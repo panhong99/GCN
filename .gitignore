@@ -3,3 +3,7 @@ __pycache__/
 /data
 /save_models
 /pytorch-cifar100
+/resnet_18
+/vit_ti_8_32
+/wandb
+/key

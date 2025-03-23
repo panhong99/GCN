@@ -2,6 +2,7 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from sentry_sdk.utils import epoch
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 import torchvision.models as models
@@ -9,8 +10,13 @@ import timm
 import torch.nn.functional as F
 import warnings
 import tqdm
+import wandb
 
 warnings.filterwarnings("ignore")
+
+wandb.init(
+    entity = "hails",
+    project = "vit_cnn_cifar100")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -29,13 +35,24 @@ def resize_pos_embed(posemb , grid_size , new_grid_size , num_extra_tokens = 1):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model' , type = str , required=False , default = "vit_ti_8_32" , help = "resnet_18 or vit_ti_8_32")
+    parser.add_argument('--model' , type = str , required=False , default = "vit" , help = "resnet or vit")
     parser.add_argument('--epoch', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=200)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--momentum', type=float, default=0.90)
     parser.add_argument('--opt_decay', type=float, default=1e-6)
     args = parser.parse_args()
+
+    wandb.run.name = f"{args.model}"
+    wandb.save()
+
+    prams = {
+        "epoch" : args.epoch,
+        "batch_size" : args.batch_size,
+        "lr" : args.lr
+    }
+
+    wandb.config.update(prams)
 
     num_epochs = args.epoch
 
@@ -51,22 +68,22 @@ def main():
 
     print("Data load complete, start training")
 
-    if args.model == "resnet_18":
-        model = models.resnet18(pretrained=False)
+    if args.model == "resnet":
+        model = models.resnet50(pretrained=False)
         model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         model.maxpool = nn.Identity()
         model.fc = nn.Linear(model.fc.in_features, 100)
         model = model.to(device)
 
-    elif args.model == "vit_ti_8_32":
+    elif args.model == "vit":
         # model = timm.create_model("vit_small_patch16_224" , pretrained = False)
-        model = timm.create_model("vit_tiny_patch16_224" , pretrained = False)
+        model = timm.create_model("vit_small_patch8_224" , pretrained = False)
         model.patch_embed.img_size = [32 , 32]
-        model.patch_embed.proj = nn.Conv2d(3 , 192 , kernel_size = 8 , stride = 8)
-        model.head = nn.Linear(in_features=192 , out_features=100)
+        model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 8 , stride = 8)
+        model.head = nn.Linear(in_features=384 , out_features=100)
 
         #Todo origin input_size = 192 , new input_size = 32
-        resized_posemb = resize_pos_embed(model.pos_embed , 14 , 4)
+        resized_posemb = resize_pos_embed(model.pos_embed , 28 , 4)
         model.pos_embed = torch.nn.Parameter(resized_posemb)
         model = model.to(device)
 
@@ -96,7 +113,8 @@ def main():
 
         acc_epoch = total_correct / total_samples * 100
         avg_loss = total_loss / total_samples
-
+        wandb.log({"Train_loss" : avg_loss})
+        wandb.log({"Train_acc" : acc_epoch})
         print(f'Epoch [{epoch + 1}/{num_epochs}], Acc: {acc_epoch:.3f}%, Loss: {avg_loss:.4f}')
 
         scheduler.step()
@@ -116,7 +134,7 @@ def main():
 
             accuracy = correct / total * 100
             print(f'Test Acc: {accuracy:.3f}%')
-
+            wandb.log({"Test_acc": accuracy})
     torch.save(model.state_dict() , f"./{args.model}")
 
 if __name__ == '__main__':
