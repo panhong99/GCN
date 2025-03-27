@@ -11,12 +11,16 @@ import torch.nn.functional as F
 import warnings
 import tqdm
 import wandb
+# from vit_pytorch import ViT
+from vit import ViT
+import warmup_scheduler
 
 warnings.filterwarnings("ignore")
 
 wandb.init(
     entity = "hails",
-    project = "vit_cnn_cifar100")
+    project = "vit_cnn_cifar100"
+)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -37,13 +41,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model' , type = str , required=False , default = "vit" , help = "resnet or vit")
     parser.add_argument('--epoch', type=int, default=200)
-    parser.add_argument('--batch_size', type=int, default=200)
-    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--batch_size', type=int, default=64)
+    parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--momentum', type=float, default=0.90)
     parser.add_argument('--opt_decay', type=float, default=1e-6)
+    parser.add_argument("--run_name" , type = str , required=False , default = "vit_small_patch16_224" , help = "model_size")
     args = parser.parse_args()
 
-    wandb.run.name = f"{args.model}"
+    wandb.run.name = f"{args.run_name}"
     wandb.save()
 
     prams = {
@@ -58,7 +63,8 @@ def main():
 
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        # transforms.Resize((224 , 224)),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.2, 0.2, 0.2))
     ])
 
     dataset = datasets.CIFAR100(root='./data', train=True, download=True, transform=transform)
@@ -69,29 +75,36 @@ def main():
     print("Data load complete, start training")
 
     if args.model == "resnet":
-        model = models.resnet50(pretrained=False)
+        model = models.resnet50(pretrained = False)
         model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         model.maxpool = nn.Identity()
         model.fc = nn.Linear(model.fc.in_features, 100)
         model = model.to(device)
 
-    elif args.model == "vit":
-        # model = timm.create_model("vit_small_patch16_224" , pretrained = False)
-        model = timm.create_model("vit_small_patch8_224" , pretrained = False)
-        model.patch_embed.img_size = [32 , 32]
-        model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 8 , stride = 8)
-        model.head = nn.Linear(in_features=384 , out_features=100)
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.opt_decay)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
-        #Todo origin input_size = 192 , new input_size = 32
-        resized_posemb = resize_pos_embed(model.pos_embed , 28 , 4)
-        model.pos_embed = torch.nn.Parameter(resized_posemb)
+    elif args.model == "vit":
+        model = ViT()
         model = model.to(device)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.opt_decay)
+        optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3,
+                                      betas=(0.9, 0.999),
+                                      weight_decay=5e-5)
+
+        base_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200,
+                                                                    eta_min=1e-5)
+
+        scheduler = warmup_scheduler.GradualWarmupScheduler(optimizer, multiplier=1.,
+                                                            total_epoch=5,
+                                                            after_scheduler=base_scheduler)
+
     criterion = nn.CrossEntropyLoss()
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
     for epoch in range(num_epochs):
+
+        prev_param = next(iter(model.named_parameters()))[1].detach().clone()
+
         model.train()
         i = 0
         total_loss, total_correct, total_samples = 0, 0, 0
@@ -110,6 +123,13 @@ def main():
             total_correct += correct
             total_samples += labels.size(0)
             i += 1
+
+        curr_param = next(iter((model.named_parameters())))[1].detach()
+
+        if not torch.equal(prev_param , curr_param):
+            print("Training")
+        else:
+            print("Not training")
 
         acc_epoch = total_correct / total_samples * 100
         avg_loss = total_loss / total_samples
@@ -139,3 +159,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

@@ -4,13 +4,14 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b1818ae8-0b1f-401d-ace6-780dc60bb9b3" name="Changes" comment="">
+    <list default="true" id="b1818ae8-0b1f-401d-ace6-780dc60bb9b3" name="Changes" comment="train vit resnet">
       <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Resnet_50.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/[ResNet]Cifar-100.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/train.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cifar-100.py" beforeDir="false" afterPath="$PROJECT_DIR$/Cifar-100.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ViT-CIFAR/autoaugment.py" beforeDir="false" afterPath="$PROJECT_DIR$/ViT-CIFAR/autoaugment.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ViT-CIFAR/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/ViT-CIFAR/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ViT-CIFAR/vit.py" beforeDir="false" afterPath="$PROJECT_DIR$/ViT-CIFAR/vit.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -28,6 +29,18 @@
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
     <option name="ROOT_SYNC" value="SYNC" />
   </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;panhong99&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/panhong99/GCN.git&quot;,
+    &quot;accountId&quot;: &quot;db6a2d9f-4f19-47c6-b416-03a3ef0b62bb&quot;
+  }
+}</component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 8
 }</component>
@@ -36,20 +49,22 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.[ResNet]Cifar-100.executor": "Debug",
-    "Python.train.executor": "Debug",
-    "Python.train_vit.executor": "Debug",
-    "Python.train_vit32.executor": "Debug",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "/home/hail/Desktop/pan"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.Cifar-100.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.[ResNet]Cifar-100.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.train.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.train_vit.executor&quot;: &quot;Debug&quot;,
+    &quot;Python.train_vit32.executor&quot;: &quot;Debug&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/hail/Desktop/pan&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
       <recent name="$PROJECT_DIR$/ViT" />
     </key>
   </component>
@@ -69,6 +84,23 @@
       <option name="presentableId" value="Default" />
       <updated>1742557483521</updated>
     </task>
+    <task id="LOCAL-00001" summary="train vit resnet">
+      <option name="closed" value="true" />
+      <created>1742712187351</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1742712187351</updated>
+    </task>
+    <task id="LOCAL-00002" summary="train vit resnet">
+      <option name="closed" value="true" />
+      <created>1742712245946</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1742712245946</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -84,7 +116,8 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="init" />
-    <option name="LAST_COMMIT_MESSAGE" value="init" />
+    <MESSAGE value="train vit resnet" />
+    <option name="LAST_COMMIT_MESSAGE" value="train vit resnet" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
@@ -115,6 +148,13 @@
           <option name="timeStamp" value="26" />
         </line-breakpoint>
       </breakpoints>
+      <default-breakpoints>
+        <breakpoint type="python-exception">
+          <properties notifyOnTerminate="true" exception="BaseException">
+            <option name="notifyOnTerminate" value="true" />
+          </properties>
+        </breakpoint>
+      </default-breakpoints>
     </breakpoint-manager>
   </component>
 </project>
