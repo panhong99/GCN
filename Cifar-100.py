@@ -48,16 +48,41 @@ def main():
 
     num_epochs = args.epoch
 
-    transform = transforms.Compose([
+    transform_cnn = transforms.Compose([
+
+        #transforms.ToPILImage(),
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomRotation(15),
         transforms.ToTensor(),
-        # transforms.Resize((224 , 224)),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.2, 0.2, 0.2))
+        transforms.Normalize([0.5 , 0.5 , 0.5], [0.2 , 0.2 , 0.2])
     ])
 
-    dataset = datasets.CIFAR100(root='./data', train=True, download=True, transform=transform)
-    dataset_test = datasets.CIFAR100(root='./data', train=False, download=True, transform=transform)
-    train_loader = DataLoader(dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, num_workers=8)
-    test_loader = DataLoader(dataset_test, batch_size=args.batch_size, drop_last=True, shuffle=False, num_workers=8)
+    transform_vit = transforms.Compose([
+        transforms.RandomResizedCrop(224),
+        transforms.RandomHorizontalFlip(),
+        # change the color
+        transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
+        transforms.ToTensor(),
+        transforms.RandomResizedCrop(size=224, scale=(0.08, 1.0), ratio=(3 / 4, 4 / 3)),
+        transforms.Normalize([0.5, 0.5, 0.5], [0.2, 0.2, 0.2]),
+        transforms.RandomErasing(p=0.25)
+    ])
+
+    if args.model == "resnet":
+
+        dataset = datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_cnn)
+        dataset_test = datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_cnn)
+        train_loader = DataLoader(dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, num_workers=8)
+        test_loader = DataLoader(dataset_test, batch_size=args.batch_size, drop_last=True, shuffle=False, num_workers=8)
+
+    elif args.model == "vit":
+
+        dataset = datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_vit)
+        dataset_test = datasets.CIFAR100(root='./data', train=False, download=True, transform=transform_vit)
+        train_loader = DataLoader(dataset, batch_size=args.batch_size, drop_last=True, shuffle=True, num_workers=8)
+        test_loader = DataLoader(dataset_test, batch_size=args.batch_size, drop_last=True, shuffle=False, num_workers=8)
+
 
     print("Data load complete, start training")
 
@@ -72,7 +97,7 @@ def main():
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
     elif args.model == "vit":
-        model = ViT()
+        model = ViT(img_size = 224 , patch = 16)
         model = model.to(device)
 
         optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3,
