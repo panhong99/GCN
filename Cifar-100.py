@@ -24,19 +24,6 @@ wandb.init(
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def resize_pos_embed(posemb , grid_size , new_grid_size , num_extra_tokens = 1):
-    #Todo split [CLS] , grid tokens
-    posemb_tok , posemb_grid = posemb[: , : num_extra_tokens] , posemb[: , num_extra_tokens :]
-    dim = posemb.shape[-1]
-
-    posemb_grid = posemb_grid.reshape(1 , grid_size , grid_size , dim).permute(0 , 3 , 1 , 2) # 1 , dim , H , W
-    posemb_grid = F.interpolate(posemb_grid , size = new_grid_size , mode = "bicubic" , align_corners=False)
-
-    posemb_grid = posemb_grid.permute(0 , 2 , 3 , 1).reshape(1 , new_grid_size * new_grid_size , dim)
-
-    #Todo reshape by image size # 32 x 32
-    return torch.cat([posemb_tok , posemb_grid] , dim = 1)
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model' , type = str , required=False , default = "vit" , help = "resnet or vit")
@@ -75,7 +62,7 @@ def main():
     print("Data load complete, start training")
 
     if args.model == "resnet":
-        model = models.resnet50(pretrained = False)
+        model = models.resnet34(pretrained = False)
         model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         model.maxpool = nn.Identity()
         model.fc = nn.Linear(model.fc.in_features, 100)
@@ -155,7 +142,7 @@ def main():
             accuracy = correct / total * 100
             print(f'Test Acc: {accuracy:.3f}%')
             wandb.log({"Test_acc": accuracy})
-    torch.save(model.state_dict() , f"./{args.model}")
+    torch.save(model.state_dict() , f"./{args.run_name}")
 
 if __name__ == '__main__':
     main()
