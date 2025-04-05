@@ -5,9 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b1818ae8-0b1f-401d-ace6-780dc60bb9b3" name="Changes" comment="train vit resnet image_32">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cifar-100.py" beforeDir="false" afterPath="$PROJECT_DIR$/Cifar-100.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/vit.py" beforeDir="false" afterPath="$PROJECT_DIR$/vit.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/Classification_resnet.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/Classification_resnet.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -45,19 +48,19 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python.Cifar-100.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.[ResNet]Cifar-100.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.train.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.train_vit.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.train_vit32.executor&quot;: &quot;Debug&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/hail/Desktop/pan&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.Cifar-100.executor": "Debug",
+    "Python.[ResNet]Cifar-100.executor": "Debug",
+    "Python.train.executor": "Debug",
+    "Python.train_vit.executor": "Debug",
+    "Python.train_vit32.executor": "Debug",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/home/hail/Desktop/pan/GCN"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$" />

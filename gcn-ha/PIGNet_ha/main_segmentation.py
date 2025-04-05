@@ -117,6 +117,7 @@ def model_size(model):
 def make_batch(samples, batch_size, feature_shape):
     inputs = [sample[0] for sample in samples]
     labels = [sample[1] for sample in samples]
+
     """
     print(inputs[0].shape)
     print(labels[0].shape)
@@ -125,7 +126,9 @@ def make_batch(samples, batch_size, feature_shape):
     padded_inputs = torch.cat([torch.stack(inputs), padding_tensor], dim=0)
     print(padded_inputs.shape)
     padded_labels = torch.cat([torch.stack(labels), torch.zeros((2,)+tuple(labels[0].shape[:]))], dim=0)
-    print(padded_labels.shape)"""
+    print(padded_labels.shape)
+    """
+
     if len(samples) < batch_size:
 
         num_padding = batch_size - len(samples)

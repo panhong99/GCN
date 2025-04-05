@@ -13,7 +13,7 @@ import os
 from torchvision import transforms
 import math
 from model_src import Classification_resnet, PIGNet_GSPonly_classification, swin,PIGNet_classification
-#from model_src.cvnets.models.classification import mobilevit_v3
+# from model_src.cvnets.models.classification import mobilevit_v3
 import torch.nn.functional as F
 from utils import AverageMeter
 from torchvision.datasets import ImageFolder
@@ -25,6 +25,10 @@ import matplotlib.pyplot as plt
 import wandb
 from vit_pytorch import ViT
 from efficientnet_pytorch import EfficientNet
+import warnings
+
+warnings.filterwarnings("ignore")
+
 def make_batch_fn(samples, batch_size, feature_shape):
     return make_batch(samples, batch_size, feature_shape)
 
@@ -157,9 +161,9 @@ parser.add_argument('--exp', type=str,default="bn_lr7e-3",
                     help='name of experiment')
 parser.add_argument('--gpu', type=int, default=0,
                     help='test time gpu device id')
-parser.add_argument('--backbone', type=str, default='resnet50',
-                    help='resnet50')
-parser.add_argument('--dataset', type=str, default='pascal',
+parser.add_argument('--backbone', type=str, default='Resnet50',
+                    help='resnet[50 , 101 , 152]')
+parser.add_argument('--dataset', type=str, default='[Pascal CIFAR-10 CIFAR-100 Imagenet]',
                     help='pascal or cityscapes')
 parser.add_argument('--groups', type=int, default=None,
                     help='num of groups for group normalization')
@@ -194,12 +198,11 @@ args = parser.parse_args()
 def model_size(model):
     total_size = 0
     for param in model.parameters():
-        # °¢ ÆÄ¶ó¹ÌÅÍÀÇ ¿ø¼Ò °³¼ö °è»ê
         num_elements = torch.prod(torch.tensor(param.size())).item()
-        # ¿ø¼Ò Å¸ÀÔ º°·Î ¹ÙÀÌÆ® Å©±â °è»ê (¿¹: float32 -> 4 bytes)
         num_bytes = num_elements * param.element_size()
         total_size += num_bytes
     return total_size
+
 def make_batch(samples, batch_size, feature_shape):
     inputs = [sample[0] for sample in samples]
     labels = [sample[1] for sample in samples]
@@ -228,18 +231,18 @@ def make_batch(samples, batch_size, feature_shape):
 def main():
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "imagenet" #CIFAR-10 CIFAR-100  imagenet
-    args.model = "Resnet" #PIGNet_classification Resnet  PIGNet_GSPonly_classification  vit  swin
-    args.backbone = "resnet101"
+    args.dataset = "CIFAR-100" #CIFAR-10 CIFAR-100  imagenet
+    args.model = "vit" #PIGNet_classification Resnet  PIGNet_GSPonly_classification  vit  swin
+    args.backbone = "resnet50" # resnet[50 , 101 , 152]
     args.workers = 4
     args.epochs = 50
     args.batch_size = 8
-    args.train = False
+    args.train = True
     args.crop_size = 513 #513
     args.base_lr = 0.007
     args.last_mult = 1.0 
     args.groups = None
-    args.scratch = False
+    args.scratch = True
     args.freeze_bn = False
     args.weight_std = False
     args.beta = False
@@ -263,7 +266,7 @@ def main():
     print("cuda available", args.device)
 
     if args.train:
-        wandb.init(project='pignet_classification', name=args.model+'_'+args.backbone+ '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
+        wandb.init(project='gcn_classification', name=args.model+'_'+args.backbone+ '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
                     config=args.__dict__)
 
     loss_data = pd.DataFrame(columns=["train_loss"])
@@ -306,8 +309,6 @@ def main():
                     ])
                 elif args.process_type =='repeat':
 
-
-
                     # Define transformations
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),  # Resize to fixed size
@@ -342,6 +343,7 @@ def main():
                 transforms.ToTensor(),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
             ])
+
         else:
             if args.process_type==None:
                 print("original data")
@@ -349,6 +351,7 @@ def main():
                     transforms.ToTensor(),
                     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
                 ])
+
             else:
                 if args.process_type == 'zoom':
                     transform = transforms.Compose([
@@ -358,20 +361,24 @@ def main():
                     ])
                 elif args.process_type == 'repeat':
 
-
-
                     # Define transformations
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),  # Resize to fixed size
                         RepeatTransform(pattern_repeat_count),  # Apply the repeat transformation
                         transforms.ToTensor(),  # Convert image to tensor
                     ])
+                # TODO Rotate
+                elif args.process_type == "rotate":
 
-
+                    transform = transforms.Compose([
+                        transforms.Resize((image_size, image_size)),
+                        transforms.RandomRotation(degrees=15),  # (-15 ~ +15) rotate
+                        transforms.ToTensor(),
+                    ])
 
         # CIFAR-100 데이터셋 로드
-        dataset = torchvision.datasets.CIFAR100(root='C:/Users/hail/Desktop/ha/model', train=True, download=True, transform=transform)
-        valid_dataset = torchvision.datasets.CIFAR100(root='C:/Users/hail/Desktop/ha/model', train=False, download=True, transform=transform)
+        dataset = torchvision.datasets.CIFAR100(root='./data/cifar-100', train=True, download=True, transform=transform)
+        valid_dataset = torchvision.datasets.CIFAR100(root='./data/cifar-100', train=False, download=True, transform=transform)
 
         dataset.CLASSES=sorted(['beaver', 'dolphin', 'otter', 'seal', 'whale',  # aquatic mammals
                            'aquarium' 'fish', 'flatfish', 'ray', 'shark', 'trout',  # fish
@@ -394,14 +401,15 @@ def main():
                            'bicycle', 'bus', 'motorcycle', 'pickup truck', 'train', # vehicles 1
                            'lawn-mower', 'rocket', 'streetcar', 'tank', 'tractor' # vehicles 2
                           ])
+
     elif args.dataset == 'CIFAR-10':
         image_size = 32
         transform = transforms.Compose([
             transforms.ToTensor()])
 
-        # CIFAR-100 데이터셋 로드
-        dataset = torchvision.datasets.CIFAR10(root='C:/Users/hail/Desktop/ha/model', train=True, download=True,transform=transform)#, transform=transform,target_transform=transform_target)
-        valid_dataset = torchvision.datasets.CIFAR10(root='C:/Users/hail/Desktop/ha/model', train=False, download=True,transform=transform)#, transform=transform,target_transform=transform_target)
+        # CIFAR-10 데이터셋 로드
+        dataset = torchvision.datasets.CIFAR10(root='./data/cifar-10/', train=True, download=True,transform=transform)#, transform=transform,target_transform=transform_target)
+        valid_dataset = torchvision.datasets.CIFAR10(root='./data/cifar-10', train=False, download=True,transform=transform)#, transform=transform,target_transform=transform_target)
         dataset.CLASSES =['plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
     else:
@@ -419,6 +427,7 @@ def main():
                 n_layer = args.n_layer,
                 n_skip_l = args.n_skip_l)
             print("model PIGNet_GSPonly_classification")
+
         elif args.model == "PIGNet_classification":
             model = getattr(PIGNet_classification, args.backbone)(
                 pretrained=(not args.scratch),
@@ -430,6 +439,7 @@ def main():
                 n_layer = args.n_layer,
                 n_skip_l = args.n_skip_l)
             print("model PIGNet_classification")
+
         elif args.model == "Resnet":
             print("Classification_resnet model load")
             model = getattr(Classification_resnet, args.backbone)(
@@ -442,18 +452,21 @@ def main():
                 n_layer=args.n_layer,
                 n_skip_l=args.n_skip_l
                 )
+
         elif args.model == 'vit':
+            print(f"classification_vit")
             model = ViT(
                 image_size=image_size,
-                patch_size=32,
+                patch_size=16,
                 num_classes=len(dataset.CLASSES),
-                dim=1024,
-                depth=6,
-                heads=16,
-                mlp_dim=2048,
+                dim=384,
+                depth=12,
+                heads=6,
+                mlp_dim= 384 * 4,
                 dropout=0.1,
                 emb_dropout=0.1
             )
+
         elif args.model == 'swin':
             model = torchvision.models.swin_t(weights=torchvision.models.Swin_T_Weights.DEFAULT)
         elif args.model == 'mobile':
@@ -462,6 +475,7 @@ def main():
     else:
 
         raise ValueError('Unknown backbone: {}'.format(args.backbone))
+
     size_in_bytes = model_size(model)
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -522,6 +536,7 @@ def main():
 
                 ],
                     lr=args.base_lr, momentum=0.9, weight_decay=0.0001)
+
         elif args.model == 'vit':
 
             # 백본이 아닌 나머지 파라미터만 학습 가능하게 설정
@@ -588,13 +603,12 @@ def main():
                 # if args.model == "deeplab":
                 inputs = Variable(inputs.to(args.device))
                 target = Variable(target.to(args.device)).long()
+
                 if args.model=='swin' or args.model=='vit':
                     outputs = model(inputs)
 
                 else:
                     outputs,_ = model(inputs)
-
-
 
                 outputs_flat = outputs.view(-1, outputs.size(-1))  # 배치 크기 유지하고 마지막 차원을 평탄화
 
@@ -637,7 +651,6 @@ def main():
             wandb.log(log)
 
 
-
             loss_list.append(loss_avg)
             print('epoch: {0}\t'
                   'lr: {1:.6f}\t'
@@ -656,6 +669,7 @@ def main():
                     'optimizer': optimizer.state_dict(),
                 }, model_fname)
                 print("model save complete!!!")
+
             else:
                 patience +=1
                 print("patience : ",patience)
@@ -664,7 +678,6 @@ def main():
                     break
             # time.sleep(150)
             print("Evaluating !!! ")
-
 
             with torch.no_grad():
                 model.eval()

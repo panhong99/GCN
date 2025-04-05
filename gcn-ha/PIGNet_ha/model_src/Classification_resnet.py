@@ -25,6 +25,7 @@ def model_size(model):
         num_bytes = num_elements * param.element_size()
         total_size += num_bytes
     return total_size
+
 class Conv2d(nn.Conv2d):
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
@@ -243,6 +244,7 @@ class ResNet(nn.Module):
                 self.conv(3, 64, 3, stride=2, padding=1, bias=False),
                 self.conv(64, 64, 3, stride=1, padding=1, bias=False),
                 self.conv(64, 64, 3, stride=1, padding=1, bias=False))
+
         self.bn1 = self.norm(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
