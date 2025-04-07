@@ -5,12 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b1818ae8-0b1f-401d-ace6-780dc60bb9b3" name="Changes" comment="train vit resnet image_32">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/Classification_resnet.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/Classification_resnet.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly_classification.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_classification.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -52,6 +50,7 @@
   "keyToString": {
     "Python.Cifar-100.executor": "Debug",
     "Python.[ResNet]Cifar-100.executor": "Debug",
+    "Python.main_classification.executor": "Debug",
     "Python.train.executor": "Debug",
     "Python.train_vit.executor": "Debug",
     "Python.train_vit32.executor": "Debug",
@@ -154,6 +153,21 @@
           <url>file://$PROJECT_DIR$/pytorch-cifar100/train.py</url>
           <line>197</line>
           <option name="timeStamp" value="26" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py</url>
+          <line>506</line>
+          <option name="timeStamp" value="27" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly_classification.py</url>
+          <line>394</line>
+          <option name="timeStamp" value="28" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_classification.py</url>
+          <line>205</line>
+          <option name="timeStamp" value="30" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>

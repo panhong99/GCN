@@ -26,6 +26,7 @@ import wandb
 from vit_pytorch import ViT
 from efficientnet_pytorch import EfficientNet
 import warnings
+import timm
 
 warnings.filterwarnings("ignore")
 
@@ -194,6 +195,19 @@ parser.add_argument('--model', type=str, default="deeplab",
 parser.add_argument('--process_type', type=str, default="zoom",
                     help='process_type')
 
+def resize_pos_embed(posemb , grid_size , new_grid_size , num_extra_tokens = 1):
+    #Todo split [CLS] , grid tokens
+    posemb_tok , posemb_grid = posemb[: , : num_extra_tokens] , posemb[: , num_extra_tokens :]
+    dim = posemb.shape[-1]
+
+    posemb_grid = posemb_grid.reshape(1 , grid_size , grid_size , dim).permute(0 , 3 , 1 , 2) # 1 , dim , H , W
+    posemb_grid = F.interpolate(posemb_grid , size = new_grid_size , mode = "bicubic" , align_corners=False)
+
+    posemb_grid = posemb_grid.permute(0 , 2 , 3 , 1).reshape(1 , new_grid_size * new_grid_size , dim)
+
+    #Todo reshape by image size # 32 x 32
+    return torch.cat([posemb_tok , posemb_grid] , dim = 1)
+
 args = parser.parse_args()
 def model_size(model):
     total_size = 0
@@ -232,7 +246,7 @@ def main():
     # make fake args
     args = argparse.Namespace()
     args.dataset = "CIFAR-100" #CIFAR-10 CIFAR-100  imagenet
-    args.model = "vit" #PIGNet_classification Resnet  PIGNet_GSPonly_classification  vit  swin
+    args.model = "Resnet" #PIGNet_classification Resnet  PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101 , 152]
     args.workers = 4
     args.epochs = 50
@@ -253,7 +267,7 @@ def main():
     args.n_layer = 6
     args.n_skip_l = 2 #2
     args.process_type = None  #zoom overlap repeat None
-    #pattern_repeat_count = 2
+    # pattern_repeat_count = 2
     zoom_factor = 2.0
 
     # if is cuda available device
@@ -266,7 +280,12 @@ def main():
     print("cuda available", args.device)
 
     if args.train:
-        wandb.init(project='gcn_classification', name=args.model+'_'+args.backbone+ '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
+        if args.scratch:
+            pt = "scratch"
+        else:
+            pt = "pretrained"
+
+        wandb.init(project='gcn_classification', name=args.model+'_'+args.backbone+'_'+pt+ '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
                     config=args.__dict__)
 
     loss_data = pd.DataFrame(columns=["train_loss"])
@@ -274,12 +293,22 @@ def main():
 
     # assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
+
     if args.model=='vit':
-        model_fname = 'model/classification_{0}_{1}_v3.pth'.format(
-            args.model, args.dataset)
+        if args.scratch: # scartch == True
+            model_fname = 'model/classification_{0}_{1}_v3.pth'.format(
+                args.model , "scratch" ,  args.dataset)
+        else: # scratch = False
+            model_fname = 'model/classification_{0}_{1}_{2}_v3.pth'.format(
+                args.model, "pretrained" , args.dataset)
+
     else:
-        model_fname = 'model/classification_{0}_{1}_{2}_v3.pth'.format(
-            args.model,args.backbone, args.dataset)
+        if args.scratch: # scartch == True
+            model_fname = 'model/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+                args.model , args.backbone, "scratch" ,  args.dataset)
+        else: # scratch = False
+            model_fname = 'model/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+                args.model, args.backbone , "pretrained" , args.dataset)
 
     if args.dataset == 'imagenet':
         # 데이터셋 경로 및 변환 정의
@@ -455,17 +484,30 @@ def main():
 
         elif args.model == 'vit':
             print(f"classification_vit")
-            model = ViT(
-                image_size=image_size,
-                patch_size=16,
-                num_classes=len(dataset.CLASSES),
-                dim=384,
-                depth=12,
-                heads=6,
-                mlp_dim= 384 * 4,
-                dropout=0.1,
-                emb_dropout=0.1
-            )
+
+            if args.scratch:
+                print("scratch")
+                model = ViT(
+                    image_size=image_size,
+                    patch_size=16,
+                    num_classes=len(dataset.CLASSES),
+                    dim=384,
+                    depth=12,
+                    heads=6,
+                    mlp_dim= 384 * 4,
+                    dropout=0.1,
+                    emb_dropout=0.1
+                )
+
+            else: # pretrained
+                print("pretrained")
+                model = timm.create_model("vit_small_patch16_224" , pretrained = True)
+                model.patch_embed.img_size = [32 , 32]
+                model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
+                model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
+
+                resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
+                model.pos_embed = torch.nn.Parameter(resized_posemb)
 
         elif args.model == 'swin':
             model = torchvision.models.swin_t(weights=torchvision.models.Swin_T_Weights.DEFAULT)
@@ -484,7 +526,6 @@ def main():
 
     # num_params_gnn = sum(p.numel() for p in model.pyramid_gnn.parameters() if p.requires_grad)
     # print(f"Number of GNN parameters: {num_params_gnn / (1000.0 ** 2): .3f} M")
-
 
     print(f"Entire model size: {size_in_bytes / (1024.0 ** 3): .3f} GB")
 
@@ -649,7 +690,6 @@ def main():
             log['train/epoch/accuracy'] = acc_avg
 
             wandb.log(log)
-
 
             loss_list.append(loss_avg)
             print('epoch: {0}\t'

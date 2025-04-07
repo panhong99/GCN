@@ -205,7 +205,7 @@ class GSP(nn.Module):
 
         self.edge_index = None
         self.graph_data = None
-        self.grid_size =  14  #feature map size  33 for pascal   8 for cifar-100  14 for imagenet
+        self.grid_size =  8  #feature map size  33 for pascal   8 for cifar-100  14 for imagenet
 
         self.gelu = nn.GELU()
 
@@ -390,8 +390,8 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block,  64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2) # stirde 2 for imagene stride 1 for cifar
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2) # stirde 2 for imagenet stride 1 for cifar
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=1) # stirde 2 for imagene stride 1 for cifar
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=1) # stirde 2 for imagenet stride 1 for cifar
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1,dilation=2)
         # remove require_grad for self.layer4
         for param in self.layer4.parameters():
@@ -443,7 +443,6 @@ class ResNet(nn.Module):
         x = self.layer2(x) #block2
         x = self.layer3(x) #block3
         #x = self.layer4(x) #block4
-
 
         x = self.pyramid_gnn(x)
 
