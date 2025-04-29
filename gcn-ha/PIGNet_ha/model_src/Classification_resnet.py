@@ -372,6 +372,9 @@ def resnet101(pretrained=False, num_groups=None, weight_std=False, **kwargs):
             raise ValueError('Currently only support BN or GN+WS')
         model_dict.update(overlap_dict)
         model.load_state_dict(model_dict)
+    else:
+        print("Not Pretrained!!")
+
     return model
 
 

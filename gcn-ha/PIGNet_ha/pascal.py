@@ -19,7 +19,7 @@ class VOCSegmentation(data.Dataset):
   def __init__(self, root, train=True, transform=None, target_transform=None, download=False, crop_size=None,process=None,process_value=None,overlap_percentage=None,pattern_repeat_count=None):
     self.root = root
     _voc_root = os.path.join(self.root, 'VOC2012')
-    _list_dir = os.path.join(_voc_root, 'list')
+    _list_dir = os.path.join(_voc_root, 'ImageSets/Segmentation')
     self.transform = transform
     self.target_transform = target_transform
     self.train = train
@@ -32,7 +32,7 @@ class VOCSegmentation(data.Dataset):
       self.download()
 
     if self.train:
-      _list_f = os.path.join(_list_dir, 'train_aug.txt')
+      _list_f = os.path.join(_list_dir, 'train.txt')
     else:
       _list_f = os.path.join(_list_dir, 'val.txt')
 
@@ -46,12 +46,19 @@ class VOCSegmentation(data.Dataset):
     self.masks = []
     with open(_list_f, 'r') as lines:
       for line in lines:
-        _image = _voc_root + line.split()[0]
-        _mask = _voc_root + line.split()[1]
-        assert os.path.isfile(_image)
-        assert os.path.isfile(_mask)
-        self.images.append(_image)
-        self.masks.append(_mask)
+        img_id = line.strip()
+
+        img_path = os.path.join(_voc_root , "JPEGImages" , img_id + ".jpg")
+        mask_path = os.path.join(_voc_root , "SegmentationClass" , img_id + ".png")
+
+        # _image = _voc_root + line.split()[0]
+        # _mask = _voc_root + line.split()[1]
+
+        assert os.path.isfile(img_path)
+        assert os.path.isfile(mask_path)
+
+        self.images.append(img_path)
+        self.masks.append(mask_path)
 
   def __getitem__(self, index):
     _img = Image.open(self.images[index]).convert('RGB')
@@ -59,7 +66,6 @@ class VOCSegmentation(data.Dataset):
     _target = Image.open(self.masks[index])
     if self.process != None:
       _target= _target.convert('L')
-
 
     # add image process for test
     if self.process == 'zoom':
@@ -73,7 +79,6 @@ class VOCSegmentation(data.Dataset):
       if _img==None:
         return None,None
 
-
     elif self.process == 'repeat':
       _img, _target = self.repeat(_img, _target,self.pattern_repeat_count)
       if _img==None:
@@ -86,6 +91,7 @@ class VOCSegmentation(data.Dataset):
                                flip=True if self.train else False,
                                scale=(0.5, 2.0) if self.train else None,
                                crop=(self.crop_size, self.crop_size))
+
     if self.transform is not None:
       _img = self.transform(_img)
 

@@ -15,3 +15,7 @@ __pycache__/
 /gcn-ha/PIGNet_ha/data/cifar-100
 /gcn-ha/PIGNet_ha/model
 /gcn-ha/PIGNet_ha/wandb
+/gcn-ha/PIGNet_ha/model_CNN_ViT.tar.gz
+/gcn-ha/PIGNet_ha/model_PIGNet.tar.gz
+/gcn-ha/PIGNet_ha/eval_graph
+/gcn-ha/PIGNet_ha/data/VOCdevkit

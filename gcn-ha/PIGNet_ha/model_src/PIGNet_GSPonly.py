@@ -6,6 +6,9 @@ import torch.utils.model_zoo as model_zoo
 from torch.nn import functional as F
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv, SAGEConv
+import warnings
+
+warnings.filterwarnings("ignore")
 
 __all__ = ['ResNet', 'resnet50', 'resnet101', 'resnet152']
 

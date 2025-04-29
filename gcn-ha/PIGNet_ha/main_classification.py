@@ -246,17 +246,18 @@ def main():
     # make fake args
     args = argparse.Namespace()
     args.dataset = "CIFAR-100" #CIFAR-10 CIFAR-100  imagenet
-    args.model = "Resnet" #PIGNet_classification Resnet  PIGNet_GSPonly_classification  vit  swin
-    args.backbone = "resnet50" # resnet[50 , 101 , 152]
+    args.model = "PIGNet_GSPonly_classification" #PIGNet_classification Resnet  PIGNet_GSPonly_classification  vit  swin
+    args.backbone = "resnet50" # resnet[50 , 101]
+    args.scratch = True
+    args.train = False
+    args.degree = 0
     args.workers = 4
     args.epochs = 50
     args.batch_size = 8
-    args.train = True
     args.crop_size = 513 #513
     args.base_lr = 0.007
     args.last_mult = 1.0 
     args.groups = None
-    args.scratch = True
     args.freeze_bn = False
     args.weight_std = False
     args.beta = False
@@ -266,9 +267,9 @@ def main():
     args.embedding_size = 256
     args.n_layer = 6
     args.n_skip_l = 2 #2
-    args.process_type = None  #zoom overlap repeat None
+    args.process_type = "zoom"  #zoom overlap repeat rotate None
     # pattern_repeat_count = 2
-    zoom_factor = 2.0
+    zoom_factor = 1 # 0.1 , 0.5 , 1.5 , 2
 
     # if is cuda available device
     if torch.cuda.is_available():
@@ -401,7 +402,7 @@ def main():
 
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),
-                        transforms.RandomRotation(degrees=15),  # (-15 ~ +15) rotate
+                        transforms.RandomRotation(degrees=args.degree),  # (-15 ~ +15) rotate
                         transforms.ToTensor(),
                     ])
 
@@ -487,17 +488,13 @@ def main():
 
             if args.scratch:
                 print("scratch")
-                model = ViT(
-                    image_size=image_size,
-                    patch_size=16,
-                    num_classes=len(dataset.CLASSES),
-                    dim=384,
-                    depth=12,
-                    heads=6,
-                    mlp_dim= 384 * 4,
-                    dropout=0.1,
-                    emb_dropout=0.1
-                )
+                model = timm.create_model("vit_small_patch16_224" , pretrained = False)
+                model.patch_embed.img_size = [32 , 32]
+                model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
+                model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
+
+                resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
+                model.pos_embed = torch.nn.Parameter(resized_posemb)
 
             else: # pretrained
                 print("pretrained")
@@ -779,7 +776,6 @@ def main():
             correct = 0
             total = 0
 
-
             distances = [1, 2, 3, 4]
             distances_sum= [ 0 for _ in range(len(distances))]
 
@@ -796,57 +792,60 @@ def main():
 
                 inputs = inputs.to(args.device)
                 labels = torch.tensor(labels).to(args.device)
-                outputs, layer_outputs = model(inputs)
 
-
+                if args.model == "vit":
+                    outputs = model(inputs)
+                else:
+                    outputs, layer_outputs = model(inputs)
 
                 _, predicted = outputs.max(1)
 
                 total += labels.size(0)
                 correct += predicted.eq(labels).sum().item()
 
-            # 텐서 크기에서 중심 좌표를 자동으로 설정 (H/2, W/2)
-            H, W = layer_outputs.shape[2], layer_outputs.shape[3]
-            center_x, center_y = H // 2, W // 2
-            distances = [1, 2, 3, 4]
-            # 중심점 feature 벡터 (512차원)
-            center_vector = layer_outputs[0, :, center_x, center_y]
-            similarities = {distance: [] for distance in distances}
+            if args.model != "vit":
+                # 텐서 크기에서 중심 좌표를 자동으로 설정 (H/2, W/2)
+                H, W = layer_outputs.shape[2], layer_outputs.shape[3]
+                center_x, center_y = H // 2, W // 2
+                distances = [1, 2, 3, 4]
+                # 중심점 feature 벡터 (512차원)
+                center_vector = layer_outputs[0, :, center_x, center_y]
+                similarities = {distance: [] for distance in distances}
 
-            for distance in distances:
-                x_indices = [max(center_x - distance, 0), min(center_x + distance, H - 1)]
-                y_indices = [max(center_y - distance, 0), min(center_y + distance, W - 1)]
+                for distance in distances:
+                    x_indices = [max(center_x - distance, 0), min(center_x + distance, H - 1)]
+                    y_indices = [max(center_y - distance, 0), min(center_y + distance, W - 1)]
 
-                for x in range(x_indices[0], x_indices[1] + 1):
-                    for y in range(y_indices[0], y_indices[1] + 1):
-                        if (x, y) != (center_x, center_y):
-                            neighbor_vector = layer_outputs[0, :, x, y]
-                            cosine_similarity = F.cosine_similarity(center_vector.unsqueeze(0),
-                                                                    neighbor_vector.unsqueeze(0))
-                            similarities[distance].append(cosine_similarity.item())
+                    for x in range(x_indices[0], x_indices[1] + 1):
+                        for y in range(y_indices[0], y_indices[1] + 1):
+                            if (x, y) != (center_x, center_y):
+                                neighbor_vector = layer_outputs[0, :, x, y]
+                                cosine_similarity = F.cosine_similarity(center_vector.unsqueeze(0),
+                                                                        neighbor_vector.unsqueeze(0))
+                                similarities[distance].append(cosine_similarity.item())
 
-            # 결과 출력
-            for distance, values in similarities.items():
-                for idx, sim in enumerate(values):
-                    print(f"Distance: {distance}, Cosine Similarity: {sim:.4f}")
-            # 각 거리별 평균 유사도 계산
-            average_similarities = {distance: sum(values) / len(values) if values else 0 for distance, values in
-                                    similarities.items()}
+                # 결과 출력
+                for distance, values in similarities.items():
+                    for idx, sim in enumerate(values):
+                        print(f"Distance: {distance}, Cosine Similarity: {sim:.4f}")
+                # 각 거리별 평균 유사도 계산
+                average_similarities = {distance: sum(values) / len(values) if values else 0 for distance, values in
+                                        similarities.items()}
 
-            # 선 그래프 그리기
-            plt.figure(figsize=(10, 6))
-            plt.plot(average_similarities.keys(), average_similarities.values(), marker='o')
-            plt.title('Average Cosine Similarity by Distance')
-            plt.xlabel('Distance')
-            plt.ylabel('Average Cosine Similarity')
-            plt.xticks(distances)
-            plt.grid(True)
-            plt.show()
+                # 선 그래프 그리기
+                plt.figure(figsize=(10, 6))
+                plt.plot(average_similarities.keys(), average_similarities.values(), marker='o')
+                plt.title('Average Cosine Similarity by Distance')
+                plt.xlabel('Distance')
+                plt.ylabel('Average Cosine Similarity')
+                plt.xticks(distances)
+                plt.grid(True)
+                save_path = os.path.join("./eval_graph" , f"{args.model}_{args.backbone}_{args.scratch}.png")
+                plt.savefig(save_path , dpi = 300 , bbox_inches = "tight")
+                plt.show()
+
             accuracy = 100 * correct / total
             print('Accuracy: {:.2f}%'.format(accuracy))
-
-
-
 
 if __name__ == "__main__":
     main()

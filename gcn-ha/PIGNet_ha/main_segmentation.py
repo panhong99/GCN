@@ -22,6 +22,9 @@ from utils import AverageMeter, inter_and_union
 from functools import partial
 import subprocess
 import wandb
+import warnings
+
+warnings.filterwarnings("ignore")
 
 def make_batch_fn(samples, batch_size, feature_shape):
     return make_batch(samples, batch_size, feature_shape)
@@ -145,17 +148,17 @@ def main():
     # make fake args
     args = argparse.Namespace()
     args.dataset = "pascal"
-    args.model = "Mask2Former" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
-    args.backbone = "resnet101"
+    args.model = "PIGNet" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
+    args.backbone = "resnet50" # resnet[50 , 101]
+    args.scratch = True
     args.workers = 4
     args.epochs = 50
     args.batch_size = 16
-    args.train = False
+    args.train = True
     args.crop_size = 513
     args.base_lr = 0.007
     args.last_mult = 1.0
     args.groups = None
-    args.scratch = False
     args.freeze_bn = False
     args.weight_std = False
     args.beta = False
@@ -166,15 +169,19 @@ def main():
     args.n_layer = 8
     args.n_skip_l = 2
 
-    args.process_type = "repeat"  # None zoom, overlap, repeat
+    args.process_type = "None"  # None zoom, overlap, repeat
     zoom_factor = 0.1 # zoom in, out value 양수면 줌 음수면 줌아웃
     overlap_percentage = 0.2 #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
     pattern_repeat_count = 3 # 반복 횟수 2이면 2*2
 
 
     if args.train:
-        wandb.init(project='pignet_segmentation', name=args.model+'_'+args.backbone+ '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
-                    config=args.__dict__)
+        if args.scratch == False:
+            wandb.init(project='gcn_segmentation', name=args.model+'_'+args.backbone+ '_pretrain' + '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
+                        config=args.__dict__)
+        else:
+            wandb.init(project='gcn_segmentation', name=args.model+'_'+args.backbone+ '_scratch' + '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
+                        config=args.__dict__)
 
     # if is cuda available device
     if torch.cuda.is_available():
@@ -194,22 +201,22 @@ def main():
     if args.dataset == 'pascal':
         if args.train:
             print("train dataset")
-            dataset = VOCSegmentation('C:/Users/hail/Desktop/ha/data/ADE/VOCdevkit',
+            dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                       train=args.train, crop_size=args.crop_size)
-            valid_dataset = VOCSegmentation('C:/Users/hail/Desktop/ha/data/ADE/VOCdevkit',
+            valid_dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                             train=not (args.train), crop_size=args.crop_size)
 
         else:
 
             if args.process_type != None:
                 print(args.process_type)
-                dataset = VOCSegmentation('C:/Users/hail/Desktop/ha/data/ADE/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                                 train=args.train, crop_size=args.crop_size,
                                                 process=args.process_type, process_value=zoom_factor,
                                                 overlap_percentage=overlap_percentage,
                                                 pattern_repeat_count=pattern_repeat_count)
             else:
-                dataset = VOCSegmentation('C:/Users/hail/Desktop/ha/data/ADE/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                                 train=args.train, crop_size=args.crop_size,
                                                 process=None, process_value=zoom_factor,
                                                 overlap_percentage=overlap_percentage,
@@ -218,6 +225,7 @@ def main():
 
     else:
         raise ValueError('Unknown dataset: {}'.format(args.dataset))
+
     if args.backbone in ["resnet50","resnet101","resnet152"]:
         if args.model == "PIGNet_GSPonly":
             model = getattr(PIGNet_GSPonly, args.backbone)(
@@ -229,6 +237,7 @@ def main():
                 embedding_size = args.embedding_size,
                 n_layer = args.n_layer,
                 n_skip_l = args.n_skip_l)
+
         elif args.model == "PIGNet":
             model = getattr(PIGNet, args.backbone)(
                 pretrained=(not args.scratch),
@@ -239,6 +248,7 @@ def main():
                 embedding_size = args.embedding_size,
                 n_layer = args.n_layer,
                 n_skip_l = args.n_skip_l)
+
         elif args.model == "ASPP":
             model = getattr(ASPP, args.backbone)(
                 pretrained=(not args.scratch),
@@ -249,28 +259,30 @@ def main():
                 embedding_size = args.embedding_size,
                 n_layer = args.n_layer,
                 n_skip_l = args.n_skip_l)
+
         elif args.model == "Mask2Former":
             model = Mask2Former()
 
     else:
         raise ValueError('Unknown backbone: {}'.format(args.backbone))
-    #size_in_bytes = model_size(model)
+    size_in_bytes = model_size(model)
 
-    #num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print number of parameters
-    #print(f"Number of parameters: {num_params / (1000.0 ** 2): .3f} M")
+    print(f"Number of parameters: {num_params / (1000.0 ** 2): .3f} M")
 
     #num_params_gnn = sum(p.numel() for p in model.pyramid_gnn.parameters() if p.requires_grad)
     #print(f"Number of GNN parameters: {num_params_gnn / (1000.0 ** 2): .3f} M")
 
-
-    #print(f"Entire model size: {size_in_bytes / (1024.0 ** 3): .3f} GB")
+    print(f"Entire model size: {size_in_bytes / (1024.0 ** 3): .3f} GB")
 
     if args.train:
         print("Training !!! ")
+
         criterion = nn.CrossEntropyLoss(ignore_index=255)
         model = nn.DataParallel(model).to(args.device)
         model.train()
+
         if args.freeze_bn:
             for m in model.modules():
                 if isinstance(m, nn.BatchNorm2d):
@@ -286,6 +298,7 @@ def main():
                 list(model.module.layer2.parameters()) +
                 list(model.module.layer3.parameters()) +
                 list(model.module.layer4.parameters()))
+
         if args.model == "PIGNet_GSPonly" or args.model=="PIGNet":
             last_params = list(model.module.pyramid_gnn.parameters())
 
@@ -344,7 +357,8 @@ def main():
                 optimizer.param_groups[1]['lr'] = lr * args.last_mult
                 inputs = Variable(inputs.to(args.device))
                 target = Variable(target.to(args.device)).long()
-                outputs = model(inputs).float()
+                outputs , _ = model(inputs)
+                outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
                     pdb.set_trace()
@@ -407,7 +421,8 @@ def main():
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(args.device))
                     target = Variable(target.to(args.device)).long()
-                    outputs = model(inputs.unsqueeze(0)).float()
+                    outputs , _ = model(inputs.unsqueeze(0))
+                    outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
                     mask = target.cpu().numpy().astype(np.uint8)
