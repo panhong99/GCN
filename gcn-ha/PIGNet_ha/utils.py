@@ -54,7 +54,7 @@ def inter_and_union(pred, mask, num_class):
 
   return (area_inter, area_union)
 
-def   preprocess(image, mask, flip=False, scale=None, crop=None):
+def preprocess(image, mask, flip=False, scale=None, crop=None):
   if flip:
     if random.random() < 0.5:
       image = image.transpose(Image.FLIP_LEFT_RIGHT)

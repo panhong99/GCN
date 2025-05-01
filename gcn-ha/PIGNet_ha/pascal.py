@@ -16,7 +16,7 @@ class VOCSegmentation(data.Dataset):
       'tv/monitor'
   ]
 
-  def __init__(self, root, train=True, transform=None, target_transform=None, download=False, crop_size=None,process=None,process_value=None,overlap_percentage=None,pattern_repeat_count=None):
+  def __init__(self, root, train=True, transform=None, target_transform=None, download=False, crop_size=None , process=None ,process_value=None,overlap_percentage=None,pattern_repeat_count=None):
     self.root = root
     _voc_root = os.path.join(self.root, 'VOC2012')
     _list_dir = os.path.join(_voc_root, 'ImageSets/Segmentation')
@@ -38,9 +38,9 @@ class VOCSegmentation(data.Dataset):
 
     if self.process == 'overlap':
       print("!! process model")
+
     elif self.process == 'zoom':
       print("!! zoom_in model")
-
 
     self.images = []
     self.masks = []
@@ -64,8 +64,9 @@ class VOCSegmentation(data.Dataset):
     _img = Image.open(self.images[index]).convert('RGB')
 
     _target = Image.open(self.masks[index])
-    if self.process != None:
-      _target= _target.convert('L')
+
+    # if self.process != None:
+    #   _target= _target.convert('L')
 
     # add image process for test
     if self.process == 'zoom':
@@ -83,8 +84,6 @@ class VOCSegmentation(data.Dataset):
       _img, _target = self.repeat(_img, _target,self.pattern_repeat_count)
       if _img==None:
         return None,None
-
-
 
     #if self.process == None:
     _img, _target = preprocess(_img, _target,
@@ -201,7 +200,7 @@ class VOCSegmentation(data.Dataset):
     # Create empty new images and masks of the same size as the original image
     new_image_size = (image_size[0] * pattern_repeat_count, image_size[1] * pattern_repeat_count)
     new_image = Image.new('RGB', new_image_size)
-    new_mask = Image.new('L', new_image_size)
+    new_mask = Image.new('P', new_image_size)
 
     # Paste the original image and mask in a grid pattern
     for i in range(pattern_repeat_count):
@@ -214,9 +213,6 @@ class VOCSegmentation(data.Dataset):
     final_mask = new_mask.resize(image_size)
 
     return final_image, final_mask
-
-
-
 
   def zoom_center(self, image, mask, zoom_factor):
     """
@@ -254,7 +250,7 @@ class VOCSegmentation(data.Dataset):
 
       # Create a new black image and paste the resized image and mask in the center
       new_image = Image.new('RGB', (width, height), (255, 255, 255))
-      new_mask = Image.new('L', (width, height), 255)
+      new_mask = Image.new('P', (width, height), 255)
 
       new_image.paste(resized_image, ((width - new_width) // 2, (height - new_height) // 2))
       new_mask.paste(resized_mask, ((width - new_width) // 2, (height - new_height) // 2))

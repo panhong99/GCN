@@ -302,7 +302,7 @@ class ResNet(nn.Module):
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
 
-        return x
+        return x , x
 
 
 

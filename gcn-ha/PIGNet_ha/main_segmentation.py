@@ -168,12 +168,10 @@ def main():
     args.embedding_size = 21
     args.n_layer = 8
     args.n_skip_l = 2
-
-    args.process_type = "None"  # None zoom, overlap, repeat
+    args.process_type = None  # None zoom, overlap, repeat
     zoom_factor = 0.1 # zoom in, out value 양수면 줌 음수면 줌아웃
     overlap_percentage = 0.2 #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
     pattern_repeat_count = 3 # 반복 횟수 2이면 2*2
-
 
     if args.train:
         if args.scratch == False:
@@ -195,17 +193,22 @@ def main():
     # assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
 
-    model_fname = 'model/{0}_{1}_{2}_v3.pth'.format(
-        args.model,args.backbone, args.dataset,args.embedding_size)
+    if args.scratch == True:
+        model_fname = 'model/segmentation/{0}_{1}_{2}_scratch_v3.pth'.format(
+            args.model,args.backbone, args.dataset,args.embedding_size)
+    else: # pretrain
+        model_fname = 'model/segmentation/{0}_{1}_{2}_pretrain_v3.pth'.format(
+            args.model,args.backbone, args.dataset,args.embedding_size)
+
 
     if args.dataset == 'pascal':
         if args.train:
+
             print("train dataset")
             dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                       train=args.train, crop_size=args.crop_size)
             valid_dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                             train=not (args.train), crop_size=args.crop_size)
-
         else:
 
             if args.process_type != None:
@@ -291,16 +294,24 @@ def main():
                     m.weight.requires_grad = False
                     m.bias.requires_grad = False
 
-        backbone_params = (
-                list(model.module.conv1.parameters()) +
-                list(model.module.bn1.parameters()) +
-                list(model.module.layer1.parameters()) +
-                list(model.module.layer2.parameters()) +
-                list(model.module.layer3.parameters()) +
-                list(model.module.layer4.parameters()))
+        if args.model != "Mask2Former":
+            backbone_params = (
+                    list(model.module.conv1.parameters()) +
+                    list(model.module.bn1.parameters()) +
+                    list(model.module.layer1.parameters()) +
+                    list(model.module.layer2.parameters()) +
+                    list(model.module.layer3.parameters()) +
+                    list(model.module.layer4.parameters()))
 
         if args.model == "PIGNet_GSPonly" or args.model=="PIGNet":
             last_params = list(model.module.pyramid_gnn.parameters())
+
+        elif args.model == "ASPP":
+            last_params = list(model.module.aspp.parameters())
+
+        else: # Masktoformer
+            backbone_params = list(model.module.backbone.parameters())
+            last_params = list(model.module.transformer_decoder.parameters())
 
         optimizer = optim.SGD([
             {'params': filter(lambda p: p.requires_grad, backbone_params)},
@@ -463,19 +474,18 @@ def main():
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         print(model_fname)
         model.load_state_dict(state_dict)
-        cmap = loadmat('C:/Users/hail/Desktop/ha/data/ADE/pascal_seg_colormap.mat')['colormap']
+        cmap = loadmat('./data/pascal_seg_colormap.mat')['colormap']
         cmap = (cmap * 255).astype(np.uint8).flatten().tolist()
 
         inter_meter = AverageMeter()
         union_meter = AverageMeter()
 
         feature_shape = (2048, 33, 33)
+
         dataset_loader = torch.utils.data.DataLoader(
             dataset, batch_size=args.batch_size, shuffle=False,
             pin_memory=True, num_workers=args.workers,
             collate_fn=lambda samples: make_batch(samples, args.batch_size, feature_shape))
-
-
 
         for i in tqdm(range(len(dataset))):
 
@@ -484,7 +494,7 @@ def main():
                 continue
 
             inputs = Variable(inputs.to(args.device))
-            outputs = model(inputs.unsqueeze(0))
+            outputs , _ = model(inputs.unsqueeze(0))
             _, pred = torch.max(outputs, 1)
             pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
             mask = target.numpy().astype(np.uint8)
