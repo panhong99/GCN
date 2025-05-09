@@ -19,3 +19,4 @@ __pycache__/
 /gcn-ha/PIGNet_ha/model_PIGNet.tar.gz
 /gcn-ha/PIGNet_ha/eval_graph
 /gcn-ha/PIGNet_ha/data/VOCdevkit
+/gcn-ha/PIGNet_ha/segmentation_result/

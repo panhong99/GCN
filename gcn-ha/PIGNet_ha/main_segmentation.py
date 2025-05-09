@@ -149,8 +149,8 @@ def main():
     args = argparse.Namespace()
     args.dataset = "pascal"
     args.model = "PIGNet" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
-    args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = True
+    args.backbone = "resnet101" # resnet[50 , 101]
+    args.scratch = False
     args.workers = 4
     args.epochs = 50
     args.batch_size = 16
@@ -166,11 +166,11 @@ def main():
     args.exp = "bn_lr7e-3"
     args.gpu = 0
     args.embedding_size = 21
-    args.n_layer = 8
-    args.n_skip_l = 2
+    args.n_layer = 12
+    args.n_skip_l = 3
     args.process_type = None  # None zoom, overlap, repeat
     zoom_factor = 0.1 # zoom in, out value 양수면 줌 음수면 줌아웃
-    overlap_percentage = 0.2 #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+    overlap_percentage = 0.5 #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
     pattern_repeat_count = 3 # 반복 횟수 2이면 2*2
 
     if args.train:
@@ -199,7 +199,6 @@ def main():
     else: # pretrain
         model_fname = 'model/segmentation/{0}_{1}_{2}_pretrain_v3.pth'.format(
             args.model,args.backbone, args.dataset,args.embedding_size)
-
 
     if args.dataset == 'pascal':
         if args.train:
@@ -274,8 +273,8 @@ def main():
     # print number of parameters
     print(f"Number of parameters: {num_params / (1000.0 ** 2): .3f} M")
 
-    #num_params_gnn = sum(p.numel() for p in model.pyramid_gnn.parameters() if p.requires_grad)
-    #print(f"Number of GNN parameters: {num_params_gnn / (1000.0 ** 2): .3f} M")
+    num_params_gnn = sum(p.numel() for p in model.pyramid_gnn.parameters() if p.requires_grad)
+    print(f"Number of GNN parameters: {num_params_gnn / (1000.0 ** 2): .3f} M")
 
     print(f"Entire model size: {size_in_bytes / (1024.0 ** 3): .3f} GB")
 
@@ -502,7 +501,7 @@ def main():
             mask_pred = Image.fromarray(pred)
             mask_pred.putpalette(cmap)
             if args.dataset == 'pascal':
-                mask_pred.save(os.path.join('data/pascal_val', imname))
+                mask_pred.save(os.path.join('segmentation_result/pascal', imname))
             elif args.dataset == 'cityscapes':
                 mask_pred.save(os.path.join('data/cityscapes_val', imname))
 

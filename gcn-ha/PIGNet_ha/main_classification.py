@@ -27,6 +27,7 @@ from vit_pytorch import ViT
 from efficientnet_pytorch import EfficientNet
 import warnings
 import timm
+import torchvision.transforms.functional as TF
 
 warnings.filterwarnings("ignore")
 
@@ -246,11 +247,11 @@ def main():
     # make fake args
     args = argparse.Namespace()
     args.dataset = "CIFAR-100" #CIFAR-10 CIFAR-100  imagenet
-    args.model = "PIGNet_GSPonly_classification" #PIGNet_classification Resnet  PIGNet_GSPonly_classification  vit  swin
+    args.model = "vit" #PIGNet_classification Resnet  PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = True
+    args.scratch = False
     args.train = False
-    args.degree = 0
+    args.degree = -180
     args.workers = 4
     args.epochs = 50
     args.batch_size = 8
@@ -267,7 +268,7 @@ def main():
     args.embedding_size = 256
     args.n_layer = 6
     args.n_skip_l = 2 #2
-    args.process_type = "zoom"  #zoom overlap repeat rotate None
+    args.process_type = "rotate"  #zoom overlap repeat rotate None
     # pattern_repeat_count = 2
     zoom_factor = 1 # 0.1 , 0.5 , 1.5 , 2
 
@@ -297,18 +298,18 @@ def main():
 
     if args.model=='vit':
         if args.scratch: # scartch == True
-            model_fname = 'model/classification_{0}_{1}_v3.pth'.format(
+            model_fname = 'model/classification/classification_{0}_{1}_v3.pth'.format(
                 args.model , "scratch" ,  args.dataset)
         else: # scratch = False
-            model_fname = 'model/classification_{0}_{1}_{2}_v3.pth'.format(
+            model_fname = 'model/classification/classification_{0}_{1}_{2}_v3.pth'.format(
                 args.model, "pretrained" , args.dataset)
 
     else:
         if args.scratch: # scartch == True
-            model_fname = 'model/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+            model_fname = 'model/classification/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model , args.backbone, "scratch" ,  args.dataset)
         else: # scratch = False
-            model_fname = 'model/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+            model_fname = 'model/classification/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model, args.backbone , "pretrained" , args.dataset)
 
     if args.dataset == 'imagenet':
@@ -402,7 +403,7 @@ def main():
 
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),
-                        transforms.RandomRotation(degrees=args.degree),  # (-15 ~ +15) rotate
+                        transforms.Lambda(lambda img: TF.rotate(img , angle = args.degree)),  # (-15 ~ +15) rotate
                         transforms.ToTensor(),
                     ])
 
@@ -842,7 +843,7 @@ def main():
                 plt.grid(True)
                 save_path = os.path.join("./eval_graph" , f"{args.model}_{args.backbone}_{args.scratch}.png")
                 plt.savefig(save_path , dpi = 300 , bbox_inches = "tight")
-                plt.show()
+                # plt.show()
 
             accuracy = 100 * correct / total
             print('Accuracy: {:.2f}%'.format(accuracy))
