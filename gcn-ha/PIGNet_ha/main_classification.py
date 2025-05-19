@@ -246,11 +246,11 @@ def make_batch(samples, batch_size, feature_shape):
 def main():
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "CIFAR-100" #CIFAR-10 CIFAR-100  imagenet
-    args.model = "vit" #PIGNet_classification Resnet  PIGNet_GSPonly_classification  vit  swin
+    args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
+    args.model = "vit" #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = False
-    args.train = False
+    args.train = True
     args.degree = -180
     args.workers = 4
     args.epochs = 50
@@ -268,7 +268,7 @@ def main():
     args.embedding_size = 256
     args.n_layer = 6
     args.n_skip_l = 2 #2
-    args.process_type = "rotate"  #zoom overlap repeat rotate None
+    args.process_type = None  #zoom overlap repeat rotate None
     # pattern_repeat_count = 2
     zoom_factor = 1 # 0.1 , 0.5 , 1.5 , 2
 
@@ -435,14 +435,51 @@ def main():
 
     elif args.dataset == 'CIFAR-10':
         image_size = 32
-        transform = transforms.Compose([
-            transforms.ToTensor()])
+
+        if args.train:
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
+            ])
+
+        else:
+            if args.process_type == None:
+                print("original data")
+                transform = transforms.Compose([
+                    transforms.ToTensor(),
+                    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
+                ])
+
+            else:
+                if args.process_type == 'zoom':
+                    transform = transforms.Compose([
+                        ZoomTransform(zoom_factor),  # Apply the zoom transformation
+                        transforms.ToTensor(),
+                        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
+                    ])
+                elif args.process_type == 'repeat':
+
+                    # Define transformations
+                    transform = transforms.Compose([
+                        transforms.Resize((image_size, image_size)),  # Resize to fixed size
+                        RepeatTransform(pattern_repeat_count),  # Apply the repeat transformation
+                        transforms.ToTensor(),  # Convert image to tensor
+                    ])
+                # TODO Rotate
+                elif args.process_type == "rotate":
+
+                    transform = transforms.Compose([
+                        transforms.Resize((image_size, image_size)),
+                        transforms.Lambda(lambda img: TF.rotate(img, angle=args.degree)),  # (-15 ~ +15) rotate
+                        transforms.ToTensor(),
+                    ])
 
         # CIFAR-10 데이터셋 로드
         dataset = torchvision.datasets.CIFAR10(root='./data/cifar-10/', train=True, download=True,transform=transform)#, transform=transform,target_transform=transform_target)
         valid_dataset = torchvision.datasets.CIFAR10(root='./data/cifar-10', train=False, download=True,transform=transform)#, transform=transform,target_transform=transform_target)
         dataset.CLASSES =['plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+
     else:
         raise ValueError('Unknown dataset: {}'.format(args.dataset))
 

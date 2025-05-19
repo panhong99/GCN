@@ -5,13 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b1818ae8-0b1f-401d-ace6-780dc60bb9b3" name="Changes" comment="edit pascal.py">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/ASPP.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/ASPP.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/pascal.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/pascal.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/utils.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -56,6 +54,7 @@
     "Python.[ResNet]Cifar-100.executor": "Debug",
     "Python.main_classification.executor": "Debug",
     "Python.main_segmentation.executor": "Debug",
+    "Python.pascal.executor": "Debug",
     "Python.train.executor": "Debug",
     "Python.train_vit.executor": "Debug",
     "Python.train_vit32.executor": "Debug",
@@ -170,18 +169,23 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py</url>
-          <line>793</line>
+          <line>830</line>
           <option name="timeStamp" value="40" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/pascal.py</url>
-          <line>214</line>
-          <option name="timeStamp" value="57" />
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py</url>
+          <line>502</line>
+          <option name="timeStamp" value="58" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py</url>
-          <line>494</line>
-          <option name="timeStamp" value="58" />
+          <line>509</line>
+          <option name="timeStamp" value="63" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py</url>
+          <line>439</line>
+          <option name="timeStamp" value="67" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>

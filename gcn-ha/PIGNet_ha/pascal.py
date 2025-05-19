@@ -32,7 +32,7 @@ class VOCSegmentation(data.Dataset):
       self.download()
 
     if self.train:
-      _list_f = os.path.join(_list_dir, 'train.txt')
+      _list_f = os.path.join(_list_dir, 'train_aug.txt')
     else:
       _list_f = os.path.join(_list_dir, 'val.txt')
 
@@ -49,7 +49,7 @@ class VOCSegmentation(data.Dataset):
         img_id = line.strip()
 
         img_path = os.path.join(_voc_root , "JPEGImages" , img_id + ".jpg")
-        mask_path = os.path.join(_voc_root , "SegmentationClass" , img_id + ".png")
+        mask_path = os.path.join(_voc_root , "SegmentationClassAug" , img_id + ".png")
 
         # _image = _voc_root + line.split()[0]
         # _mask = _voc_root + line.split()[1]
@@ -65,8 +65,8 @@ class VOCSegmentation(data.Dataset):
 
     _target = Image.open(self.masks[index])
 
-    # if self.process != None:
-    #   _target= _target.convert('L')
+    if self.process != None:
+      _target= _target.convert('L')
 
     # add image process for test
     if self.process == 'zoom':
@@ -200,7 +200,7 @@ class VOCSegmentation(data.Dataset):
     # Create empty new images and masks of the same size as the original image
     new_image_size = (image_size[0] * pattern_repeat_count, image_size[1] * pattern_repeat_count)
     new_image = Image.new('RGB', new_image_size)
-    new_mask = Image.new('P', new_image_size)
+    new_mask = Image.new('L', new_image_size)
 
     # Paste the original image and mask in a grid pattern
     for i in range(pattern_repeat_count):
@@ -250,7 +250,7 @@ class VOCSegmentation(data.Dataset):
 
       # Create a new black image and paste the resized image and mask in the center
       new_image = Image.new('RGB', (width, height), (255, 255, 255))
-      new_mask = Image.new('P', (width, height), 255)
+      new_mask = Image.new('L', (width, height), 255)
 
       new_image.paste(resized_image, ((width - new_width) // 2, (height - new_height) // 2))
       new_mask.paste(resized_mask, ((width - new_width) // 2, (height - new_height) // 2))

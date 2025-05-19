@@ -18,6 +18,7 @@ import pandas as pd
 from model_src import PIGNet_GSPonly, ASPP, PIGNet
 from model_src.Mask2Former import Mask2Former
 from pascal import VOCSegmentation
+from cityscapes import Cityscapes
 from utils import AverageMeter, inter_and_union
 from functools import partial
 import subprocess
@@ -148,13 +149,13 @@ def main():
     # make fake args
     args = argparse.Namespace()
     args.dataset = "pascal"
-    args.model = "PIGNet" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
+    args.model = "PIGNet_GSPonly" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
     args.backbone = "resnet101" # resnet[50 , 101]
     args.scratch = False
     args.workers = 4
     args.epochs = 50
     args.batch_size = 16
-    args.train = True
+    args.train = False
     args.crop_size = 513
     args.base_lr = 0.007
     args.last_mult = 1.0
@@ -168,7 +169,7 @@ def main():
     args.embedding_size = 21
     args.n_layer = 12
     args.n_skip_l = 3
-    args.process_type = None  # None zoom, overlap, repeat
+    args.process_type = "overlap"  # None zoom, overlap, repeat
     zoom_factor = 0.1 # zoom in, out value 양수면 줌 음수면 줌아웃
     overlap_percentage = 0.5 #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
     pattern_repeat_count = 3 # 반복 횟수 2이면 2*2
@@ -224,11 +225,17 @@ def main():
                                                 overlap_percentage=overlap_percentage,
                                                 pattern_repeat_count=pattern_repeat_count)
 
+    elif args.dataset == 'cityscapes':
+        dataset = Cityscapes('data/cityscapes',
+                             train=args.train, crop_size=args.crop_size)
+        valid_dataset = Cityscapes('data/cityscapes',
+                             train=not(args.train), crop_size=args.crop_size)
 
     else:
         raise ValueError('Unknown dataset: {}'.format(args.dataset))
 
     if args.backbone in ["resnet50","resnet101","resnet152"]:
+
         if args.model == "PIGNet_GSPonly":
             model = getattr(PIGNet_GSPonly, args.backbone)(
                 pretrained=(not args.scratch),
@@ -273,8 +280,8 @@ def main():
     # print number of parameters
     print(f"Number of parameters: {num_params / (1000.0 ** 2): .3f} M")
 
-    num_params_gnn = sum(p.numel() for p in model.pyramid_gnn.parameters() if p.requires_grad)
-    print(f"Number of GNN parameters: {num_params_gnn / (1000.0 ** 2): .3f} M")
+    # num_params_gnn = sum(p.numel() for p in model.pyramid_gnn.parameters() if p.requires_grad)
+    # print(f"Number of GNN parameters: {num_params_gnn / (1000.0 ** 2): .3f} M")
 
     print(f"Entire model size: {size_in_bytes / (1024.0 ** 3): .3f} GB")
 
@@ -317,7 +324,7 @@ def main():
             {'params': filter(lambda p: p.requires_grad, last_params)}
 
         ],
-            lr=args.base_lr, momentum=0.9, weight_decay=0.0001)
+            lr=args.base_lr, momentum=0.9, weight_decay=1e-4)
         feature_shape = (2048, 33, 33)
 
         collate_fn = partial(make_batch_fn, batch_size=args.batch_size, feature_shape=feature_shape)
@@ -460,6 +467,8 @@ def main():
                 log['test/epoch/loss'] = losses_test / len(dataset)
                 log['test/epoch/iou'] = miou.item()
             # time.sleep(60)
+
+            wandb.log(log)
             model.train()
 
         wandb.finish()
