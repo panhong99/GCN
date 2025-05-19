@@ -13,6 +13,7 @@ __pycache__/
 /.idea
 /gcn-ha/PIGNet_ha/data/cifar-10
 /gcn-ha/PIGNet_ha/data/cifar-100
+/gcn-ha/PIGNet_ha/data/cityscape
 /gcn-ha/PIGNet_ha/model
 /gcn-ha/PIGNet_ha/wandb
 /gcn-ha/PIGNet_ha/model_CNN_ViT.tar.gz
@@ -20,3 +21,4 @@ __pycache__/
 /gcn-ha/PIGNet_ha/eval_graph
 /gcn-ha/PIGNet_ha/data/VOCdevkit
 /gcn-ha/PIGNet_ha/segmentation_result/
+/cityscapesscripts

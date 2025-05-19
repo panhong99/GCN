@@ -5,11 +5,11 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b1818ae8-0b1f-401d-ace6-780dc60bb9b3" name="Changes" comment="edit pascal.py">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/cityscapes.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/cityscapes.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/pascal.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/pascal.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/utils.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -174,12 +174,12 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py</url>
-          <line>502</line>
+          <line>511</line>
           <option name="timeStamp" value="58" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py</url>
-          <line>509</line>
+          <line>518</line>
           <option name="timeStamp" value="63" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">

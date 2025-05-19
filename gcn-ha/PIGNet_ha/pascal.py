@@ -99,8 +99,6 @@ class VOCSegmentation(data.Dataset):
       _target = _target.unsqueeze(0)
       _target = self.target_transform(_target)
 
-
-
     return _img, _target
 
   def __len__(self):

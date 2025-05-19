@@ -226,10 +226,28 @@ def main():
                                                 pattern_repeat_count=pattern_repeat_count)
 
     elif args.dataset == 'cityscapes':
-        dataset = Cityscapes('data/cityscapes',
-                             train=args.train, crop_size=args.crop_size)
-        valid_dataset = Cityscapes('data/cityscapes',
-                             train=not(args.train), crop_size=args.crop_size)
+        if args.train:
+            print("train dataset cityscape")
+
+            dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                                 train=args.train, crop_size=args.crop_size)
+            valid_dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                                 train=not(args.train), crop_size=args.crop_size)
+
+        else: # val
+            if args.process_type != None:
+                print(args.process_type)
+                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                                          train=args.train, crop_size=args.crop_size,
+                                          process=args.process_type, process_value=zoom_factor,
+                                          overlap_percentage=overlap_percentage,
+                                          pattern_repeat_count=pattern_repeat_count)
+            else:
+                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                                          train=args.train, crop_size=args.crop_size,
+                                          process=None, process_value=zoom_factor,
+                                          overlap_percentage=overlap_percentage,
+                                          pattern_repeat_count=pattern_repeat_count)
 
     else:
         raise ValueError('Unknown dataset: {}'.format(args.dataset))
