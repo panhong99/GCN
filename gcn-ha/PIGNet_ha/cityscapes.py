@@ -56,6 +56,7 @@ class Cityscapes(data.Dataset):
         print("!! zoom_in model")
 
     dataset_split = 'train' if self.train else 'val'
+
     self.images = self._get_files('image', dataset_split)
     self.masks = self._get_files('label', dataset_split)
 
@@ -87,7 +88,7 @@ class Cityscapes(data.Dataset):
     _img, _target = preprocess(_img, _target,
                                flip=True if self.train else False,
                                scale=(0.5, 2.0) if self.train else None,
-                               crop=(self.crop_size, self.crop_size) if self.train else (1025, 2049))
+                               crop=(self.crop_size, self.crop_size))
 
     if self.transform is not None:
       _img = self.transform(_img)

@@ -246,7 +246,7 @@ def make_batch(samples, batch_size, feature_shape):
 def main():
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
+    args.dataset = "imagenet" #CIFAR-10 CIFAR-100  imagenet
     args.model = "vit" #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = False
@@ -270,7 +270,7 @@ def main():
     args.n_skip_l = 2 #2
     args.process_type = None  #zoom overlap repeat rotate None
     # pattern_repeat_count = 2
-    zoom_factor = 1 # 0.1 , 0.5 , 1.5 , 2
+    zoom_factor = 0.1 # 0.1 , 0.5 , 1.5 , 2
 
     # if is cuda available device
     if torch.cuda.is_available():
@@ -315,7 +315,7 @@ def main():
     if args.dataset == 'imagenet':
         # 데이터셋 경로 및 변환 정의
         image_size=224
-        data_dir = 'C:/Users/hail/Desktop/ha/data/Imagenet'
+        data_dir = '/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/imagenet-100'
         # Set the zoom factor (e.g., 1.2 to zoom in, 0.8 to zoom out)
 
         if args.train:
@@ -324,6 +324,7 @@ def main():
                 transforms.Resize((image_size, image_size)),  # Resize to fixed size
                 transforms.ToTensor(),  # Convert image to tensor
             ])
+
         else:
             if args.process_type==None:
                 transform = transforms.Compose([
@@ -347,10 +348,18 @@ def main():
                         transforms.ToTensor(),  # Convert image to tensor
                     ])
 
+                # TODO Rotate
+                elif args.process_type == "rotate":
+
+                    transform = transforms.Compose([
+                        transforms.Resize((image_size, image_size)),
+                        transforms.Lambda(lambda img: TF.rotate(img, angle=args.degree)),  # (-15 ~ +15) rotate
+                        transforms.ToTensor(),
+                    ])
+
         # Load datasets with ImageFolder and apply transformations
         dataset = ImageFolder(root=f'{data_dir}/train', transform=transform)
         valid_dataset = ImageFolder(root=f'{data_dir}/val', transform=transform)
-
 
         # dataset = torchvision.datasets.ImageFolder(root=data_dir+'/train', transform=transform)
         #
@@ -359,11 +368,17 @@ def main():
         cls2label = {}
 
         import json
-        json_file=data_dir+'/imagenet_class_index.json'
+        json_file=data_dir+'/Labels.json'
         with open(json_file, "r") as read_file:
             class_idx = json.load(read_file)
-            idx2label = [class_idx[str(k)][1] for k in range(len(class_idx))]
-            cls2label = {class_idx[str(k)][0]: class_idx[str(k)][1] for k in range(len(class_idx))}
+
+            idx2label = list(class_idx.values())
+
+            cla2label = class_idx
+
+            # idx2label = [class_idx[str(k)][1] for k in range(len(class_idx))]
+            # cls2label = {class_idx[str(k)][0]: class_idx[str(k)][1] for k in range(len(class_idx))}
+
         dataset.CLASSES = idx2label
 
     elif args.dataset == 'CIFAR-100':
@@ -527,22 +542,22 @@ def main():
             if args.scratch:
                 print("scratch")
                 model = timm.create_model("vit_small_patch16_224" , pretrained = False)
-                model.patch_embed.img_size = [32 , 32]
-                model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
-                model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
+                # model.patch_embed.img_size = [32 , 32] # 33 for cifar , 224 for imagenet
+                # model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
+                # model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
 
-                resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
-                model.pos_embed = torch.nn.Parameter(resized_posemb)
+                # resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
+                # model.pos_embed = torch.nn.Parameter(resized_posemb)
 
             else: # pretrained
                 print("pretrained")
                 model = timm.create_model("vit_small_patch16_224" , pretrained = True)
-                model.patch_embed.img_size = [32 , 32]
-                model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
-                model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
-
-                resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
-                model.pos_embed = torch.nn.Parameter(resized_posemb)
+                # model.patch_embed.img_size = [32 , 32]
+                # model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
+                # model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
+                #
+                # resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
+                # model.pos_embed = torch.nn.Parameter(resized_posemb)
 
         elif args.model == 'swin':
             model = torchvision.models.swin_t(weights=torchvision.models.Swin_T_Weights.DEFAULT)

@@ -148,14 +148,14 @@ def make_batch(samples, batch_size, feature_shape):
 def main():
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "pascal"
+    args.dataset = "cityscape"
     args.model = "PIGNet_GSPonly" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
-    args.backbone = "resnet101" # resnet[50 , 101]
+    args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = False
     args.workers = 4
     args.epochs = 50
     args.batch_size = 16
-    args.train = False
+    args.train = True
     args.crop_size = 513
     args.base_lr = 0.007
     args.last_mult = 1.0
@@ -169,7 +169,7 @@ def main():
     args.embedding_size = 21
     args.n_layer = 12
     args.n_skip_l = 3
-    args.process_type = "overlap"  # None zoom, overlap, repeat
+    args.process_type = None  # None zoom, overlap, repeat
     zoom_factor = 0.1 # zoom in, out value 양수면 줌 음수면 줌아웃
     overlap_percentage = 0.5 #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
     pattern_repeat_count = 3 # 반복 횟수 2이면 2*2
@@ -225,25 +225,26 @@ def main():
                                                 overlap_percentage=overlap_percentage,
                                                 pattern_repeat_count=pattern_repeat_count)
 
-    elif args.dataset == 'cityscapes':
+    elif args.dataset == 'cityscape':
         if args.train:
             print("train dataset cityscape")
 
             dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                  train=args.train, crop_size=args.crop_size)
+
             valid_dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
-                                 train=not(args.train), crop_size=args.crop_size)
+                                 train=not (args.train), crop_size=args.crop_size)
 
         else: # val
             if args.process_type != None:
                 print(args.process_type)
-                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                           train=args.train, crop_size=args.crop_size,
                                           process=args.process_type, process_value=zoom_factor,
                                           overlap_percentage=overlap_percentage,
                                           pattern_repeat_count=pattern_repeat_count)
             else:
-                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                           train=args.train, crop_size=args.crop_size,
                                           process=None, process_value=zoom_factor,
                                           overlap_percentage=overlap_percentage,
