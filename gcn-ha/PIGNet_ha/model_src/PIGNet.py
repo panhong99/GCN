@@ -400,7 +400,6 @@ class ResNet(nn.Module):
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        # self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=2 , multi=[1,2,4])
         self.pyramid_gnn = GSP(num_classes, 512 * block.expansion, self.embedding_size, self.n_layer,
                                n_skip_l=self.n_skip_l)
@@ -413,25 +412,6 @@ class ResNet(nn.Module):
             elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.GroupNorm):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
-
-    def _make_layer_(self, block, planes, blocks, stride=1, dilation=1):
-        downsample = None
-        if stride != 1 or dilation != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                self.conv(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, dilation=max(1, dilation / 2), bias=False),
-                self.norm(planes * block.expansion),
-            )
-
-        layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample, dilation=max(1, dilation / 2), conv=self.conv,
-                            norm=self.norm))
-        self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, dilation=dilation, conv=self.conv, norm=self.norm))
-
-        return nn.Sequential(*layers)
-
 
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1 , multi=[1,1,1]):
         downsample = None

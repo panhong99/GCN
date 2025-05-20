@@ -246,15 +246,15 @@ def make_batch(samples, batch_size, feature_shape):
 def main():
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "imagenet" #CIFAR-10 CIFAR-100  imagenet
-    args.model = "vit" #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
+    args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
+    args.model = "Resnet" #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = False
+    args.scratch = True
     args.train = True
-    args.degree = -180
+    args.degree = 60
     args.workers = 4
     args.epochs = 50
-    args.batch_size = 8
+    args.batch_size = 16
     args.crop_size = 513 #513
     args.base_lr = 0.007
     args.last_mult = 1.0 
@@ -266,8 +266,8 @@ def main():
     args.exp = "bn_lr7e-3"
     args.gpu = 0
     args.embedding_size = 256
-    args.n_layer = 6
-    args.n_skip_l = 2 #2
+    args.n_layer = 12
+    args.n_skip_l = 3 #2
     args.process_type = None  #zoom overlap repeat rotate None
     # pattern_repeat_count = 2
     zoom_factor = 0.1 # 0.1 , 0.5 , 1.5 , 2
@@ -315,6 +315,7 @@ def main():
     if args.dataset == 'imagenet':
         # 데이터셋 경로 및 변환 정의
         image_size=224
+
         data_dir = '/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/imagenet-100'
         # Set the zoom factor (e.g., 1.2 to zoom in, 0.8 to zoom out)
 
@@ -542,22 +543,24 @@ def main():
             if args.scratch:
                 print("scratch")
                 model = timm.create_model("vit_small_patch16_224" , pretrained = False)
-                # model.patch_embed.img_size = [32 , 32] # 33 for cifar , 224 for imagenet
-                # model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
-                # model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
+                if args.dataset != "imagenet":
+                    model.patch_embed.img_size = [32 , 32] # 33 for cifar , 224 for imagenet
+                    model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
+                    model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
 
-                # resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
-                # model.pos_embed = torch.nn.Parameter(resized_posemb)
+                    resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
+                    model.pos_embed = torch.nn.Parameter(resized_posemb)
 
             else: # pretrained
                 print("pretrained")
                 model = timm.create_model("vit_small_patch16_224" , pretrained = True)
-                # model.patch_embed.img_size = [32 , 32]
-                # model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
-                # model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
-                #
-                # resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
-                # model.pos_embed = torch.nn.Parameter(resized_posemb)
+                if args.dataset != "imagenet":
+                    model.patch_embed.img_size = [32 , 32]
+                    model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
+                    model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
+
+                    resized_posemb = resize_pos_embed(model.pos_embed , 14 , 2)
+                    model.pos_embed = torch.nn.Parameter(resized_posemb)
 
         elif args.model == 'swin':
             model = torchvision.models.swin_t(weights=torchvision.models.Swin_T_Weights.DEFAULT)

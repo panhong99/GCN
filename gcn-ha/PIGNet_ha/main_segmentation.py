@@ -148,14 +148,14 @@ def make_batch(samples, batch_size, feature_shape):
 def main():
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "cityscape"
-    args.model = "PIGNet_GSPonly" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
+    args.dataset = "pascal" # cityscape pascal
+    args.model = "PIGNet" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
     args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = False
+    args.scratch = True
+    args.train = True
     args.workers = 4
     args.epochs = 50
     args.batch_size = 16
-    args.train = True
     args.crop_size = 513
     args.base_lr = 0.007
     args.last_mult = 1.0
