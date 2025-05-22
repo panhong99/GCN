@@ -5,14 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b1818ae8-0b1f-401d-ace6-780dc60bb9b3" name="Changes" comment="edit pascal.py">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly_classification.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_classification.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -50,23 +45,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;Python.Cifar-100.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.PIGNet.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.[ResNet]Cifar-100.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.main_classification.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.main_segmentation.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.pascal.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.train.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.train_vit.executor&quot;: &quot;Debug&quot;,
-    &quot;Python.train_vit32.executor&quot;: &quot;Debug&quot;,
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/home/hail/Desktop/pan/GCN&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Python.Cifar-100.executor": "Debug",
+    "Python.PIGNet.executor": "Debug",
+    "Python.[ResNet]Cifar-100.executor": "Debug",
+    "Python.main_classification.executor": "Debug",
+    "Python.main_segmentation.executor": "Debug",
+    "Python.pascal.executor": "Debug",
+    "Python.train.executor": "Debug",
+    "Python.train_vit.executor": "Debug",
+    "Python.train_vit32.executor": "Debug",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/home/hail1/Desktop/pan/GCN",
+    "settings.editor.selected.configurable": "com.jetbrains.python.configuration.PyActiveSdkModuleConfigurable"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$" />
@@ -184,6 +180,31 @@
           <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py</url>
           <line>849</line>
           <option name="timeStamp" value="90" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/Mask2Former.py</url>
+          <line>476</line>
+          <option name="timeStamp" value="95" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/Mask2Former.py</url>
+          <line>398</line>
+          <option name="timeStamp" value="96" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/Mask2Former.py</url>
+          <line>378</line>
+          <option name="timeStamp" value="97" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py</url>
+          <line>396</line>
+          <option name="timeStamp" value="99" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/Mask2Former.py</url>
+          <line>548</line>
+          <option name="timeStamp" value="100" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>
