@@ -389,6 +389,7 @@ def main():
         sampler = DistributedSampler(dataset , num_replicas = world_size , rank = local_rank)
     
         batch_size_per_gpu = args.batch_size // world_size
+
         dataset_loader = torch.utils.data.DataLoader(
             dataset,
             sampler = sampler,
@@ -421,7 +422,9 @@ def main():
         train_step = 0
 
         for epoch in range(start_epoch, args.epochs):
+
             sampler.set_epoch(epoch)
+
             if local_rank == 0:
                 print("EPOCHS : ", epoch + 1, " / ", args.epochs)
 
@@ -430,7 +433,7 @@ def main():
 
             data_iter = dataset_loader
             if dist.get_rank() == 0:
-                data_iter = tqdm(dataset_loader)
+                data_iter = tqdm(iter(dataset_loader) , total = len(dataset_loader))
 
             for inputs, target in data_iter:
                 log = {}
@@ -502,11 +505,12 @@ def main():
                 model.eval()
                 losses_test = 0.0
                 log = {}
+
                 for i in tqdm(range(len(valid_dataset))):
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(args.device))
                     target = Variable(target.to(args.device)).long()
-                    outputs , _ = model(inputs.unsqueeze(0))
+                    outputs = model(inputs.unsqueeze(0))
                     outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -570,7 +574,7 @@ def main():
                 continue
 
             inputs = Variable(inputs.to(args.device))
-            outputs , _ = model(inputs.unsqueeze(0))
+            outputs = model(inputs.unsqueeze(0))
             _, pred = torch.max(outputs, 1)
             pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
             mask = target.numpy().astype(np.uint8)
