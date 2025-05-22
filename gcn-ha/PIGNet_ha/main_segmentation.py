@@ -540,10 +540,16 @@ def main():
                 log['test/epoch/iou'] = miou.item()
             # time.sleep(60)
 
-            wandb.log(log)
+            if dist.get_rank() == 0:    
+                wandb.log(log)
+
             model.train()
+
+        if dist.get_rank() == 0:
+            wandb.finish()
+    
         cleanup()
-        wandb.finish()
+
     else:
         print("Evaluating !!! ")
         torch.cuda.set_device(args.gpu)
