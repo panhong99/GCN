@@ -246,7 +246,7 @@ def make_batch(samples, batch_size, feature_shape):
 def main():
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
+    args.dataset = "imagenet" #CIFAR-10 CIFAR-100  imagenet
     args.model = "Resnet" #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = True

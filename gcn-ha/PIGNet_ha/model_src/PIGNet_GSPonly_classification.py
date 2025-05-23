@@ -205,7 +205,7 @@ class GSP(nn.Module):
 
         self.edge_index = None
         self.graph_data = None
-        self.grid_size =  14  #feature map size  33 for pascal   8 for cifar-100  14 for imagenet
+        self.grid_size =  14 #feature map size  33 for pascal   8 for cifar-100  14 for imagenet
 
         self.gelu = nn.GELU()
 
