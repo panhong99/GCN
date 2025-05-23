@@ -24,8 +24,23 @@ from functools import partial
 import subprocess
 import wandb
 import warnings
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import DataLoader , DistributedSampler
+import torch.distributed as dist
+import torch.multiprocessing as mp
 
 warnings.filterwarnings("ignore")
+
+def setup(rank , world_size):
+    dist.init_process_group(
+        "nccl" , 
+        init_method = "env://",
+        rank = rank , 
+        world_size = world_size
+        )
+
+def cleanup():
+    dist.destroy_process_group()
 
 def make_batch_fn(samples, batch_size, feature_shape):
     return make_batch(samples, batch_size, feature_shape)
@@ -146,17 +161,24 @@ def make_batch(samples, batch_size, feature_shape):
         return [torch.stack(inputs), torch.stack(labels)]
 
 def main():
+
+    local_rank = int(os.environ["LOCAL_RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    
+    
+    setup(local_rank , world_size)
+
     # make fake args
     args = argparse.Namespace()
     args.dataset = "pascal" # cityscape pascal
-    args.model = "PIGNet" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
+    args.model = "Mask2Former" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
     args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = True
     args.train = True
     args.workers = 4
     args.epochs = 50
-    args.batch_size = 16
-    args.crop_size = 513
+    args.batch_size = 8
+    args.crop_size = 512
     args.base_lr = 0.007
     args.last_mult = 1.0
     args.groups = None
@@ -170,17 +192,20 @@ def main():
     args.n_layer = 12
     args.n_skip_l = 3
     args.process_type = None  # None zoom, overlap, repeat
+    args.gpu_ids = [0,1]
+    args.use_ddp = True
     zoom_factor = 0.1 # zoom in, out value 양수면 줌 음수면 줌아웃
     overlap_percentage = 0.5 #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
     pattern_repeat_count = 3 # 반복 횟수 2이면 2*2
-
-    if args.train:
+    
+    if args.train & dist.get_rank() == 0:
         if args.scratch == False:
             wandb.init(project='gcn_segmentation', name=args.model+'_'+args.backbone+ '_pretrain' + '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
                         config=args.__dict__)
         else:
             wandb.init(project='gcn_segmentation', name=args.model+'_'+args.backbone+ '_scratch' + '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
                         config=args.__dict__)
+
 
     # if is cuda available device
     if torch.cuda.is_available():
@@ -189,8 +214,13 @@ def main():
         args.device = 'cpu'
 
     print("cuda available",args.device)
+    
+    print(f"local_rank : {local_rank}")
+    print(f"world_size : {world_size}")
+
 
     loss_list = []
+
     # assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
 
@@ -205,21 +235,21 @@ def main():
         if args.train:
 
             print("train dataset")
-            dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+            dataset = VOCSegmentation('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                       train=args.train, crop_size=args.crop_size)
-            valid_dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+            valid_dataset = VOCSegmentation('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                             train=not (args.train), crop_size=args.crop_size)
         else:
 
             if args.process_type != None:
                 print(args.process_type)
-                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                                 train=args.train, crop_size=args.crop_size,
                                                 process=args.process_type, process_value=zoom_factor,
                                                 overlap_percentage=overlap_percentage,
                                                 pattern_repeat_count=pattern_repeat_count)
             else:
-                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                                 train=args.train, crop_size=args.crop_size,
                                                 process=None, process_value=zoom_factor,
                                                 overlap_percentage=overlap_percentage,
@@ -229,22 +259,22 @@ def main():
         if args.train:
             print("train dataset cityscape")
 
-            dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+            dataset = Cityscapes('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                  train=args.train, crop_size=args.crop_size)
 
-            valid_dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+            valid_dataset = Cityscapes('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                  train=not (args.train), crop_size=args.crop_size)
 
         else: # val
             if args.process_type != None:
                 print(args.process_type)
-                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                dataset = Cityscapes('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                           train=args.train, crop_size=args.crop_size,
                                           process=args.process_type, process_value=zoom_factor,
                                           overlap_percentage=overlap_percentage,
                                           pattern_repeat_count=pattern_repeat_count)
             else:
-                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                dataset = Cityscapes('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                           train=args.train, crop_size=args.crop_size,
                                           process=None, process_value=zoom_factor,
                                           overlap_percentage=overlap_percentage,
@@ -297,18 +327,26 @@ def main():
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print number of parameters
-    print(f"Number of parameters: {num_params / (1000.0 ** 2): .3f} M")
+    if dist.get_rank() == 0:
+        print(f"Number of parameters: {num_params / (1000.0 ** 2): .3f} M")
 
     # num_params_gnn = sum(p.numel() for p in model.pyramid_gnn.parameters() if p.requires_grad)
     # print(f"Number of GNN parameters: {num_params_gnn / (1000.0 ** 2): .3f} M")
-
-    print(f"Entire model size: {size_in_bytes / (1024.0 ** 3): .3f} GB")
+    if dist.get_rank() == 0:
+        print(f"Entire model size: {size_in_bytes / (1024.0 ** 3): .3f} GB")
 
     if args.train:
-        print("Training !!! ")
+
+        args.device = f"cuda:{local_rank}"
+        torch.cuda.set_device(local_rank)
+
+        if dist.get_rank() == 0:
+            print("Training !!! ")
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
-        model = nn.DataParallel(model).to(args.device)
+        model = model.to(args.device)
+        model = DDP(model , device_ids = [local_rank] , output_device = local_rank , find_unused_parameters=True)
+
         model.train()
 
         if args.freeze_bn:
@@ -348,10 +386,15 @@ def main():
 
         collate_fn = partial(make_batch_fn, batch_size=args.batch_size, feature_shape=feature_shape)
 
+        sampler = DistributedSampler(dataset , num_replicas = world_size , rank = local_rank)
+    
+        batch_size_per_gpu = args.batch_size // world_size
+
         dataset_loader = torch.utils.data.DataLoader(
             dataset,
-            batch_size=args.batch_size,
-            shuffle=args.train,
+            sampler = sampler,
+            batch_size=batch_size_per_gpu,
+            shuffle= not args.train,
             pin_memory=True,
             num_workers=args.workers,
             collate_fn=collate_fn
@@ -379,12 +422,20 @@ def main():
         train_step = 0
 
         for epoch in range(start_epoch, args.epochs):
-            print("EPOCHS : ", epoch + 1, " / ", args.epochs)
+
+            sampler.set_epoch(epoch)
+
+            if local_rank == 0:
+                print("EPOCHS : ", epoch + 1, " / ", args.epochs)
 
             loss_sum = 0
             cnt = 0
 
-            for inputs, target in tqdm(iter(dataset_loader)):
+            data_iter = dataset_loader
+            if dist.get_rank() == 0:
+                data_iter = tqdm(iter(dataset_loader) , total = len(dataset_loader))
+
+            for inputs, target in data_iter:
                 log = {}
                 cur_iter = epoch * len(dataset_loader) + cnt
                 lr = args.base_lr * (1 - float(cur_iter) / max_iter) ** 0.9
@@ -393,7 +444,7 @@ def main():
                 optimizer.param_groups[1]['lr'] = lr * args.last_mult
                 inputs = Variable(inputs.to(args.device))
                 target = Variable(target.to(args.device)).long()
-                outputs , _ = model(inputs)
+                outputs = model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -419,7 +470,8 @@ def main():
             loss_avg = loss_sum / len(dataset_loader)
             log['train/epoch/loss'] = loss_avg
 
-            wandb.log(log)
+            if dist.get_rank() == 0:
+                wandb.log(log)
 
             loss_list.append(loss_avg)
             print('epoch: {0}\t'
@@ -453,11 +505,12 @@ def main():
                 model.eval()
                 losses_test = 0.0
                 log = {}
+
                 for i in tqdm(range(len(valid_dataset))):
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(args.device))
                     target = Variable(target.to(args.device)).long()
-                    outputs , _ = model(inputs.unsqueeze(0))
+                    outputs = model(inputs.unsqueeze(0))
                     outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -487,10 +540,16 @@ def main():
                 log['test/epoch/iou'] = miou.item()
             # time.sleep(60)
 
-            wandb.log(log)
+            if dist.get_rank() == 0:    
+                wandb.log(log)
+
             model.train()
 
-        wandb.finish()
+        if dist.get_rank() == 0:
+            wandb.finish()
+    
+        cleanup()
+
     else:
         print("Evaluating !!! ")
         torch.cuda.set_device(args.gpu)
@@ -521,7 +580,7 @@ def main():
                 continue
 
             inputs = Variable(inputs.to(args.device))
-            outputs , _ = model(inputs.unsqueeze(0))
+            outputs = model(inputs.unsqueeze(0))
             _, pred = torch.max(outputs, 1)
             pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
             mask = target.numpy().astype(np.uint8)

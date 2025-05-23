@@ -25,3 +25,5 @@ __pycache__/
 /cityscapesscripts
 /gcn-ha/PIGNet_ha/.fr-agTx0l
 /gcn-ha/PIGNet_ha/data.tar.gz
+/.vscode/
+/some/other/stuff/
