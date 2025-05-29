@@ -243,15 +243,14 @@ def make_batch(samples, batch_size, feature_shape):
         return [torch.stack(inputs), torch.stack(labels)]
 
 
-def main():
+def main(process , factor):
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "imagenet" #CIFAR-10 CIFAR-100  imagenet
+    args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
     args.model = "Resnet" #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = True
-    args.train = True
-    args.degree = 60
+    args.train = False
     args.workers = 4
     args.epochs = 50
     args.batch_size = 16
@@ -268,9 +267,9 @@ def main():
     args.embedding_size = 256
     args.n_layer = 12
     args.n_skip_l = 3 #2
-    args.process_type = None  #zoom overlap repeat rotate None
+    args.process_type = process  #zoom overlap repeat rotate None
     # pattern_repeat_count = 2
-    zoom_factor = 0.1 # 0.1 , 0.5 , 1.5 , 2
+    args.factor = factor # 0.1 , 0.5 , 1.5 , 2
 
     # if is cuda available device
     if torch.cuda.is_available():
@@ -298,18 +297,18 @@ def main():
 
     if args.model=='vit':
         if args.scratch: # scartch == True
-            model_fname = 'model/classification/classification_{0}_{1}_v3.pth'.format(
+            model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model , "scratch" ,  args.dataset)
         else: # scratch = False
-            model_fname = 'model/classification/classification_{0}_{1}_{2}_v3.pth'.format(
+            model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model, "pretrained" , args.dataset)
 
     else:
         if args.scratch: # scartch == True
-            model_fname = 'model/classification/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+            model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model , args.backbone, "scratch" ,  args.dataset)
         else: # scratch = False
-            model_fname = 'model/classification/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+            model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model, args.backbone , "pretrained" , args.dataset)
 
     if args.dataset == 'imagenet':
@@ -337,7 +336,7 @@ def main():
                     # Define transformations
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),  # Resize to fixed size
-                        ZoomTransform(zoom_factor),  # Apply the zoom transformation
+                        ZoomTransform(args.factor),  # Apply the zoom transformation
                         transforms.ToTensor(),  # Convert image to tensor
                     ])
                 elif args.process_type =='repeat':
@@ -345,7 +344,7 @@ def main():
                     # Define transformations
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),  # Resize to fixed size
-                        RepeatTransform(pattern_repeat_count),  # Apply the repeat transformation
+                        RepeatTransform(args.factor),  # Apply the repeat transformation
                         transforms.ToTensor(),  # Convert image to tensor
                     ])
 
@@ -354,7 +353,7 @@ def main():
 
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),
-                        transforms.Lambda(lambda img: TF.rotate(img, angle=args.degree)),  # (-15 ~ +15) rotate
+                        transforms.Lambda(lambda img: TF.rotate(img, angle=args.factor)),  # (-15 ~ +15) rotate
                         transforms.ToTensor(),
                     ])
 
@@ -402,7 +401,7 @@ def main():
             else:
                 if args.process_type == 'zoom':
                     transform = transforms.Compose([
-                        ZoomTransform(zoom_factor),  # Apply the zoom transformation
+                        ZoomTransform(args.factor),  # Apply the zoom transformation
                         transforms.ToTensor(),
                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
                     ])
@@ -411,7 +410,7 @@ def main():
                     # Define transformations
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),  # Resize to fixed size
-                        RepeatTransform(pattern_repeat_count),  # Apply the repeat transformation
+                        RepeatTransform(args.factor),  # Apply the repeat transformation
                         transforms.ToTensor(),  # Convert image to tensor
                     ])
                 # TODO Rotate
@@ -419,7 +418,7 @@ def main():
 
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),
-                        transforms.Lambda(lambda img: TF.rotate(img , angle = args.degree)),  # (-15 ~ +15) rotate
+                        transforms.Lambda(lambda img: TF.rotate(img , angle = args.factor)),  # (-15 ~ +15) rotate
                         transforms.ToTensor(),
                     ])
 
@@ -469,7 +468,7 @@ def main():
             else:
                 if args.process_type == 'zoom':
                     transform = transforms.Compose([
-                        ZoomTransform(zoom_factor),  # Apply the zoom transformation
+                        ZoomTransform(args.factor),  # Apply the zoom transformation
                         transforms.ToTensor(),
                         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
                     ])
@@ -478,7 +477,7 @@ def main():
                     # Define transformations
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),  # Resize to fixed size
-                        RepeatTransform(pattern_repeat_count),  # Apply the repeat transformation
+                        RepeatTransform(args.factor),  # Apply the repeat transformation
                         transforms.ToTensor(),  # Convert image to tensor
                     ])
                 # TODO Rotate
@@ -486,7 +485,7 @@ def main():
 
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),
-                        transforms.Lambda(lambda img: TF.rotate(img, angle=args.degree)),  # (-15 ~ +15) rotate
+                        transforms.Lambda(lambda img: TF.rotate(img, angle=args.factor)),  # (-15 ~ +15) rotate
                         transforms.ToTensor(),
                     ])
 
@@ -902,6 +901,28 @@ def main():
 
             accuracy = 100 * correct / total
             print('Accuracy: {:.2f}%'.format(accuracy))
+            return accuracy
 
 if __name__ == "__main__":
-    main()
+    
+    zoom_ratio = [0.1,0.5,1,1.5,2]
+    rotate_degree = [60 , 45 , 30 , 15, 0 , -15 , -30 , -45 , -60 , -90 , -120 , -150 , -180]
+
+    process_dict = {
+        "zoom" : zoom_ratio , 
+        "rotate" : rotate_degree
+    }
+
+    output_dict = {"zoom" : [] , "rotate" : []}
+
+    if args.train != True: # inference
+        for key , value in process_dict.items():
+            for ratio in value:
+                output = main(key , ratio)
+                output_dict[key].append(output)
+
+    else: 
+        main(None , None)
+
+    print(output_dict)
+

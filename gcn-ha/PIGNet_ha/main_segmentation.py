@@ -24,23 +24,8 @@ from functools import partial
 import subprocess
 import wandb
 import warnings
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader , DistributedSampler
-import torch.distributed as dist
-import torch.multiprocessing as mp
 
 warnings.filterwarnings("ignore")
-
-def setup(rank , world_size):
-    dist.init_process_group(
-        "nccl" , 
-        init_method = "env://",
-        rank = rank , 
-        world_size = world_size
-        )
-
-def cleanup():
-    dist.destroy_process_group()
 
 def make_batch_fn(samples, batch_size, feature_shape):
     return make_batch(samples, batch_size, feature_shape)
@@ -160,25 +145,18 @@ def make_batch(samples, batch_size, feature_shape):
 
         return [torch.stack(inputs), torch.stack(labels)]
 
-def main():
-
-    local_rank = int(os.environ["LOCAL_RANK"])
-    world_size = int(os.environ["WORLD_SIZE"])
-    
-    
-    setup(local_rank , world_size)
-
-    # make fake args
+def main(process_type , factor):
+    # make fake ar
     args = argparse.Namespace()
-    args.dataset = "pascal" # cityscape pascal
-    args.model = "Mask2Former" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
+    args.dataset = "cityscape" # cityscape pascal
+    args.model = "PIGNet" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
     args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = True
+    args.scratch = False
     args.train = True
     args.workers = 4
     args.epochs = 50
-    args.batch_size = 8
-    args.crop_size = 512
+    args.batch_size = 16
+    args.crop_size = 513
     args.base_lr = 0.007
     args.last_mult = 1.0
     args.groups = None
@@ -191,21 +169,16 @@ def main():
     args.embedding_size = 21
     args.n_layer = 12
     args.n_skip_l = 3
-    args.process_type = None  # None zoom, overlap, repeat
-    args.gpu_ids = [0,1]
-    args.use_ddp = True
-    zoom_factor = 0.1 # zoom in, out value 양수면 줌 음수면 줌아웃
-    overlap_percentage = 0.5 #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-    pattern_repeat_count = 3 # 반복 횟수 2이면 2*2
-    
-    if args.train & dist.get_rank() == 0:
+    args.factor = factor
+    args.process_type = process_type
+
+    if args.train:
         if args.scratch == False:
             wandb.init(project='gcn_segmentation', name=args.model+'_'+args.backbone+ '_pretrain' + '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
                         config=args.__dict__)
         else:
             wandb.init(project='gcn_segmentation', name=args.model+'_'+args.backbone+ '_scratch' + '_embed' + str(args.embedding_size) +'_nlayer' + str(args.n_layer) + '_'+args.exp+'_'+str(args.dataset),
                         config=args.__dict__)
-
 
     # if is cuda available device
     if torch.cuda.is_available():
@@ -214,13 +187,8 @@ def main():
         args.device = 'cpu'
 
     print("cuda available",args.device)
-    
-    print(f"local_rank : {local_rank}")
-    print(f"world_size : {world_size}")
-
 
     loss_list = []
-
     # assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
 
@@ -235,50 +203,50 @@ def main():
         if args.train:
 
             print("train dataset")
-            dataset = VOCSegmentation('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+            dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                       train=args.train, crop_size=args.crop_size)
-            valid_dataset = VOCSegmentation('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+            valid_dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                             train=not (args.train), crop_size=args.crop_size)
         else:
 
             if args.process_type != None:
                 print(args.process_type)
-                dataset = VOCSegmentation('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                                 train=args.train, crop_size=args.crop_size,
-                                                process=args.process_type, process_value=zoom_factor,
-                                                overlap_percentage=overlap_percentage,
-                                                pattern_repeat_count=pattern_repeat_count)
+                                                process=args.process_type, process_value=args.factor,
+                                                overlap_percentage=args.factor,
+                                                pattern_repeat_count=args.factor)
             else:
-                dataset = VOCSegmentation('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                                 train=args.train, crop_size=args.crop_size,
-                                                process=None, process_value=zoom_factor,
-                                                overlap_percentage=overlap_percentage,
-                                                pattern_repeat_count=pattern_repeat_count)
+                                                process=None, process_value=args.factor,
+                                                overlap_percentage=args.factor,
+                                                pattern_repeat_count=args.factor)
 
     elif args.dataset == 'cityscape':
         if args.train:
             print("train dataset cityscape")
 
-            dataset = Cityscapes('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+            dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                  train=args.train, crop_size=args.crop_size)
 
-            valid_dataset = Cityscapes('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+            valid_dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                  train=not (args.train), crop_size=args.crop_size)
 
         else: # val
             if args.process_type != None:
                 print(args.process_type)
-                dataset = Cityscapes('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                           train=args.train, crop_size=args.crop_size,
-                                          process=args.process_type, process_value=zoom_factor,
-                                          overlap_percentage=overlap_percentage,
-                                          pattern_repeat_count=pattern_repeat_count)
+                                          process=args.process_type, process_value=args.factor,
+                                          overlap_percentage=args.factor,
+                                          pattern_repeat_count=args.factor)
             else:
-                dataset = Cityscapes('/home/hail1/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                           train=args.train, crop_size=args.crop_size,
-                                          process=None, process_value=zoom_factor,
-                                          overlap_percentage=overlap_percentage,
-                                          pattern_repeat_count=pattern_repeat_count)
+                                          process=None, process_value=args.factor,
+                                          overlap_percentage=args.factor,
+                                          pattern_repeat_count=args.factor)
 
     else:
         raise ValueError('Unknown dataset: {}'.format(args.dataset))
@@ -327,26 +295,18 @@ def main():
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print number of parameters
-    if dist.get_rank() == 0:
-        print(f"Number of parameters: {num_params / (1000.0 ** 2): .3f} M")
+    print(f"Number of parameters: {num_params / (1000.0 ** 2): .3f} M")
 
     # num_params_gnn = sum(p.numel() for p in model.pyramid_gnn.parameters() if p.requires_grad)
     # print(f"Number of GNN parameters: {num_params_gnn / (1000.0 ** 2): .3f} M")
-    if dist.get_rank() == 0:
-        print(f"Entire model size: {size_in_bytes / (1024.0 ** 3): .3f} GB")
+
+    print(f"Entire model size: {size_in_bytes / (1024.0 ** 3): .3f} GB")
 
     if args.train:
-
-        args.device = f"cuda:{local_rank}"
-        torch.cuda.set_device(local_rank)
-
-        if dist.get_rank() == 0:
-            print("Training !!! ")
+        print("Training !!! ")
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
-        model = model.to(args.device)
-        model = DDP(model , device_ids = [local_rank] , output_device = local_rank , find_unused_parameters=True)
-
+        model = nn.DataParallel(model).to(args.device)
         model.train()
 
         if args.freeze_bn:
@@ -386,15 +346,10 @@ def main():
 
         collate_fn = partial(make_batch_fn, batch_size=args.batch_size, feature_shape=feature_shape)
 
-        sampler = DistributedSampler(dataset , num_replicas = world_size , rank = local_rank)
-    
-        batch_size_per_gpu = args.batch_size // world_size
-
         dataset_loader = torch.utils.data.DataLoader(
             dataset,
-            sampler = sampler,
-            batch_size=batch_size_per_gpu,
-            shuffle= not args.train,
+            batch_size=args.batch_size,
+            shuffle=args.train,
             pin_memory=True,
             num_workers=args.workers,
             collate_fn=collate_fn
@@ -422,20 +377,12 @@ def main():
         train_step = 0
 
         for epoch in range(start_epoch, args.epochs):
-
-            sampler.set_epoch(epoch)
-
-            if local_rank == 0:
-                print("EPOCHS : ", epoch + 1, " / ", args.epochs)
+            print("EPOCHS : ", epoch + 1, " / ", args.epochs)
 
             loss_sum = 0
             cnt = 0
 
-            data_iter = dataset_loader
-            if dist.get_rank() == 0:
-                data_iter = tqdm(iter(dataset_loader) , total = len(dataset_loader))
-
-            for inputs, target in data_iter:
+            for inputs, target in tqdm(iter(dataset_loader)):
                 log = {}
                 cur_iter = epoch * len(dataset_loader) + cnt
                 lr = args.base_lr * (1 - float(cur_iter) / max_iter) ** 0.9
@@ -444,7 +391,7 @@ def main():
                 optimizer.param_groups[1]['lr'] = lr * args.last_mult
                 inputs = Variable(inputs.to(args.device))
                 target = Variable(target.to(args.device)).long()
-                outputs = model(inputs)
+                outputs , _ = model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -470,8 +417,7 @@ def main():
             loss_avg = loss_sum / len(dataset_loader)
             log['train/epoch/loss'] = loss_avg
 
-            if dist.get_rank() == 0:
-                wandb.log(log)
+            wandb.log(log)
 
             loss_list.append(loss_avg)
             print('epoch: {0}\t'
@@ -505,12 +451,11 @@ def main():
                 model.eval()
                 losses_test = 0.0
                 log = {}
-
                 for i in tqdm(range(len(valid_dataset))):
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(args.device))
                     target = Variable(target.to(args.device)).long()
-                    outputs = model(inputs.unsqueeze(0))
+                    outputs , _ = model(inputs.unsqueeze(0))
                     outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -540,16 +485,10 @@ def main():
                 log['test/epoch/iou'] = miou.item()
             # time.sleep(60)
 
-            if dist.get_rank() == 0:    
-                wandb.log(log)
-
+            wandb.log(log)
             model.train()
 
-        if dist.get_rank() == 0:
-            wandb.finish()
-    
-        cleanup()
-
+        wandb.finish()
     else:
         print("Evaluating !!! ")
         torch.cuda.set_device(args.gpu)
@@ -580,7 +519,7 @@ def main():
                 continue
 
             inputs = Variable(inputs.to(args.device))
-            outputs = model(inputs.unsqueeze(0))
+            outputs , _ = model(inputs.unsqueeze(0))
             _, pred = torch.max(outputs, 1)
             pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
             mask = target.numpy().astype(np.uint8)
@@ -602,10 +541,30 @@ def main():
         for i, val in enumerate(iou):
             print('IoU {0}: {1:.2f}'.format(dataset.CLASSES[i], val * 100))
         print('Mean IoU: {0:.2f}'.format(iou.mean() * 100))
-
+        return iou.mean() * 100
 
 if __name__ == "__main__":
-    main()
+
+    zoom_factor = [0.1 , 0.5 , 1 , 1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+    overlap_percentage = [0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+    pattern_repeat_count = [3,6,9,12] # 반복 횟수 2이면 2*2
+
+    output_dict = {"zoom" : [] , "overlap" : [] , "repeat" : []}
+
+    process_dict = {
+        "zoom" : zoom_factor , 
+        "overlap" : overlap_percentage ,
+        "repeat" : pattern_repeat_count
+    }
+
+    if args.train != True: # inference
+            
+            for key , value in process_dict.items():
+                for ratio in value:
+                    output = main(key , ratio)
+                    output_dict[key].append(output)
+    else: 
+        main(None , None)
 
 # 텐서 크기에서 중심 좌표를 자동으로 설정 (H/2, W/2)
 # H, W = layer_outputs.shape[2], layer_outputs.shape[3]
