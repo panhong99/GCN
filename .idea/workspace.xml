@@ -5,15 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b1818ae8-0b1f-401d-ace6-780dc60bb9b3" name="Changes" comment="edit pascal.py">
-<<<<<<< HEAD
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly_classification.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/model_src/PIGNet_GSPonly_classification.py" afterDir="false" />
-=======
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" beforeDir="false" afterPath="$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_segmentation.py" afterDir="false" />
->>>>>>> 6f780997098129373649bcb39c60b51f49eb162c
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -78,6 +73,7 @@
 }</component>
   <component name="RdControllerToolWindowsLayoutState" isNewUi="true">
     <layout>
+<<<<<<< Updated upstream
       <window_info id="Bookmarks" side_tool="true" />
       <window_info id="Merge Requests" />
       <window_info id="Backup and Sync History" />
@@ -91,6 +87,12 @@
       <window_info anchor="bottom" id="TypeScript" />
       <window_info anchor="bottom" id="HfCacheToolWindow" />
       <window_info anchor="bottom" id="File Transfer" />
+=======
+      <window_info content_ui="combo" id="Project" order="0" weight="0.25" />
+      <window_info id="Commit" order="1" weight="0.25" />
+      <window_info id="Structure" order="2" side_tool="true" weight="0.25" />
+      <window_info anchor="bottom" id="Database Changes" />
+>>>>>>> Stashed changes
       <window_info anchor="bottom" id="Version Control" order="0" />
       <window_info anchor="bottom" id="Problems" order="1" />
       <window_info anchor="bottom" id="Problems View" order="2" />
@@ -98,11 +100,15 @@
       <window_info anchor="bottom" id="Services" order="4" />
       <window_info anchor="bottom" id="Python Packages" order="5" weight="0.1" />
       <window_info anchor="bottom" id="Python Console" order="6" weight="0.1" />
+<<<<<<< Updated upstream
       <window_info anchor="bottom" id="TODO" order="7" weight="0.3305" />
       <window_info anchor="right" id="Endpoints" />
       <window_info anchor="right" id="Coverage" side_tool="true" />
       <window_info anchor="right" id="SciView" />
       <window_info anchor="right" id="Notifications" order="0" weight="0.3298828" />
+=======
+      <window_info anchor="right" content_ui="combo" id="Notifications" order="0" weight="0.25" />
+>>>>>>> Stashed changes
       <window_info anchor="right" id="AIAssistant" order="1" weight="0.25" />
       <window_info anchor="right" id="Database" order="2" weight="0.25" />
       <window_info anchor="right" id="Gradle" order="3" weight="0.25" />
@@ -110,6 +116,7 @@
       <window_info anchor="right" id="Plots" order="5" weight="0.1" />
     </layout>
   </component>
+<<<<<<< Updated upstream
 =======
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
@@ -130,6 +137,8 @@
   }
 }]]></component>
 >>>>>>> 6f780997098129373649bcb39c60b51f49eb162c
+=======
+>>>>>>> Stashed changes
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$" />
@@ -152,8 +161,13 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1742557483521</updated>
+<<<<<<< Updated upstream
       <workItem from="1747812921215" duration="388000" />
       <workItem from="1747889241245" duration="1439000" />
+=======
+      <workItem from="1747813489726" duration="664000" />
+      <workItem from="1747814762833" duration="179000" />
+>>>>>>> Stashed changes
     </task>
     <task id="LOCAL-00001" summary="train vit resnet">
       <option name="closed" value="true" />
@@ -251,7 +265,7 @@
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
           <url>file://$PROJECT_DIR$/gcn-ha/PIGNet_ha/main_classification.py</url>
-          <line>849</line>
+          <line>852</line>
           <option name="timeStamp" value="90" />
         </line-breakpoint>
         <line-breakpoint enabled="true" suspend="THREAD" type="python-line">

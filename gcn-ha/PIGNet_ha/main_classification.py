@@ -246,11 +246,20 @@ def make_batch(samples, batch_size, feature_shape):
 def main(process , factor):
     # make fake args
     args = argparse.Namespace()
+<<<<<<< Updated upstream
     args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
     args.model = "Resnet" #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = True
     args.train = False
+=======
+    args.dataset = "imagenet" #CIFAR-10 CIFAR-100  imagenet
+    args.model = "vit" #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
+    args.backbone = "resnet101" # resnet[50 , 101]
+    args.scratch = False
+    args.train = True
+    args.degree = 60
+>>>>>>> Stashed changes
     args.workers = 4
     args.epochs = 50
     args.batch_size = 16

@@ -150,8 +150,8 @@ def main(process_type , factor):
     args = argparse.Namespace()
     args.dataset = "cityscape" # cityscape pascal
     args.model = "PIGNet" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
-    args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = False
+    args.backbone = "resnet101" # resnet[50 , 101]
+    args.scratch = True
     args.train = True
     args.workers = 4
     args.epochs = 50
