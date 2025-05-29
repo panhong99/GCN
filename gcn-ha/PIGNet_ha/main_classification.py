@@ -28,6 +28,7 @@ from efficientnet_pytorch import EfficientNet
 import warnings
 import timm
 import torchvision.transforms.functional as TF
+import re
 
 warnings.filterwarnings("ignore")
 
@@ -153,49 +154,6 @@ class RepeatTransform:
         return repeat(image, self.pattern_repeat_count)
 
 
-
-
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--train', action='store_true', default=False,
-                    help='training mode')
-parser.add_argument('--exp', type=str,default="bn_lr7e-3",
-                    help='name of experiment')
-parser.add_argument('--gpu', type=int, default=0,
-                    help='test time gpu device id')
-parser.add_argument('--backbone', type=str, default='Resnet50',
-                    help='resnet[50 , 101 , 152]')
-parser.add_argument('--dataset', type=str, default='[Pascal CIFAR-10 CIFAR-100 Imagenet]',
-                    help='pascal or cityscapes')
-parser.add_argument('--groups', type=int, default=None,
-                    help='num of groups for group normalization')
-parser.add_argument('--epochs', type=int, default=30,
-                    help='num of training epochs')
-parser.add_argument('--batch_size', type=int, default=8,
-                    help='batch size')
-parser.add_argument('--base_lr', type=float, default=0.007,
-                    help='base learning rate')
-parser.add_argument('--last_mult', type=float, default=1.0,
-                    help='learning rate multiplier for last layers')
-parser.add_argument('--scratch', action='store_true', default=False,
-                    help='train from scratch')
-parser.add_argument('--freeze_bn', action='store_true', default=False,
-                    help='freeze batch normalization parameters')
-parser.add_argument('--weight_std', action='store_true', default=False,
-                    help='weight standardization')
-parser.add_argument('--beta', action='store_true', default=False,
-                    help='resnet101 beta')
-parser.add_argument('--crop_size', type=int, default=513,
-                    help='image crop size')
-parser.add_argument('--resume', type=str, default=None,
-                    help='path to checkpoint to resume from')
-parser.add_argument('--workers', type=int, default=4,
-                    help='number of model loading workers')
-parser.add_argument('--model', type=str, default="deeplab",
-                    help='model name')
-parser.add_argument('--process_type', type=str, default="zoom",
-                    help='process_type')
-
 def resize_pos_embed(posemb , grid_size , new_grid_size , num_extra_tokens = 1):
     #Todo split [CLS] , grid tokens
     posemb_tok , posemb_grid = posemb[: , : num_extra_tokens] , posemb[: , num_extra_tokens :]
@@ -209,7 +167,6 @@ def resize_pos_embed(posemb , grid_size , new_grid_size , num_extra_tokens = 1):
     #Todo reshape by image size # 32 x 32
     return torch.cat([posemb_tok , posemb_grid] , dim = 1)
 
-args = parser.parse_args()
 def model_size(model):
     total_size = 0
     for param in model.parameters():
@@ -241,13 +198,61 @@ def make_batch(samples, batch_size, feature_shape):
     else:
 
         return [torch.stack(inputs), torch.stack(labels)]
+    
+parser = argparse.ArgumentParser()
+parser.add_argument('--train', action='store_true', required=True , default=False,
+                    help='training mode')
+parser.add_argument('--exp', type=str,default="bn_lr7e-3",
+                    help='name of experiment')
+parser.add_argument('--gpu', type=int, default=0,
+                    help='test time gpu device id')
+parser.add_argument('--backbone', type=str, default='Resnet50',
+                    help='resnet[50 , 101 , 152]')
+parser.add_argument('--dataset', required=True ,type=str, default='CIFAR-10',
+                    help='pascal or cityscapes')
+parser.add_argument('--groups', type=int, default=None,
+                    help='num of groups for group normalization')
+parser.add_argument('--epochs', type=int, default=30,
+                    help='num of training epochs')
+parser.add_argument('--batch_size', type=int, default=8,
+                    help='batch size')
+parser.add_argument('--base_lr', type=float, default=0.007,
+                    help='base learning rate')
+parser.add_argument('--last_mult', type=float, default=1.0,
+                    help='learning rate multiplier for last layers')
+parser.add_argument('--scratch', action='store_true', default=False,
+                    help='train from scratch')
+parser.add_argument('--freeze_bn', action='store_true', default=False,
+                    help='freeze batch normalization parameters')
+parser.add_argument('--weight_std', action='store_true', default=False,
+                    help='weight standardization')
+parser.add_argument('--beta', action='store_true', default=False,
+                    help='resnet101 beta')
+parser.add_argument('--crop_size', type=int, default=513,
+                    help='image crop size')
+parser.add_argument('--resume', type=str, default=None,
+                    help='path to checkpoint to resume from')
+parser.add_argument('--workers', type=int, default=4,
+                    help='number of model loading workers')
+parser.add_argument('--model', type=str, default="deeplab",
+                    help='model name')
+parser.add_argument('--process_type', type=str, default="zoom",
+                    help='process_type')
+parser.add_argument("--trained_model" , default="scratch" , required=True , help = "scratch or pretrained")
 
+args = parser.parse_args()
 
-def main(process , factor):
+def main(process , factor , model_name):
+    
+    m_name = re.search(r"classification_(.*?)_resnet50" , model_name)
+
+    if m_name:
+        m_name = m_name.group(1)
+
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
-    args.model = "Resnet" #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
+    # args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
+    args.model = m_name #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = True
     args.train = False
@@ -500,6 +505,15 @@ def main(process , factor):
 
     if args.backbone in ["resnet50","resnet101","resnet152"]:
         if args.model == "PIGNet_GSPonly_classification":
+        
+            if args.dataset != "imagenet":
+
+                grid_size = 8
+                data_stride = 1
+            else:
+                grid_size = 14
+                data_stride = 2
+        
             model = getattr(PIGNet_GSPonly_classification, args.backbone)(
                 pretrained=(not args.scratch),
                 num_classes=len(dataset.CLASSES),
@@ -508,10 +522,20 @@ def main(process , factor):
                 beta=args.beta,
                 embedding_size = args.embedding_size,
                 n_layer = args.n_layer,
-                n_skip_l = args.n_skip_l)
+                n_skip_l = args.n_skip_l,
+                data_stride = data_stride,
+                grid_size = grid_size)
             print("model PIGNet_GSPonly_classification")
 
         elif args.model == "PIGNet_classification":
+
+            if args.dataset != "imagenet":
+                grid_size = 8
+                data_stride = 1
+            else:
+                grid_size = 14
+                data_stride = 2
+        
             model = getattr(PIGNet_classification, args.backbone)(
                 pretrained=(not args.scratch),
                 num_classes=len(dataset.CLASSES),
@@ -520,7 +544,9 @@ def main(process , factor):
                 beta=args.beta,
                 embedding_size = args.embedding_size,
                 n_layer = args.n_layer,
-                n_skip_l = args.n_skip_l)
+                n_skip_l = args.n_skip_l,
+                data_stride = data_stride,
+                grid_size = grid_size)
             print("model PIGNet_classification")
 
         elif args.model == "Resnet":
@@ -814,7 +840,11 @@ def main(process , factor):
         torch.cuda.set_device(args.gpu)
         model = model.to(args.device)
         model.eval()
-        checkpoint = torch.load(model_fname)
+
+        if args.scratch != True: # pretrained
+            checkpoint = torch.load(f'model/classification/{args.dataset}/pretrained/{model_name}')
+        else:
+            checkpoint = torch.load(f'model/classification/{args.dataset}/scratch/{model_name}')
 
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         model.load_state_dict(state_dict)
@@ -904,7 +934,10 @@ def main(process , factor):
             return accuracy
 
 if __name__ == "__main__":
-    
+
+    path = f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/classification/{args.dataset}/{args.trained_model}"
+    model_list = sorted(os.listdir(path))
+
     zoom_ratio = [0.1,0.5,1,1.5,2]
     rotate_degree = [60 , 45 , 30 , 15, 0 , -15 , -30 , -45 , -60 , -90 , -120 , -150 , -180]
 
@@ -913,16 +946,31 @@ if __name__ == "__main__":
         "rotate" : rotate_degree
     }
 
-    output_dict = {"zoom" : [] , "rotate" : []}
+    output_dict = {model_name : {"zoom" : [] , "rotate" : []} for model_name in model_list}
 
     if args.train != True: # inference
-        for key , value in process_dict.items():
-            for ratio in value:
-                output = main(key , ratio)
-                output_dict[key].append(output)
+        for name in model_list:
+            for key , value in process_dict.items():
+                for ratio in value:
+                    output = main(key , ratio , name)
+                    output_dict[name][key].append(output)
 
     else: 
-        main(None , None)
+        main(None , None , None)
 
     print(output_dict)
 
+    records = []
+
+    for model_name , result_dict in output_dict.items():
+        for task , values in result_dict.items():
+            for i , val in enumerate(values):
+                records.append({
+                    "model" : model_name ,
+                    "task" : task ,
+                    "index" : i , 
+                    "value" : val
+                })
+
+    df = pd.DataFrame(records)
+    df.to_csv(f"output_{args.trained_model}_{args.dataset}.csv" , index = False)

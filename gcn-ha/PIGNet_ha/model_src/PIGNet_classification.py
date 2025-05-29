@@ -174,7 +174,7 @@ class SPP(nn.Module):
 
 
 class GSP(nn.Module):
-    def __init__(self, num_classes, depth, embedding_size, n_layer, norm=nn.BatchNorm2d, n_skip_l=1):
+    def __init__(self, num_classes, depth, embedding_size, n_layer, norm=nn.BatchNorm2d, n_skip_l=1 , grid_size = 8):
         # PyramidGNN(num_classes, 512 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l)
         super(GSP, self).__init__()
         mult = 1
@@ -184,6 +184,7 @@ class GSP(nn.Module):
         self.embedding_size = embedding_size
         self.encoder = SPP(1024, self.embedding_size, conv, norm, momentum, mult)
         self.n_skip_l = n_skip_l
+
 
         self.gelu = nn.GELU()
 
@@ -203,7 +204,7 @@ class GSP(nn.Module):
 
         self.edge_index = None
         self.graph_data = None
-        self.grid_size = 14 #feature map size  33 for pascal   8 for cifar-100  14 for imagenet(embedding 256 기준)
+        self.grid_size = grid_size #feature map size  33 for pascal   8 for cifar-100  14 for imagenet(embedding 256 기준)
 
         self.gelu = nn.GELU()
 
@@ -367,7 +368,7 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes, num_groups=None, weight_std=False, beta=False, **kwargs):
+    def __init__(self, block, layers, num_classes, num_groups=None, weight_std=False, beta=False, data_stride = 1 , grid_size = 8 , **kwargs):
         if 'embedding_size' in kwargs:
             self.embedding_size = kwargs['embedding_size']
         if 'n_layer' in kwargs:
@@ -380,6 +381,7 @@ class ResNet(nn.Module):
             self.n_skip_l = 1
 
         self.inplanes = 64
+        self.grid_size = grid_size
         self.norm = lambda planes, momentum=0.05: nn.BatchNorm2d(planes,
                                                                  momentum=momentum) if num_groups is None else nn.GroupNorm(
             num_groups, planes)
@@ -398,11 +400,11 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2) #image net 2  cifar 1
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2) #image net 2  cifar 1
+        self.layer2 = self._make_layer(block, 128, layers[1], data_stride) #image net 2  cifar 1
+        self.layer3 = self._make_layer(block, 256, layers[2], data_stride) #image net 2  cifar 1
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=2 , multi=[1,2,4])
         self.pyramid_gnn = GSP(num_classes, 256 * block.expansion, self.embedding_size, self.n_layer,
-                               n_skip_l=self.n_skip_l)
+                               n_skip_l=self.n_skip_l , grid_size=self.grid_size)
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.FC = nn.Linear(256, num_classes)
         # self.upsample = nn.Conv2d(in_channels=num_classes, out_channels=num_classes, kernel_size=2, stride=1, padding=1,dilation=2)

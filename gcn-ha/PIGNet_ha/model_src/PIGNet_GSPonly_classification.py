@@ -176,7 +176,7 @@ class SPP(nn.Module):
 
 
 class GSP(nn.Module):
-    def __init__(self,num_classes, depth, embedding_size, n_layer, norm=nn.BatchNorm2d, n_skip_l = 1):
+    def __init__(self,num_classes, depth, embedding_size, n_layer, norm=nn.BatchNorm2d, n_skip_l = 1 , grid_size = 8):
         # PyramidGNN(num_classes, 512 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l)
         super(GSP, self).__init__()
         mult = 1
@@ -205,7 +205,7 @@ class GSP(nn.Module):
 
         self.edge_index = None
         self.graph_data = None
-        self.grid_size =  14 #feature map size  33 for pascal   8 for cifar-100  14 for imagenet
+        self.grid_size = grid_size #feature map size  33 for pascal   8 for cifar-100  14 for imagenet
 
         self.gelu = nn.GELU()
 
@@ -359,7 +359,7 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes, num_groups=None, weight_std=False, beta=False, **kwargs):
+    def __init__(self, block, layers, num_classes, num_groups=None, weight_std=False, beta=False, data_stride = 1 , grid_size = 8 ,**kwargs):
         if 'embedding_size' in kwargs:
             self.embedding_size = kwargs['embedding_size']
         if 'n_layer' in kwargs:
@@ -390,8 +390,8 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block,  64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2) # stirde 2 for imagene stride 1 for cifar
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2) # stirde 2 for imagenet stride 1 for cifar
+        self.layer2 = self._make_layer(block, 128, layers[1], data_stride) # stirde 2 for imagene stride 1 for cifar
+        self.layer3 = self._make_layer(block, 256, layers[2], data_stride) # stirde 2 for imagenet stride 1 for cifar
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=2 , multi=[1,2,4])
         # remove require_grad for self.layer4
         for param in self.layer4.parameters():
@@ -399,7 +399,7 @@ class ResNet(nn.Module):
 
         # self.pyramid_gnn = GSP(num_classes, 256 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l) # 512 * block.expansion for pascal
         print(num_classes, block.expansion, self.embedding_size, self.n_layer)
-        self.pyramid_gnn = GSP(num_classes, 256 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l) # 512 * block.expansion for pascal
+        self.pyramid_gnn = GSP(num_classes, 256 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l , grid_size = gride_size) # 512 * block.expansion for pascal
         #num_classes, depth, embedding_size, n_layer, norm=nn.BatchNorm2d, n_skip_l =
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.FC = nn.Linear(self.embedding_size, num_classes)
