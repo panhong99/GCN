@@ -399,7 +399,7 @@ class ResNet(nn.Module):
 
         # self.pyramid_gnn = GSP(num_classes, 256 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l) # 512 * block.expansion for pascal
         print(num_classes, block.expansion, self.embedding_size, self.n_layer)
-        self.pyramid_gnn = GSP(num_classes, 256 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l , grid_size = gride_size) # 512 * block.expansion for pascal
+        self.pyramid_gnn = GSP(num_classes, 256 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l , grid_size = grid_size) # 512 * block.expansion for pascal
         #num_classes, depth, embedding_size, n_layer, norm=nn.BatchNorm2d, n_skip_l =
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.FC = nn.Linear(self.embedding_size, num_classes)

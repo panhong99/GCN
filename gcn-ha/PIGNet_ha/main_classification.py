@@ -200,7 +200,7 @@ def make_batch(samples, batch_size, feature_shape):
         return [torch.stack(inputs), torch.stack(labels)]
     
 parser = argparse.ArgumentParser()
-parser.add_argument('--train', action='store_true', required=True , default=False,
+parser.add_argument('--train', action='store_true' , default=False,
                     help='training mode')
 parser.add_argument('--exp', type=str,default="bn_lr7e-3",
                     help='name of experiment')
@@ -240,6 +240,8 @@ parser.add_argument('--process_type', type=str, default="zoom",
                     help='process_type')
 parser.add_argument("--trained_model" , default="scratch" , required=True , help = "scratch or pretrained")
 
+parser.add_argument('--infer' , required=True , default=False , help="True , False")
+
 args = parser.parse_args()
 
 def main(process , factor , model_name):
@@ -251,13 +253,13 @@ def main(process , factor , model_name):
 
     # make fake args
     args = argparse.Namespace()
-    # args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
+    args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
     args.model = m_name #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = True
     args.train = False
     args.workers = 4
-    args.epochs = 50
+    args.epochs = 1
     args.batch_size = 16
     args.crop_size = 513 #513
     args.base_lr = 0.007
@@ -948,29 +950,29 @@ if __name__ == "__main__":
 
     output_dict = {model_name : {"zoom" : [] , "rotate" : []} for model_name in model_list}
 
-    if args.train != True: # inference
+    if args.infer != True: # inference
         for name in model_list:
             for key , value in process_dict.items():
                 for ratio in value:
                     output = main(key , ratio , name)
                     output_dict[name][key].append(output)
+        print(output_dict)
+
+        records = []
+
+        for model_name , result_dict in output_dict.items():
+            for task , values in result_dict.items():
+                for i , val in enumerate(values):
+                    records.append({
+                        "model" : model_name ,
+                        "task" : task ,
+                        "index" : i , 
+                        "value" : val
+                    })
+
+        df = pd.DataFrame(records)
+        df.to_csv(f"output_{args.trained_model}_{args.dataset}.csv" , index = False)
 
     else: 
         main(None , None , None)
 
-    print(output_dict)
-
-    records = []
-
-    for model_name , result_dict in output_dict.items():
-        for task , values in result_dict.items():
-            for i , val in enumerate(values):
-                records.append({
-                    "model" : model_name ,
-                    "task" : task ,
-                    "index" : i , 
-                    "value" : val
-                })
-
-    df = pd.DataFrame(records)
-    df.to_csv(f"output_{args.trained_model}_{args.dataset}.csv" , index = False)

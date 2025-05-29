@@ -69,7 +69,7 @@ def calculate_cosine_similarity(coords, center_vector, tensor):
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--train', action='store_true', default=False,
+parser.add_argument('--train', action='store_true',
                     help='training mode')
 parser.add_argument('--exp', type=str,default="bn_lr7e-3",
                     help='name of experiment')
@@ -107,6 +107,8 @@ parser.add_argument('--model', type=str, default="deeplab",
                     help='model name')
 parser.add_argument('--process_type', type=str, default="zoom",
                     help='process_type')
+parser.add_argument('--infer' , required=True , default=False , help="True , False")
+
 args = parser.parse_args()
 
 
@@ -150,7 +152,7 @@ def main(process_type , factor):
     args = argparse.Namespace()
     args.dataset = "cityscape" # cityscape pascal
     args.model = "PIGNet" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
-    args.backbone = "resnet101" # resnet[50 , 101]
+    args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = True
     args.train = True
     args.workers = 4
@@ -557,7 +559,7 @@ if __name__ == "__main__":
         "repeat" : pattern_repeat_count
     }
 
-    if args.train != True: # inference
+    if args.infer != True: # inference
             
             for key , value in process_dict.items():
                 for ratio in value:
