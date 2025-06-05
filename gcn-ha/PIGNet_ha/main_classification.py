@@ -200,7 +200,7 @@ def make_batch(samples, batch_size, feature_shape):
         return [torch.stack(inputs), torch.stack(labels)]
     
 parser = argparse.ArgumentParser()
-parser.add_argument('--train', action='store_true' , default=False,
+parser.add_argument('--train', action='store_true',
                     help='training mode')
 parser.add_argument('--exp', type=str,default="bn_lr7e-3",
                     help='name of experiment')
@@ -208,7 +208,7 @@ parser.add_argument('--gpu', type=int, default=0,
                     help='test time gpu device id')
 parser.add_argument('--backbone', type=str, default='Resnet50',
                     help='resnet[50 , 101 , 152]')
-parser.add_argument('--dataset', required=True ,type=str, default='CIFAR-10',
+parser.add_argument('--dataset', required=False ,type=str, default='CIFAR-10',
                     help='pascal or cityscapes')
 parser.add_argument('--groups', type=int, default=None,
                     help='num of groups for group normalization')
@@ -238,9 +238,11 @@ parser.add_argument('--model', type=str, default="deeplab",
                     help='model name')
 parser.add_argument('--process_type', type=str, default="zoom",
                     help='process_type')
+
 parser.add_argument("--trained_model" , default="scratch" , required=True , help = "scratch or pretrained")
 
 parser.add_argument('--infer' , required=True , default=False , help="True , False")
+
 
 args = parser.parse_args()
 
@@ -253,13 +255,13 @@ def main(process , factor , model_name):
 
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "CIFAR-10" #CIFAR-10 CIFAR-100  imagenet
+    args.dataset = "imagenet" #CIFAR-10 CIFAR-100  imagenet
     args.model = m_name #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
     args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = True
+    args.scratch = False
     args.train = False
     args.workers = 4
-    args.epochs = 1
+    args.epochs = 50
     args.batch_size = 16
     args.crop_size = 513 #513
     args.base_lr = 0.007
@@ -305,10 +307,10 @@ def main(process , factor , model_name):
     if args.model=='vit':
         if args.scratch: # scartch == True
             model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
-                args.model , "scratch" ,  args.dataset)
+                args.model , args.backbone , "scratch" ,  args.dataset)
         else: # scratch = False
             model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
-                args.model, "pretrained" , args.dataset)
+                args.model,  args.backbone , "pretrained" , args.dataset)
 
     else:
         if args.scratch: # scartch == True
@@ -919,16 +921,16 @@ def main(process , factor , model_name):
                 average_similarities = {distance: sum(values) / len(values) if values else 0 for distance, values in
                                         similarities.items()}
 
-                # 선 그래프 그리기
-                plt.figure(figsize=(10, 6))
-                plt.plot(average_similarities.keys(), average_similarities.values(), marker='o')
-                plt.title('Average Cosine Similarity by Distance')
-                plt.xlabel('Distance')
-                plt.ylabel('Average Cosine Similarity')
-                plt.xticks(distances)
-                plt.grid(True)
-                save_path = os.path.join("./eval_graph" , f"{args.model}_{args.backbone}_{args.scratch}.png")
-                plt.savefig(save_path , dpi = 300 , bbox_inches = "tight")
+                # # 선 그래프 그리기
+                # plt.figure(figsize=(10, 6))
+                # plt.plot(average_similarities.keys(), average_similarities.values(), marker='o')
+                # plt.title('Average Cosine Similarity by Distance')
+                # plt.xlabel('Distance')
+                # plt.ylabel('Average Cosine Similarity')
+                # plt.xticks(distances)
+                # plt.grid(True)
+                # save_path = os.path.join("./eval_graph" , f"{args.model}_{args.backbone}_{args.scratch}.png")
+                # plt.savefig(save_path , dpi = 300 , bbox_inches = "tight")
                 # plt.show()
 
             accuracy = 100 * correct / total

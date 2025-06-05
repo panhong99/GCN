@@ -24,6 +24,7 @@ from functools import partial
 import subprocess
 import wandb
 import warnings
+import re
 
 warnings.filterwarnings("ignore")
 
@@ -107,7 +108,10 @@ parser.add_argument('--model', type=str, default="deeplab",
                     help='model name')
 parser.add_argument('--process_type', type=str, default="zoom",
                     help='process_type')
-parser.add_argument('--infer' , required=True , default=False , help="True , False")
+
+parser.add_argument('--infer' , action = "store_true")
+
+parser.add_argument("--trained_model" , default="scratch" , required = False , help = "scratch or pretrained")
 
 args = parser.parse_args()
 
@@ -147,14 +151,22 @@ def make_batch(samples, batch_size, feature_shape):
 
         return [torch.stack(inputs), torch.stack(labels)]
 
-def main(process_type , factor):
+def main(process_type , factor , model_name):
+
+    print(f"type : {type(model_name)} , model_name : {model_name}")
+
+    m_name = re.search(r"(.*?)_resnet50" , model_name)
+
+    if m_name:
+        m_name = m_name.group(1)
+
     # make fake ar
     args = argparse.Namespace()
-    args.dataset = "cityscape" # cityscape pascal
-    args.model = "PIGNet" #PIGNet PIGNet_GSPonly  Mask2Former ASPP
+    args.dataset = "pascal" # cityscape pascal
+    args.model = m_name #PIGNet PIGNet_GSPonly  Mask2Former ASPP
     args.backbone = "resnet50" # resnet[50 , 101]
     args.scratch = True
-    args.train = True
+    args.train = False
     args.workers = 4
     args.epochs = 50
     args.batch_size = 16
@@ -188,6 +200,7 @@ def main(process_type , factor):
     else:
         args.device = 'cpu'
 
+    print("ags",args.model,args.dataset)
     print("cuda available",args.device)
 
     loss_list = []
@@ -293,6 +306,7 @@ def main(process_type , factor):
 
     else:
         raise ValueError('Unknown backbone: {}'.format(args.backbone))
+
     size_in_bytes = model_size(model)
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -496,12 +510,16 @@ def main(process_type , factor):
         torch.cuda.set_device(args.gpu)
         model = model.to(args.device)
         model.eval()
-        checkpoint = torch.load(model_fname)
+
+        if args.scratch != True: # pretrained
+            checkpoint = torch.load(f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/pretrained/{model_name}")
+        else:
+            checkpoint = torch.load(f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/scratch/{model_name}")
 
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         print(model_fname)
         model.load_state_dict(state_dict)
-        cmap = loadmat('./data/pascal_seg_colormap.mat')['colormap']
+        cmap = loadmat('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/pascal_seg_colormap.mat')['colormap']
         cmap = (cmap * 255).astype(np.uint8).flatten().tolist()
 
         inter_meter = AverageMeter()
@@ -529,7 +547,7 @@ def main(process_type , factor):
             mask_pred = Image.fromarray(pred)
             mask_pred.putpalette(cmap)
             if args.dataset == 'pascal':
-                mask_pred.save(os.path.join('segmentation_result/pascal', imname))
+                mask_pred.save(os.path.join('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/segmentation_result/pascal', imname))
             elif args.dataset == 'cityscapes':
                 mask_pred.save(os.path.join('data/cityscapes_val', imname))
 
@@ -547,11 +565,14 @@ def main(process_type , factor):
 
 if __name__ == "__main__":
 
+    path = f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/{args.trained_model}"
+    model_list = sorted(os.listdir(path))
+
     zoom_factor = [0.1 , 0.5 , 1 , 1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
     overlap_percentage = [0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
     pattern_repeat_count = [3,6,9,12] # 반복 횟수 2이면 2*2
 
-    output_dict = {"zoom" : [] , "overlap" : [] , "repeat" : []}
+    output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
     process_dict = {
         "zoom" : zoom_factor , 
@@ -559,14 +580,32 @@ if __name__ == "__main__":
         "repeat" : pattern_repeat_count
     }
 
-    if args.infer != True: # inference
-            
+    if args.infer == True: # inference
+        for name in model_list:
             for key , value in process_dict.items():
                 for ratio in value:
-                    output = main(key , ratio)
-                    output_dict[key].append(output)
+                    output = main(key , ratio , name)
+                    output_dict[name][key].append(output)
+        print(output_dict)
+
+        records = []
+
+        for model_name , result_dict in output_dict.items():
+            for task , values in result_dict.items():
+                for i , val in enumerate(values):
+                    records.append({
+                        "model" : model_name ,
+                        "task" : task ,
+                        "index" : i , 
+                        "value" : val
+                    })
+
+        df = pd.DataFrame(records)
+        df.to_csv(f"output_{args.trained_model}_{args.dataset}.csv" , index = False)
+    
     else: 
-        main(None , None)
+        main(None , None , None)
+
 
 # 텐서 크기에서 중심 좌표를 자동으로 설정 (H/2, W/2)
 # H, W = layer_outputs.shape[2], layer_outputs.shape[3]
