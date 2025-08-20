@@ -33,3 +33,16 @@ __pycache__/
 /gcn-ha/PIGNet_ha/output_scratch_CIFAR-10.csv
 /gcn-ha/PIGNet_ha/output_scratch_CIFAR-100.csv
 /gcn-ha/PIGNet_ha/output_scratch_imagenet.csv
+/gcn-ha/PIGNet_ha/1_spare
+/gcn-ha/PIGNet_ha/CIFAR-10/
+/gcn-ha/PIGNet_ha/CIFAR-100/
+/gcn-ha/PIGNet_ha/M2F_add_exp/
+/gcn-ha/PIGNet_ha/cityscape/
+/gcn-ha/PIGNet_ha/etc_result_csv/
+/gcn-ha/PIGNet_ha/main_classification_2.py
+/gcn-ha/PIGNet_ha/main_segmentation_2.py
+/gcn-ha/PIGNet_ha/old_csv /
+/gcn-ha/PIGNet_ha/overlap_add_exp/
+/gcn-ha/PIGNet_ha/pascal/
+/output_csv/
+

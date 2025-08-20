@@ -208,7 +208,7 @@ parser.add_argument('--gpu', type=int, default=0,
                     help='test time gpu device id')
 parser.add_argument('--backbone', type=str, default='Resnet50',
                     help='resnet[50 , 101 , 152]')
-parser.add_argument('--dataset', required=False ,type=str, default='CIFAR-10',
+parser.add_argument('--dataset', required=False ,type=str, default='CIFAR-100',
                     help='pascal or cityscapes')
 parser.add_argument('--groups', type=int, default=None,
                     help='num of groups for group normalization')
@@ -239,26 +239,27 @@ parser.add_argument('--model', type=str, default="deeplab",
 parser.add_argument('--process_type', type=str, default="zoom",
                     help='process_type')
 
-parser.add_argument("--trained_model" , default="scratch" , required=True , help = "scratch or pretrained")
+parser.add_argument("--trained_model" , default="scratch" , required=False , help = "scratch or pretrained")
 
-parser.add_argument('--infer' , required=True , default=False , help="True , False")
+parser.add_argument('--infer' , required=False , default=True , help="True , False")
 
+parser.add_argument("--type"  , required = False , default="2" , help = "[1,2,3]]")
 
 args = parser.parse_args()
 
 def main(process , factor , model_name):
     
-    m_name = re.search(r"classification_(.*?)_resnet50" , model_name)
+    m_name = re.search(r"classification_(.*?)_resnet101" , model_name)
 
     if m_name:
         m_name = m_name.group(1)
 
     # make fake args
     args = argparse.Namespace()
-    args.dataset = "imagenet" #CIFAR-10 CIFAR-100  imagenet
+    args.dataset = "CIFAR-100" #CIFAR-10 CIFAR-100  imagenet
     args.model = m_name #Resnet , PIGNet_classification   PIGNet_GSPonly_classification  vit  swin
-    args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = False
+    args.backbone = "resnet101" # resnet[50 , 101]
+    args.scratch = True 
     args.train = False
     args.workers = 4
     args.epochs = 50
@@ -279,6 +280,7 @@ def main(process , factor , model_name):
     args.process_type = process  #zoom overlap repeat rotate None
     # pattern_repeat_count = 2
     args.factor = factor # 0.1 , 0.5 , 1.5 , 2
+    args.type = 2
 
     # if is cuda available device
     if torch.cuda.is_available():
@@ -306,25 +308,25 @@ def main(process , factor , model_name):
 
     if args.model=='vit':
         if args.scratch: # scartch == True
-            model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+            model_fname = 'model/3/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model , args.backbone , "scratch" ,  args.dataset)
         else: # scratch = False
-            model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+            model_fname = 'model/type_3/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model,  args.backbone , "pretrained" , args.dataset)
 
     else:
         if args.scratch: # scartch == True
-            model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+            model_fname = 'model/type_3/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model , args.backbone, "scratch" ,  args.dataset)
         else: # scratch = False
-            model_fname = 'model/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
+            model_fname = 'model/type_3/classification/{3}/{2}/classification_{0}_{1}_{2}_{3}_v3.pth'.format(
                 args.model, args.backbone , "pretrained" , args.dataset)
 
     if args.dataset == 'imagenet':
         # 데이터셋 경로 및 변환 정의
         image_size=224
 
-        data_dir = '/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/imagenet-100'
+        data_dir = '/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/imagenet-100'
         # Set the zoom factor (e.g., 1.2 to zoom in, 0.8 to zoom out)
 
         if args.train:
@@ -846,9 +848,9 @@ def main(process , factor , model_name):
         model.eval()
 
         if args.scratch != True: # pretrained
-            checkpoint = torch.load(f'model/classification/{args.dataset}/pretrained/{model_name}')
+            checkpoint = torch.load(f'model/type_{args.type}/classification/{args.dataset}/pretrained/{model_name}')
         else:
-            checkpoint = torch.load(f'model/classification/{args.dataset}/scratch/{model_name}')
+            checkpoint = torch.load(f'model/type_{args.type}/classification/{args.dataset}/scratch/{model_name}')
 
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         model.load_state_dict(state_dict)
@@ -939,11 +941,13 @@ def main(process , factor , model_name):
 
 if __name__ == "__main__":
 
-    path = f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/classification/{args.dataset}/{args.trained_model}"
+    # # TODO when infer
+    path = f"/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/model/type_{args.type}/classification/{args.dataset}/{args.trained_model}"
     model_list = sorted(os.listdir(path))
 
     zoom_ratio = [0.1,0.5,1,1.5,2]
-    rotate_degree = [60 , 45 , 30 , 15, 0 , -15 , -30 , -45 , -60 , -90 , -120 , -150 , -180]
+    
+    rotate_degree = [180, 150, 120, 90, 60 , 45 , 30 , 15, 0 , -15 , -30 , -45 , -60 , -90 , -120 , -150 , -180]
 
     process_dict = {
         "zoom" : zoom_ratio , 
@@ -952,7 +956,7 @@ if __name__ == "__main__":
 
     output_dict = {model_name : {"zoom" : [] , "rotate" : []} for model_name in model_list}
 
-    if args.infer != True: # inference
+    if args.infer : # inference
         for name in model_list:
             for key , value in process_dict.items():
                 for ratio in value:
@@ -973,7 +977,7 @@ if __name__ == "__main__":
                     })
 
         df = pd.DataFrame(records)
-        df.to_csv(f"output_{args.trained_model}_{args.dataset}.csv" , index = False)
+        df.to_csv(f"output_{args.type}_{args.trained_model}_{args.dataset}.csv" , index = False)
 
     else: 
         main(None , None , None)

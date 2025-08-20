@@ -109,9 +109,11 @@ parser.add_argument('--model', type=str, default="deeplab",
 parser.add_argument('--process_type', type=str, default="zoom",
                     help='process_type')
 
-parser.add_argument('--infer' , action = "store_true")
+parser.add_argument('--infer', required=False, default=True , action = "store_true")
 
 parser.add_argument("--trained_model" , default="scratch" , required = False , help = "scratch or pretrained")
+
+parser.add_argument("--type" , default="2" , required = True , help = "[1,2,3]]")
 
 args = parser.parse_args()
 
@@ -155,7 +157,7 @@ def main(process_type , factor , model_name):
 
     print(f"type : {type(model_name)} , model_name : {model_name}")
 
-    m_name = re.search(r"(.*?)_resnet50" , model_name)
+    m_name = re.search(r"(.*?)_resnet101" , model_name)
 
     if m_name:
         m_name = m_name.group(1)
@@ -164,13 +166,13 @@ def main(process_type , factor , model_name):
     args = argparse.Namespace()
     args.dataset = "pascal" # cityscape pascal
     args.model = m_name #PIGNet PIGNet_GSPonly  Mask2Former ASPP
-    args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = True
+    args.backbone = "resnet101" # resnet[50 , 101]
+    args.scratch = False
     args.train = False
     args.workers = 4
     args.epochs = 50
     args.batch_size = 16
-    args.crop_size = 513
+    args.crop_size = 513 # 513 for Mask2former
     args.base_lr = 0.007
     args.last_mult = 1.0
     args.groups = None
@@ -185,6 +187,8 @@ def main(process_type , factor , model_name):
     args.n_skip_l = 3
     args.factor = factor
     args.process_type = process_type
+    args.type = 3
+    args.trained_model = False
 
     if args.train:
         if args.scratch == False:
@@ -208,31 +212,32 @@ def main(process_type , factor , model_name):
     torch.backends.cudnn.benchmark = True
 
     if args.scratch == True:
-        model_fname = 'model/segmentation/{0}_{1}_{2}_scratch_v3.pth'.format(
-            args.model,args.backbone, args.dataset,args.embedding_size)
+        # /home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/model/type_2/segmetation/cityscape/scratch
+        model_fname = f'model/type_{args.type}/segmentation/{args.dataset}/{args.trained_model}/{args.model}_{args.backbone}_{args.dataset}_scratch_v3.pth'
+        # .format(args.model,args.backbone, args.dataset,"scratch",args.embedding_size)
     else: # pretrain
-        model_fname = 'model/segmentation/{0}_{1}_{2}_pretrain_v3.pth'.format(
-            args.model,args.backbone, args.dataset,args.embedding_size)
+        model_fname = f'model/type_{args.type}/segmentation/{args.dataset}/{args.trained_model}/{args.model}_{args.backbone}_{args.dataset}_scratch_v3.pth'
+        # .format(args.model,args.backbone, args.dataset,"pretrained",args.embedding_size)
 
     if args.dataset == 'pascal':
         if args.train:
 
             print("train dataset")
-            dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+            dataset = VOCSegmentation('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                       train=args.train, crop_size=args.crop_size)
-            valid_dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+            valid_dataset = VOCSegmentation('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                             train=not (args.train), crop_size=args.crop_size)
         else:
 
             if args.process_type != None:
                 print(args.process_type)
-                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                                 train=args.train, crop_size=args.crop_size,
                                                 process=args.process_type, process_value=args.factor,
                                                 overlap_percentage=args.factor,
                                                 pattern_repeat_count=args.factor)
             else:
-                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/VOCdevkit',
                                                 train=args.train, crop_size=args.crop_size,
                                                 process=None, process_value=args.factor,
                                                 overlap_percentage=args.factor,
@@ -242,22 +247,22 @@ def main(process_type , factor , model_name):
         if args.train:
             print("train dataset cityscape")
 
-            dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+            dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                  train=args.train, crop_size=args.crop_size)
 
-            valid_dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+            valid_dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                  train=not (args.train), crop_size=args.crop_size)
 
         else: # val
             if args.process_type != None:
                 print(args.process_type)
-                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                           train=args.train, crop_size=args.crop_size,
                                           process=args.process_type, process_value=args.factor,
                                           overlap_percentage=args.factor,
                                           pattern_repeat_count=args.factor)
             else:
-                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
+                dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/cityscape',
                                           train=args.train, crop_size=args.crop_size,
                                           process=None, process_value=args.factor,
                                           overlap_percentage=args.factor,
@@ -512,14 +517,16 @@ def main(process_type , factor , model_name):
         model.eval()
 
         if args.scratch != True: # pretrained
-            checkpoint = torch.load(f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/pretrained/{model_name}")
+            checkpoint = torch.load(f"/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/model/type_{args.type}/segmentation/{args.dataset}/pretrained/{model_name}")
         else:
-            checkpoint = torch.load(f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/scratch/{model_name}")
+            checkpoint = torch.load(f"/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/model/type_{args.type}/segmentation/{args.dataset}/scratch/{model_name}")
+
+        # checkpoint = torch.load(f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/Mask2Former_resnet50_pascal_pretrain_v3.pth", map_location = "cuda:0")
 
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         print(model_fname)
         model.load_state_dict(state_dict)
-        cmap = loadmat('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/data/pascal_seg_colormap.mat')['colormap']
+        cmap = loadmat('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/data/pascal_seg_colormap.mat')['colormap']
         cmap = (cmap * 255).astype(np.uint8).flatten().tolist()
 
         inter_meter = AverageMeter()
@@ -540,6 +547,7 @@ def main(process_type , factor , model_name):
 
             inputs = Variable(inputs.to(args.device))
             outputs , _ = model(inputs.unsqueeze(0))
+            # outputs = model(inputs.unsqueeze(0))
             _, pred = torch.max(outputs, 1)
             pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
             mask = target.numpy().astype(np.uint8)
@@ -547,7 +555,7 @@ def main(process_type , factor , model_name):
             mask_pred = Image.fromarray(pred)
             mask_pred.putpalette(cmap)
             if args.dataset == 'pascal':
-                mask_pred.save(os.path.join('/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/segmentation_result/pascal', imname))
+                mask_pred.save(os.path.join('/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/segmentation_result/pascal', imname))
             elif args.dataset == 'cityscapes':
                 mask_pred.save(os.path.join('data/cityscapes_val', imname))
 
@@ -565,12 +573,21 @@ def main(process_type , factor , model_name):
 
 if __name__ == "__main__":
 
-    path = f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/{args.trained_model}"
+    path = f"/home/hail/Desktop/HDD/pan/GCN/gcn-ha/PIGNet_ha/model/type_{args.type}/segmentation/{args.dataset}/{args.trained_model}"
+
+    # model_name = "Mask2former"
+
+    # if model_name != "Mask2former":
+    #     model_list = sorted(os.listdir(path))
+    # else: 
+    #     model_list = ["Mask2former"]
+
     model_list = sorted(os.listdir(path))
 
     zoom_factor = [0.1 , 0.5 , 1 , 1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
-    overlap_percentage = [0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-    pattern_repeat_count = [3,6,9,12] # 반복 횟수 2이면 2*2
+    overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+    pattern_repeat_count = [1 ,3,6,9,12] # 반복 횟수 2이면 2*2
+
 
     output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
@@ -580,7 +597,7 @@ if __name__ == "__main__":
         "repeat" : pattern_repeat_count
     }
 
-    if args.infer == True: # inference
+    if args.infer : # inference
         for name in model_list:
             for key , value in process_dict.items():
                 for ratio in value:
@@ -601,7 +618,7 @@ if __name__ == "__main__":
                     })
 
         df = pd.DataFrame(records)
-        df.to_csv(f"output_{args.trained_model}_{args.dataset}.csv" , index = False)
+        df.to_csv(f"output_{args.type}_{args.trained_model}_{args.dataset}.csv" , index = False)
     
     else: 
         main(None , None , None)
