@@ -109,9 +109,11 @@ parser.add_argument('--model', type=str, default="deeplab",
 parser.add_argument('--process_type', type=str, default="zoom",
                     help='process_type')
 
-parser.add_argument('--infer' , action = "store_true")
+parser.add_argument('--infer' , default=True, required=False)
 
 parser.add_argument("--trained_model" , default="scratch" , required = False , help = "scratch or pretrained")
+
+parser.add_argument("--type" , default="3" , required = False , help = "[1,2,3]]")
 
 args = parser.parse_args()
 
@@ -165,7 +167,7 @@ def main(process_type , factor , model_name):
     args.dataset = "pascal" # cityscape pascal
     args.model = m_name #PIGNet PIGNet_GSPonly  Mask2Former ASPP
     args.backbone = "resnet50" # resnet[50 , 101]
-    args.scratch = True
+    args.scratch = False
     args.train = False
     args.workers = 4
     args.epochs = 50
@@ -185,6 +187,8 @@ def main(process_type , factor , model_name):
     args.n_skip_l = 3
     args.factor = factor
     args.process_type = process_type
+    args.type = 3
+    args.trained_model = "pretrained"
 
     if args.train:
         if args.scratch == False:
@@ -208,11 +212,11 @@ def main(process_type , factor , model_name):
     torch.backends.cudnn.benchmark = True
 
     if args.scratch == True:
-        model_fname = 'model/segmentation/{0}_{1}_{2}_scratch_v3.pth'.format(
-            args.model,args.backbone, args.dataset,args.embedding_size)
+        model_fname = f'model/type_{args.type}/segmentation/{args.dataset}/{args.trained_model}/{args.model}_{args.backbone}_{args.dataset}_scratch_v3.pth'
+        # .format(args.model,args.backbone, args.dataset,"scratch",args.embedding_size)
     else: # pretrain
-        model_fname = 'model/segmentation/{0}_{1}_{2}_pretrain_v3.pth'.format(
-            args.model,args.backbone, args.dataset,args.embedding_size)
+        model_fname = f'model/type_{args.type}/segmentation/{args.dataset}/{args.trained_model}/{args.model}_{args.backbone}_{args.dataset}_scratch_v3.pth'
+        # .format(args.model,args.backbone, args.dataset,"pretrained",args.embedding_size)
 
     if args.dataset == 'pascal':
         if args.train:
@@ -512,9 +516,9 @@ def main(process_type , factor , model_name):
         model.eval()
 
         if args.scratch != True: # pretrained
-            checkpoint = torch.load(f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/pretrained/{model_name}")
+            checkpoint = torch.load(f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/type_{args.type}/segmentation/{args.dataset}/pretrained/{model_name}")
         else:
-            checkpoint = torch.load(f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/scratch/{model_name}")
+            checkpoint = torch.load(f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/type_{args.type}/segmentation/{args.dataset}/scratch/{model_name}")
 
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         print(model_fname)
@@ -565,12 +569,13 @@ def main(process_type , factor , model_name):
 
 if __name__ == "__main__":
 
-    path = f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/segmentation/{args.dataset}/{args.trained_model}"
+    path = f"/home/hail/Desktop/pan/GCN/gcn-ha/PIGNet_ha/model/type_{args.type}/segmentation/{args.dataset}/{args.trained_model}"
     model_list = sorted(os.listdir(path))
 
     zoom_factor = [0.1 , 0.5 , 1 , 1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
-    overlap_percentage = [0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-    pattern_repeat_count = [3,6,9,12] # 반복 횟수 2이면 2*2
+    overlap_percentage = [0,0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+    pattern_repeat_count = [1,3,6,9,12] # 반복 횟수 2이면 2*2
+
 
     output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
@@ -580,7 +585,7 @@ if __name__ == "__main__":
         "repeat" : pattern_repeat_count
     }
 
-    if args.infer == True: # inference
+    if args.infer : # inference
         for name in model_list:
             for key , value in process_dict.items():
                 for ratio in value:
@@ -601,11 +606,10 @@ if __name__ == "__main__":
                     })
 
         df = pd.DataFrame(records)
-        df.to_csv(f"output_{args.trained_model}_{args.dataset}.csv" , index = False)
+        df.to_csv(f"output_{args.type}_{args.trained_model}_{args.dataset}.csv" , index = False)
     
     else: 
         main(None , None , None)
-
 
 # 텐서 크기에서 중심 좌표를 자동으로 설정 (H/2, W/2)
 # H, W = layer_outputs.shape[2], layer_outputs.shape[3]
