@@ -1,0 +1,34 @@
+mode: "infer"
+
+# shared setting
+factor: ""
+model: "Resnet"
+exp: "bn_lr7e-3"
+gpu: 0 
+backbone: "resnet50"
+dataset: "pascal"
+model_type: "pretrained"
+workers: 4
+resume: null
+infer: True
+n_layer: 12
+n_skip_l: 3
+embedding_size: 21
+model_number: 2
+batch_size: 16
+epochs: 50
+crop_size: 513
+groups: null
+base_lr: 0.007
+last_mult: 1.0
+freeze_bn: False
+weight_std: False
+beta: False
+
+# params for infer
+infer_params:
+  process_type: ""
+  model_name: ""
+  model_filename: ""
+
+

@@ -31,8 +31,8 @@ import torchvision.transforms.functional as TF
 import re
 import yaml
 import copy
-import utils_fun
-import make_dataset
+import PIGNet.utils_classification as utils_classification
+import PIGNet.make_classification_dataset as make_classification_dataset
 
 warnings.filterwarnings("ignore")
 
@@ -109,7 +109,7 @@ def get_model(config, dataset):
                         model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
                         model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
 
-                        resized_posemb = utils_fun.resize_pos_embed(model.pos_embed , 14 , 2)
+                        resized_posemb = utils_classification.resize_pos_embed(model.pos_embed , 14 , 2)
                         model.pos_embed = torch.nn.Parameter(resized_posemb)
 
                 elif config.model_type == "pretrain": # pretrained
@@ -121,7 +121,7 @@ def get_model(config, dataset):
                         model.patch_embed.proj = nn.Conv2d(3 , 384 , kernel_size = 16 , stride = 16)
                         model.head = nn.Linear(in_features = 384 , out_features = len(dataset.CLASSES))
 
-                        resized_posemb = utils_fun.resize_pos_embed(model.pos_embed , 14 , 2)
+                        resized_posemb = utils_classification.resize_pos_embed(model.pos_embed , 14 , 2)
                         model.pos_embed = torch.nn.Parameter(resized_posemb)
 
             # elif config.model == 'swin':
@@ -133,7 +133,7 @@ def get_model(config, dataset):
 
             raise ValueError('Unknown backbone: {}'.format(config.backbone))
 
-    size_in_bytes = utils_fun.model_size(model)
+    size_in_bytes = utils_classification.model_size(model)
 
     num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     # print number of parameters

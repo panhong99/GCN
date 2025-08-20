@@ -31,9 +31,9 @@ import torchvision.transforms.functional as TF
 import re
 import yaml
 import copy
-import utils_fun
-from make_dataset import get_dataset
-from make_model import get_model
+import PIGNet.utils_classification as utils_classification
+from PIGNet.make_classification_dataset import get_dataset
+from PIGNet.make_classification_model import get_model
 
 warnings.filterwarnings("ignore")
 
@@ -69,12 +69,7 @@ def main(config):
     # assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
 
-    if config.model_type == "scratch":
-        model_fname = f'model/{config.model_number}/classification/{config.dataset}/{config.model_type}/classification_{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
-
-    elif config.model_type == "pretrain":
-        model_fname = f'model/{config.model_number}/classification/{config.dataset}/{config.model_type}/classification_{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
-
+    model_fname = f'model/{config.model_number}/classification/{config.dataset}/{config.model_type}/classification_{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
 
     # define model, dataset
     dataset, dataset_loader, valid_dataset = get_dataset(config)
@@ -158,7 +153,7 @@ def main(config):
 
         feature_shape = (2048,33,33)
 
-        collate_fn = partial(utils_fun.make_batch_fn, batch_size=config.batch_size, feature_shape=feature_shape)
+        collate_fn = partial(utils_classification.make_batch_fn, batch_size=config.batch_size, feature_shape=feature_shape)
 
         max_iter = config.epochs * len(dataset_loader)
         losses = AverageMeter()
@@ -407,7 +402,7 @@ def main(config):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Load configuration from config.yaml")
-    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/pan/GCN/PIGNet/config.yaml", help = "path to config.yaml")
+    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/pan/GCN/PIGNet/config_classification.yaml", help = "path to config.yaml")
     cli_args = parser.parse_args()
     
     try:
@@ -503,7 +498,7 @@ if __name__ == "__main__":
         df_wide.rename_axis(columns=None, inplace=True)
 
         # 3. 변환된 와이드 포맷의 DataFrame을 CSV 파일로 저장합니다.
-        output_filename = f"output_wide_{config.infer_params.type}_{config.infer_params.trained_model}_{config.dataset}.csv"
+        output_filename = f"output_wide_{config.model_number}_{config.model_type}_{config.dataset}.csv"
         df_wide.to_csv(output_filename, index=False)
         
         print(f"\n[SUCCESS] Reshaped results saved to '{output_filename}'")

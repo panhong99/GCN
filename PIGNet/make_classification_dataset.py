@@ -31,7 +31,7 @@ import torchvision.transforms.functional as TF
 import re
 import yaml
 import copy
-import utils_fun
+import PIGNet.utils_classification as utils_classification
 
 warnings.filterwarnings("ignore")
 
@@ -64,7 +64,7 @@ def get_dataset(config):
                     
                     if config.infer_params.process_type == 'zoom':
                         transform = transforms.Compose([
-                            utils_fun.ZoomTransform(config.factor),  # Apply the zoom transformation
+                            utils_classification.ZoomTransform(config.factor),  # Apply the zoom transformation
                             transforms.ToTensor(),
                             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
                         ])
@@ -73,7 +73,7 @@ def get_dataset(config):
                         # Define transformations
                         transform = transforms.Compose([
                             transforms.Resize((image_size, image_size)),  # Resize to fixed size
-                            utils_fun.RepeatTransform(config.factor),  # Apply the repeat transformation
+                            utils_classification.RepeatTransform(config.factor),  # Apply the repeat transformation
                             transforms.ToTensor(),  # Convert image to tensor
                         ])
 
@@ -132,7 +132,7 @@ def get_dataset(config):
                     
                     if config.infer_params.process_type == 'zoom':
                         transform = transforms.Compose([
-                            utils_fun.ZoomTransform(config.factor),  # Apply the zoom transformation
+                            utils_classification.ZoomTransform(config.factor),  # Apply the zoom transformation
                             transforms.ToTensor(),
                             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
                         ])
@@ -141,7 +141,7 @@ def get_dataset(config):
                         # Define transformations
                         transform = transforms.Compose([
                             transforms.Resize((image_size, image_size)),  # Resize to fixed size
-                            utils_fun.RepeatTransform(config.factor),  # Apply the repeat transformation
+                            utils_classification.RepeatTransform(config.factor),  # Apply the repeat transformation
                             transforms.ToTensor(),  # Convert image to tensor
                         ])
 
@@ -201,7 +201,7 @@ def get_dataset(config):
                 else:
                     if config.infer_params.process_type == 'zoom':
                         transform = transforms.Compose([
-                            utils_fun.ZoomTransform(config.factor),  # Apply the zoom transformation
+                            utils_classification.ZoomTransform(config.factor),  # Apply the zoom transformation
                             transforms.ToTensor(),
                             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))  # 이미지를 정규화합니다.
                         ])
@@ -210,7 +210,7 @@ def get_dataset(config):
                         # Define transformations
                         transform = transforms.Compose([
                             transforms.Resize((image_size, image_size)),  # Resize to fixed size
-                            utils_fun.RepeatTransform(config.factor),  # Apply the repeat transformation
+                            utils_classification.RepeatTransform(config.factor),  # Apply the repeat transformation
                             transforms.ToTensor(),  # Convert image to tensor
                         ])
                     # TODO Rotate
