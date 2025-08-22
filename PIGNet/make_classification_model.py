@@ -31,8 +31,8 @@ import torchvision.transforms.functional as TF
 import re
 import yaml
 import copy
-import PIGNet.utils_classification as utils_classification
-import PIGNet.make_classification_dataset as make_classification_dataset
+import utils_classification as utils_classification
+import make_classification_dataset as make_classification_dataset
 
 warnings.filterwarnings("ignore")
 
@@ -40,7 +40,7 @@ def get_model(config, dataset):
     
     if config.backbone in ["resnet50","resnet101"]:
 
-            if config.model_type == "pretrain":
+            if config.model_type == "pretrained":
                 config.pretrain = False
 
             else:
@@ -112,7 +112,7 @@ def get_model(config, dataset):
                         resized_posemb = utils_classification.resize_pos_embed(model.pos_embed , 14 , 2)
                         model.pos_embed = torch.nn.Parameter(resized_posemb)
 
-                elif config.model_type == "pretrain": # pretrained
+                elif config.model_type == "pretrained": # pretrained
                     print("pretrained")
                     model = timm.create_model("vit_small_patch16_224" , pretrained = True)
 

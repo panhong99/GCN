@@ -31,7 +31,7 @@ import torchvision.transforms.functional as TF
 import re
 import yaml
 import copy
-import PIGNet.utils_classification as utils_classification
+import utils_classification as utils_classification
 
 warnings.filterwarnings("ignore")
 

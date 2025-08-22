@@ -31,9 +31,9 @@ import torchvision.transforms.functional as TF
 import re
 import yaml
 import copy
-import PIGNet.utils_classification as utils_classification
-from PIGNet.make_classification_dataset import get_dataset
-from PIGNet.make_classification_model import get_model
+import utils_classification as utils_classification
+from make_classification_dataset import get_dataset
+from make_classification_model import get_model
 
 warnings.filterwarnings("ignore")
 
@@ -177,7 +177,7 @@ def main(config):
 
         train_step = 0
 
-        for epoch in range(start_epoch, config.epochs):
+        for epoch in (range(start_epoch, config.epochs)):
             print("EPOCHS : ", epoch+1," / ",config.epochs)
 
             loss_sum = 0

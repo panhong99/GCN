@@ -2,19 +2,19 @@ mode: "infer"
 
 # shared setting
 factor: ""
-model: "vit"
+model: ""
 exp: "bn_lr7e-3"
 gpu: 0 
 backbone: "resnet50"
 dataset: "CIFAR-10"
-model_type: "scratch"
+model_type: "pretrained"
 workers: 4
 resume: null
 infer: True
 n_layer: 12
 n_skip_l: 3
 embedding_size: 256
-model_number: 2
+model_number: 1
 batch_size: 16
 epochs: 50
 crop_size: 513
