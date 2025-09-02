@@ -38,19 +38,28 @@ warnings.filterwarnings("ignore")
 def get_dataset(config):
 
     if config.dataset == 'imagenet':
-            # 데이터셋 경로 및 변환 정의
-            image_size=224
+        # 데이터셋 경로 및 변환 정의
+        image_size=224
 
             data_dir = '/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/imagenet-100'
             # Set the zoom factor (e.g., 1.2 to zoom in, 0.8 to zoom out)
 
-            if config.mode == "train":
-                # Define transformations
+        if config.mode == "train":
+            # Define transformations
+            transform = transforms.Compose([
+                transforms.Resize((image_size, image_size)),  # Resize to fixed size
+                transforms.ToTensor(),  # Convert image to tensor
+            ])
+
+        else:
+            if config.infer_params.process_type==None:
                 transform = transforms.Compose([
                     transforms.Resize((image_size, image_size)),  # Resize to fixed size
                     transforms.ToTensor(),  # Convert image to tensor
                 ])
-
+            else:
+                if config.infer_params.process_type == 'zoom':
+                    # Define transformations
             else:
                 if config.infer_params.process_type==None:
                     transform = transforms.Compose([
@@ -67,46 +76,47 @@ def get_dataset(config):
                         ])
                     elif config.infer_params.process_type =='repeat':
 
-                        # Define transformations
-                        transform = transforms.Compose([
-                            transforms.Resize((image_size, image_size)),  # Resize to fixed size
-                            utils_classification.RepeatTransform(config.factor),  # Apply the repeat transformation
-                            transforms.ToTensor(),  # Convert image to tensor
-                        ])
+                    # Define transformations
+                    transform = transforms.Compose([
+                        transforms.Resize((image_size, image_size)),  # Resize to fixed size
+                        utils_classification.RepeatTransform(config.factor),  # Apply the repeat transformation
+                        transforms.ToTensor(),  # Convert image to tensor
+                    ])
 
                     # TODO Rotate
                     elif config.infer_params.process_type == "rotate":
+                # TODO Rotate
+                elif config.infer_params.process_type == "rotate":
 
-                        transform = transforms.Compose([
-                            transforms.Resize((image_size, image_size)),
-                            transforms.Lambda(lambda img: TF.rotate(img, angle=config.factor)),  # (-15 ~ +15) rotate
-                            transforms.ToTensor(),
-                        ])
+                    transform = transforms.Compose([
+                        transforms.Resize((image_size, image_size)),
+                        transforms.Lambda(lambda img: TF.rotate(img, angle=config.factor)),  # (-15 ~ +15) rotate
+                        transforms.ToTensor(),
+                    ])
 
-            # Load datasets with ImageFolder and apply transformations
-            dataset = ImageFolder(root=f'{data_dir}/train', transform=transform)
-            valid_dataset = ImageFolder(root=f'{data_dir}/val', transform=transform)
+        # Load datasets with ImageFolder and apply transformations
+        dataset = ImageFolder(root=f'{data_dir}/train', transform=transform)
+        valid_dataset = ImageFolder(root=f'{data_dir}/val', transform=transform)
 
-            # dataset = torchvision.datasets.ImageFolder(root=data_dir+'/train', transform=transform)
-            #
-            # valid_dataset = torchvision.datasets.ImageFolder(root=data_dir+'/val', transform=transform)
+        # dataset = torchvision.datasets.ImageFolder(root=data_dir+'/train', transform=transform)
+        #
+        # valid_dataset = torchvision.datasets.ImageFolder(root=data_dir+'/val', transform=transform)
+        idx2label = []
+        cls2label = {}
 
-            idx2label = []
-            cls2label = {}
+        import json
+        json_file=data_dir+'/Labels.json'
+        with open(json_file, "r") as read_file:
+            class_idx = json.load(read_file)
 
-            import json
-            json_file=data_dir+'/Labels.json'
-            with open(json_file, "r") as read_file:
-                class_idx = json.load(read_file)
+            idx2label = list(class_idx.values())
 
-                idx2label = list(class_idx.values())
+            cla2label = class_idx
 
-                cla2label = class_idx
+            # idx2label = [class_idx[str(k)][1] for k in range(len(class_idx))]
+            # cls2label = {class_idx[str(k)][0]: class_idx[str(k)][1] for k in range(len(class_idx))}
 
-                # idx2label = [class_idx[str(k)][1] for k in range(len(class_idx))]
-                # cls2label = {class_idx[str(k)][0]: class_idx[str(k)][1] for k in range(len(class_idx))}
-
-            dataset.CLASSES = idx2label
+        dataset.CLASSES = idx2label
 
     elif config.dataset == 'CIFAR-100':
             image_size = 32

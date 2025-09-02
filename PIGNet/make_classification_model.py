@@ -41,10 +41,10 @@ def get_model(config, dataset):
     if config.backbone in ["resnet50","resnet101"]:
 
             if config.model_type == "pretrained":
-                config.pretrain = False
+                config.pretrain = True
 
             else:
-                config.pretrain = True
+                config.pretrain = False
                 
             if config.dataset != "imagenet":
                 grid_size = 8

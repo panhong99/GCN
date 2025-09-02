@@ -3,12 +3,17 @@ mode: "infer"
 # shared setting
 factor: ""
 model: "Resnet"
+model: ""
 exp: "bn_lr7e-3"
 gpu: 0 
 backbone: "resnet101"
 dataset: "CIFAR-10"
 model_type: "pretrained"
 model_number: 3
+backbone: "resnet50"
+dataset: "imagenet"
+model_type: "scratch"
+model_number: 1
 workers: 4
 resume: null
 infer: True

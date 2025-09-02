@@ -177,7 +177,7 @@ def main(config):
 
         train_step = 0
 
-        for epoch in range(start_epoch, config.epochs):
+        for epoch in (range(start_epoch, config.epochs)):
             print("EPOCHS : ", epoch+1," / ",config.epochs)
 
             loss_sum = 0
