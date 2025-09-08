@@ -42,3 +42,7 @@ __pycache__/
 /PIGNet/.vscode/
 /PIGNet/check_image.yaml
 /PIGNet/check_image_ratio.py
+/PIGNet/Rotate_-120.png
+/PIGNet/Rotate_120.png
+/PIGNet/infer_segmentation_images/
+/PIGNet/overlap__.png

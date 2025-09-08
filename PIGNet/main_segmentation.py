@@ -290,12 +290,17 @@ def main(config):
 
         for i in tqdm(range(len(dataset))):
 
-            inputs, target = dataset[i]
+            inputs, target, gt_image = dataset[i]
             if inputs==None:
                 continue
 
             inputs = Variable(inputs.to(device))
-            outputs , _ = model(inputs.unsqueeze(0))
+
+            if config.model == "Mask2Former":
+                outputs = model(inputs.unsqueeze(0))
+            else:
+                outputs , _ = model(inputs.unsqueeze(0))
+
             _, pred = torch.max(outputs, 1)
             pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
             mask = target.numpy().astype(np.uint8)
@@ -305,18 +310,33 @@ def main(config):
 
             if config.dataset == 'pascal':
                 path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/segmentation_result/pascal/{config.model}'
+                path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
                 if os.path.exists(path):
                     mask_pred.save(os.path.join(path, imname))
                 else: 
                     os.mkdir(path)
                     mask_pred.save(os.path.join(path, imname))
+                
+                if os.path.exists(path_GT):
+                    gt_image.save(os.path.join(path_GT, imname))
+                else: 
+                    os.mkdir(path_GT)
+                    gt_image.save(os.path.join(path_GT, imname))
+                
             elif config.dataset == 'cityscapes':
                 path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/segmentation_result/cityscape_val/{config.model}'
+                path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
                 if os.path.exists(path):
                     mask_pred.save(os.path.join(path, imname))
                 else: 
                     os.mkdir(path)
                     mask_pred.save(os.path.join(path, imname))
+                
+                if os.path.exists(path_GT):
+                    gt_image.save(os.path.join(path_GT, imname))
+                else: 
+                    os.mkdir(path_GT)
+                    gt_image.save(os.path.join(path_GT, imname))
 
             # print('eval: {0}/{1}'.format(i + 1, len(dataset)))
 
@@ -376,36 +396,38 @@ if __name__ == "__main__":
             print(f"[ERROR] Model directory not found at '{path}'")
             exit()
     
-        # zoom_factor = [0.1 , 0.5 , 1 , 1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+        zoom_factor = [0.1 , 0.5 , 1 , 1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
 
-        zoom_factor = [1] # zoom in, out value 양수면 줌 음수면 줌아웃
+        # zoom_factor = [1] # zoom in, out value 양수면 줌 음수면 줌아웃
 
-        # overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+        overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
-        # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+        pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
 
-        # output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
-
-        # process_dict = {
-        #     "zoom" : zoom_factor , 
-        #     "overlap" : overlap_percentage ,
-        #     "repeat" : pattern_repeat_count
-        # }
-
-        output_dict = {model_name : {"zoom" : []} for model_name in model_list}
+        output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
         process_dict = {
             "zoom" : zoom_factor , 
+            "overlap" : overlap_percentage ,
+            "repeat" : pattern_repeat_count
         }
+
+        # output_dict = {model_name : {"zoom" : []} for model_name in model_list}
+
+        # process_dict = {
+        #     "zoom" : zoom_factor , 
+        # }
         
         for name in model_list:
             for process_key , factor_list in process_dict.items():
                 for factor_value in factor_list:
                     
                     iter_config = copy.deepcopy(config)
+                    if "Mask2Former" in name:
+                        iter_config.crop_size = 512
                     iter_config.infer_params.model_filename = name
                     iter_config.infer_params.process_type = process_key
-                    iter_config.factor = float(factor_value)
+                    iter_config.factor = factor_value
 
                     print("-" * 60)
                     print(f"Testing model: {name} | Process: {process_key} | Factor: {factor_value}")

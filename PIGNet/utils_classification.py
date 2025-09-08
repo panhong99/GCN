@@ -31,6 +31,7 @@ import torchvision.transforms.functional as TF
 import re
 import yaml
 import copy
+import os
 
  
 def make_batch_fn(samples, batch_size, feature_shape):
@@ -105,12 +106,13 @@ def zoom_center(image, zoom_factor):
         resized_image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         # Create a new white image and paste the resized image in the center
-        new_image = Image.new('RGB', (width, height), (255, 255, 255))
+        new_image = Image.new('RGB', (width, height), (0, 0, 0))
         new_image.paste(resized_image, ((width - new_width) // 2, (height - new_height) // 2))
 
         image = new_image
-
+    
     return image
+
 def repeat(image, pattern_repeat_count):
     """
     Repeat the inner region of the image in a grid pattern.
@@ -139,6 +141,13 @@ def repeat(image, pattern_repeat_count):
 
     return final_image
 # Define a custom transform class for zoom
+
+def rotate(image, rotate_ratio):
+    if rotate_ratio == 0:
+        return image
+    
+    return TF.rotate(image, angle= rotate_ratio)
+
 class ZoomTransform:
     def __init__(self, zoom_factor):
         self.zoom_factor = zoom_factor
@@ -153,7 +162,13 @@ class RepeatTransform:
 
     def __call__(self, image):
         return repeat(image, self.pattern_repeat_count)
-
+    
+class RotateTransform:
+    def __init__(self, rotate_ratio):
+        self.rotate_ratio = rotate_ratio
+    
+    def __call__(self, image):
+        return rotate(image, self.rotate_ratio)
 
 def resize_pos_embed(posemb , grid_size , new_grid_size , num_extra_tokens = 1):
     #Todo split [CLS] , grid tokens

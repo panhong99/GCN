@@ -449,6 +449,12 @@ if __name__ == "__main__":
 
         rotate_degree = [180, 150, 120, 90, 60, 45, 30, 15, 0, -15, -30, -45, -60, -90, -120, -150, -180]
 
+        # zoom_ratio = [1]
+
+        # rotate_degree = [0]
+
+        # process_dict = {"zoom": zoom_ratio, "rotate": rotate_degree}
+
         process_dict = {"zoom": zoom_ratio, "rotate": rotate_degree}
 
         output_dict = {model_name: {"zoom": [], "rotate": []} for model_name in model_list}

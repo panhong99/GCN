@@ -436,7 +436,7 @@ class ResNet(nn.Module):
                 layers.append(block(self.inplanes, planes, dilation=dilation, conv=self.conv, norm=self.norm))
 
 
-        return nn.Sequential(*layers)
+        return nn.Sequential(*layers) 
 
     def forward(self, x):
         size = (x.shape[2], x.shape[3])

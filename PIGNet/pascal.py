@@ -7,6 +7,7 @@ import numpy as np
 import scipy.ndimage as ndi
 import random
 from utils import preprocess
+import copy
 
 class VOCSegmentation(data.Dataset):
   CLASSES = [
@@ -76,6 +77,8 @@ class VOCSegmentation(data.Dataset):
 
       next_img=Image.open(self.images[index+1]).convert('RGB')
       next_target=Image.open(self.masks[index+1])
+      
+      
       _img, _target = self.overlap(_img, _target,next_img,next_target,self.overlap_percentage)
       if _img==None:
         return None,None
@@ -86,6 +89,9 @@ class VOCSegmentation(data.Dataset):
         return None,None
 
     #if self.process == None:
+    
+    gt_image = copy.deepcopy(_img)
+    
     _img, _target = preprocess(_img, _target,
                                flip=True if self.train else False,
                                scale=(0.5, 2.0) if self.train else None,
@@ -99,7 +105,7 @@ class VOCSegmentation(data.Dataset):
       _target = _target.unsqueeze(0)
       _target = self.target_transform(_target)
 
-    return _img, _target
+    return _img, _target, gt_image
 
   def __len__(self):
     return len(self.images)
@@ -140,7 +146,6 @@ class VOCSegmentation(data.Dataset):
     inner_region2 = self.extract_inner_region(next_original_opencv_image, contour2[0])
     inner_image2 = Image.fromarray(cv2.cvtColor(inner_region2, cv2.COLOR_BGR2RGB))
 
-
     inner_image1_np = np.array(inner_image1)
     inner_image2_np = np.array(inner_image2)
     inner_mask1_np = np.array(mask)
@@ -168,13 +173,15 @@ class VOCSegmentation(data.Dataset):
           canvas_mask[i, start_x + j] = inner_mask2_np[i, j]
 
     # Convert the canvas back to an image and mask
-    result_image = Image.fromarray(cv2.cvtColor(canvas_image, cv2.COLOR_BGR2RGB))
-    result_mask = Image.fromarray(canvas_mask)
+    # result_image = Image.fromarray(cv2.cvtColor(canvas_image, cv2.COLOR_BGR2RGB))
+    result_image = Image.fromarray(canvas_image)
 
+    result_mask = Image.fromarray(canvas_mask)
+    
     return result_image, result_mask
 
   def repeat(self,image, mask, pattern_repeat_count):
-    image_size = image.size
+    image_size = image.size 
     numpy_image = np.array(image)
     original_opencv_image = cv2.cvtColor(numpy_image, cv2.COLOR_RGB2BGR)
 
@@ -189,14 +196,18 @@ class VOCSegmentation(data.Dataset):
     )
 
     numpy_mask = np.array(mask)
-    original_opencv_mask = cv2.cvtColor(numpy_mask, cv2.COLOR_GRAY2BGR)
-    inner_mask1 = self.extract_inner_region(original_opencv_mask, contour1[0])
-    inner_mask1_resize = Image.fromarray(cv2.cvtColor(inner_mask1, cv2.COLOR_BGR2GRAY)).resize(
+    # original_opencv_mask = cv2.cvtColor(numpy_mask, cv2.COLOR_GRAY2BGR)
+    # inner_mask1 = self.extract_inner_region(original_opencv_mask, contour1[0])
+    inner_mask1 = self.extract_inner_region(numpy_mask, contour1[0])
+    # inner_mask1_resize = Image.fromarray(cv2.cvtColor(inner_mask1, cv2.COLOR_BGR2GRAY)).resize(
+    #   (image_size[0], image_size[1])
+    # )
+    inner_mask1_resize = Image.fromarray(inner_mask1).resize(
       (image_size[0], image_size[1])
     )
 
     # Create empty new images and masks of the same size as the original image
-    new_image_size = (image_size[0] * pattern_repeat_count, image_size[1] * pattern_repeat_count)
+    new_image_size = (image_size[0] * int(pattern_repeat_count), image_size[1] * int(pattern_repeat_count))
     new_image = Image.new('RGB', new_image_size)
     new_mask = Image.new('L', new_image_size)
 
@@ -209,7 +220,7 @@ class VOCSegmentation(data.Dataset):
     # Resize the final images to the original image size
     final_image = new_image.resize(image_size)
     final_mask = new_mask.resize(image_size)
-
+    
     return final_image, final_mask
 
   def zoom_center(self, image, mask, zoom_factor):
@@ -247,8 +258,8 @@ class VOCSegmentation(data.Dataset):
       resized_mask = mask.resize((new_width, new_height), Image.Resampling.NEAREST)
 
       # Create a new black image and paste the resized image and mask in the center
-      new_image = Image.new('RGB', (width, height), (255, 255, 255))
-      new_mask = Image.new('L', (width, height), 255)
+      new_image = Image.new('RGB', (width, height), (0, 0, 0))
+      new_mask = Image.new('L', (width, height), 0)
 
       new_image.paste(resized_image, ((width - new_width) // 2, (height - new_height) // 2))
       new_mask.paste(resized_mask, ((width - new_width) // 2, (height - new_height) // 2))

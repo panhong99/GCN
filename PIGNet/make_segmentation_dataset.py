@@ -31,6 +31,7 @@ import copy
 
 def get_dataset(config):
 
+    
     config.train = True if config.mode == "train" else False
 
     if config.dataset == 'pascal':

@@ -8,13 +8,13 @@ gpu: 0
 backbone: "resnet101"
 dataset: "pascal"
 model_type: "pretrained"
+model_number: 2
 workers: 4
 resume: null
 infer: True
 n_layer: 12
 n_skip_l: 3
 embedding_size: 21
-model_number: 2
 batch_size: 16
 epochs: 50
 crop_size: 513

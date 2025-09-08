@@ -41,9 +41,8 @@ def get_dataset(config):
         # 데이터셋 경로 및 변환 정의
         image_size=224
 
-            data_dir = '/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/imagenet-100'
+        data_dir = '/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/imagenet-100'
             # Set the zoom factor (e.g., 1.2 to zoom in, 0.8 to zoom out)
-
         if config.mode == "train":
             # Define transformations
             transform = transforms.Compose([
@@ -58,23 +57,15 @@ def get_dataset(config):
                     transforms.ToTensor(),  # Convert image to tensor
                 ])
             else:
+
                 if config.infer_params.process_type == 'zoom':
                     # Define transformations
-            else:
-                if config.infer_params.process_type==None:
                     transform = transforms.Compose([
                         transforms.Resize((image_size, image_size)),  # Resize to fixed size
+                        utils_classification.ZoomTransform(config.factor),  # Apply the zoom transformation
                         transforms.ToTensor(),  # Convert image to tensor
                     ])
-                else:
-                    if config.infer_params.process_type == 'zoom':
-                        # Define transformations
-                        transform = transforms.Compose([
-                            transforms.Resize((image_size, image_size)),  # Resize to fixed size
-                            utils_classification.ZoomTransform(config.factor),  # Apply the zoom transformation
-                            transforms.ToTensor(),  # Convert image to tensor
-                        ])
-                    elif config.infer_params.process_type =='repeat':
+                elif config.infer_params.process_type =='repeat':
 
                     # Define transformations
                     transform = transforms.Compose([
@@ -83,8 +74,6 @@ def get_dataset(config):
                         transforms.ToTensor(),  # Convert image to tensor
                     ])
 
-                    # TODO Rotate
-                    elif config.infer_params.process_type == "rotate":
                 # TODO Rotate
                 elif config.infer_params.process_type == "rotate":
 
@@ -93,7 +82,7 @@ def get_dataset(config):
                         transforms.Lambda(lambda img: TF.rotate(img, angle=config.factor)),  # (-15 ~ +15) rotate
                         transforms.ToTensor(),
                     ])
-
+                    
         # Load datasets with ImageFolder and apply transformations
         dataset = ImageFolder(root=f'{data_dir}/train', transform=transform)
         valid_dataset = ImageFolder(root=f'{data_dir}/val', transform=transform)
@@ -159,6 +148,8 @@ def get_dataset(config):
                             transforms.Resize((image_size, image_size)),
                             transforms.Lambda(lambda img: TF.rotate(img, angle=config.factor)),  # (-15 ~ +15) rotate
                             transforms.ToTensor(),
+                            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+
                         ])
 
 
@@ -226,8 +217,9 @@ def get_dataset(config):
 
                         transform = transforms.Compose([
                             transforms.Resize((image_size, image_size)),
-                            transforms.Lambda(lambda img: TF.rotate(img, angle=config.factor)),  # (-15 ~ +15) rotate
+                            utils_classification.RotateTransform(config.factor),
                             transforms.ToTensor(),
+                            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
                         ])
 
             # CIFAR-10 데이터셋 로드
