@@ -6,7 +6,7 @@ import torch.utils.model_zoo as model_zoo
 from torch.nn import functional as F
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv, SAGEConv
-
+import copy
 
 __all__ = ['ResNet', 'resnet50', 'resnet101', 'resnet152']
 
@@ -308,25 +308,31 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         size = (x.shape[2], x.shape[3])
-
+        backbone_layers_output = []
+        
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
 
         x = self.layer1(x) #block1
+        backbone_layers_output.append(x)
+
         x = self.layer2(x) #block2
+        backbone_layers_output.append(x)
+
         x = self.layer3(x) #block3
+        backbone_layers_output.append(x)
+
         x = self.layer4(x) #block4
+        backbone_layers_output.append(x)
 
-
-        x = self.aspp(x)
-
+        x, aspp_layers_output = self.aspp(x)
 
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
 
-        return x , x
+        return x, aspp_layers_output, backbone_layers_output
 
 
 
@@ -455,11 +461,11 @@ class ASPP(nn.Module):
         res = []
         for conv in self.convs:
             res.append(conv(x))
+        
+        aspp_layers_output = [t.detach().cpu() for t in res]
         res = torch.cat(res, dim=1)
 
-
-        return self.project(res)
-
+        return self.project(res), aspp_layers_output
 
 class DeepLabHead(nn.Module):
     def __init__(self, in_channels, num_classes, aspp_dilate=[12, 24, 36]):

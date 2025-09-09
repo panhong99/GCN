@@ -294,22 +294,29 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x) #block1
-        #layer_outputs.append(x)
+        layer_outputs.append(x)
+
         x = self.layer2(x) #block2
-        #layer_outputs.append(x)
+        layer_outputs.append(x)
+
         x = self.layer3(x) #block3
-        #layer_outputs.append(x)
+        layer_outputs.append(x)
+
         x = self.layer4(x) #block4
-        layer_outputs= x
+        layer_outputs.append(x)
 
         #print("backbone output ",x.size())
         x = self.global_avg_pool(x)
+
         #print("pooling output ", x.size())
         x=x.view(x.size(0), -1)
+
         #print("x output ", x.size())
         x = self.linear(x)
+
         # for idx,model in enumerate(layer_outputs):
         #     print(f"{idx} model {model.size()}")
+
         return x,layer_outputs
 
 

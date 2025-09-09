@@ -346,42 +346,73 @@ def main(config):
 
                     outputs = model(inputs)
 
+                elif config.model == "Resnet":
+                    outputs, layers_output = model(inputs)
+
                 else:
-                    outputs, layer_outputs = model(inputs)
+                    outputs, layers_output, backbone_layers_output = model(inputs)
 
                 _, predicted = outputs.max(1)
 
                 total += labels.size(0)
                 correct += predicted.eq(labels).sum().item()
+            
+            backbone_path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/backbone_activity"
+            layers_path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/layers_activity"
+            
+            if config.model == "PIGNet_GSPonly_classification" or config.model == "PIGNet_classification":
 
-            if config.model != "vit":
-                # 텐서 크기에서 중심 좌표를 자동으로 설정 (H/2, W/2)
-                H, W = layer_outputs.shape[2], layer_outputs.shape[3]
-                center_x, center_y = H // 2, W // 2
-                distances = [1, 2, 3, 4]
-                # 중심점 feature 벡터 (512차원)
-                center_vector = layer_outputs[0, :, center_x, center_y]
-                similarities = {distance: [] for distance in distances}
+                if os.path.exists(backbone_path):
+                    pass
+                else: # not exists(path)
+                    os.makedirs(backbone_path, exist_ok=True)
+                    torch.save(backbone_layers_output, os.path.join(backbone_path, "backbone.pth"))                
+                
+                if os.path.exists(layers_path):
+                    pass
+                else: # not exists(path)
+                    os.makedirs(layers_path, exist_ok=True)
+                    torch.save(layers_output, os.path.join(layers_path, "model_layers.pth"))                
 
-                for distance in distances:
-                    x_indices = [max(center_x - distance, 0), min(center_x + distance, H - 1)]
-                    y_indices = [max(center_y - distance, 0), min(center_y + distance, W - 1)]
+            elif config.model == "Resnet":
 
-                    for x in range(x_indices[0], x_indices[1] + 1):
-                        for y in range(y_indices[0], y_indices[1] + 1):
-                            if (x, y) != (center_x, center_y):
-                                neighbor_vector = layer_outputs[0, :, x, y]
-                                cosine_similarity = F.cosine_similarity(center_vector.unsqueeze(0),
-                                                                        neighbor_vector.unsqueeze(0))
-                                similarities[distance].append(cosine_similarity.item())
+                if os.path.exists(layers_path):
+                    pass
+                else: # not exists(path)
+                    os.makedirs(layers_path, exist_ok=True)
+                    torch.save(layers_output, os.path.join(layers_path, "model_layers.pth"))                
+            
+            else: # vit
+                pass
 
-                # 결과 출력
-                for distance, values in similarities.items():
-                    for idx, sim in enumerate(values):
-                        print(f"Distance: {distance}, Cosine Similarity: {sim:.4f}")
-                # 각 거리별 평균 유사도 계산
-                average_similarities = {distance: sum(values) / len(values) if values else 0 for distance, values in
-                                        similarities.items()}
+            # if config.model != "vit":
+            #     # 텐서 크기에서 중심 좌표를 자동으로 설정 (H/2, W/2)
+            #     H, W = layer_outputs.shape[2], layer_outputs.shape[3]
+            #     center_x, center_y = H // 2, W // 2
+            #     distances = [1, 2, 3, 4]
+            #     # 중심점 feature 벡터 (512차원)
+            #     center_vector = layer_outputs[0, :, center_x, center_y]
+            #     similarities = {distance: [] for distance in distances}
+
+            #     for distance in distances:
+            #         x_indices = [max(center_x - distance, 0), min(center_x + distance, H - 1)]
+            #         y_indices = [max(center_y - distance, 0), min(center_y + distance, W - 1)]
+
+            #         for x in range(x_indices[0], x_indices[1] + 1):
+            #             for y in range(y_indices[0], y_indices[1] + 1):
+            #                 if (x, y) != (center_x, center_y):
+            #                     neighbor_vector = layer_outputs[0, :, x, y]
+            #                     cosine_similarity = F.cosine_similarity(center_vector.unsqueeze(0),
+            #                                                             neighbor_vector.unsqueeze(0))
+            #                     similarities[distance].append(cosine_similarity.item())
+
+            #     # 결과 출력
+            #     for distance, values in similarities.items():
+            #         for idx, sim in enumerate(values):
+            #             print(f"Distance: {distance}, Cosine Similarity: {sim:.4f}")
+            #     # 각 거리별 평균 유사도 계산
+            #     average_similarities = {distance: sum(values) / len(values) if values else 0 for distance, values in
+            #                             similarities.items()}
 
                 # # 선 그래프 그리기
                 # plt.figure(figsize=(10, 6))
@@ -445,15 +476,9 @@ if __name__ == "__main__":
             print(f"[ERROR] Model directory not found at '{path}'")
             exit()
 
-        zoom_ratio = [0.1, 0.5, 1, 1.5, 2]
+        zoom_ratio = [1, 0.1, 0.5, 1.5, 2]
 
-        rotate_degree = [180, 150, 120, 90, 60, 45, 30, 15, 0, -15, -30, -45, -60, -90, -120, -150, -180]
-
-        # zoom_ratio = [1]
-
-        # rotate_degree = [0]
-
-        # process_dict = {"zoom": zoom_ratio, "rotate": rotate_degree}
+        rotate_degree = [0, 180, 150, 120, 90, 60, 45, 30, 15, -15, -30, -45, -60, -90, -120, -150, -180]
 
         process_dict = {"zoom": zoom_ratio, "rotate": rotate_degree}
 

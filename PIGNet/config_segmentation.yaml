@@ -8,7 +8,7 @@ gpu: 0
 backbone: "resnet101"
 dataset: "pascal"
 model_type: "pretrained"
-model_number: 2
+model_number: 1
 workers: 4
 resume: null
 infer: True

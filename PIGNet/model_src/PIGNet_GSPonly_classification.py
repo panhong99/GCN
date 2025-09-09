@@ -6,6 +6,7 @@ import torch.utils.model_zoo as model_zoo
 from torch.nn import functional as F
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv, SAGEConv
+import copy
 
 
 __all__ = ['ResNet', 'resnet50', 'resnet101', 'resnet152']
@@ -232,6 +233,7 @@ class GSP(nn.Module):
                     edge_index.append([current, current + grid_size - 1])
         edge_idx = torch.tensor(edge_index, dtype=torch.long).t().contiguous().cuda()
         return edge_idx
+
     def feature2graph(self,feature_map,edge_index):
 
         batch_size, channels, height, width = feature_map.shape
@@ -259,6 +261,7 @@ class GSP(nn.Module):
         batch = Batch.from_data_list(data_list)
 
         return batch
+
     def graph2feature(self, graph, num_nodes, feature_shape=(512, 11, 11)):
         batch_size = graph.size(0) // num_nodes
 
@@ -281,6 +284,7 @@ class GSP(nn.Module):
         feature_maps = torch.stack(feature_maps)
 
         return feature_maps
+
     def forward(self, x):
         # Encoder
         x_origin = x
@@ -297,26 +301,29 @@ class GSP(nn.Module):
 
         x = x.x
 
-        
-        gsp_layer_outputs=[]
+        # gsp_layer_outputs=[]
 
         #gsp_layer_outputs.append(gsp_layer_input)
         for ii in range(len(self.gn_layers)):
             x, edge = self.gn_layers[ii](x, edge_idx)
             # x_s[ii] = x
-            if (ii+1) % self.n_skip_l ==0:
+            if (ii+1) % self.n_skip_l == 0:
                 x_s_f.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),
                                                feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
-            #gsp_layer_outputs.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
+            # gsp_layer_outputs.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
 
+        gsp_layer_outputs = copy.deepcopy(x_s_f)
+        
         output = torch.cat(x_s_f, dim=1)
+
         # Decoder
         #x = self.decoder(x)
         # x = self.convx(output)
 
         # Output
         x = self.conv2(output)
-        return x #,gsp_layer_outputs
+
+        return x, gsp_layer_outputs
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -386,19 +393,23 @@ class ResNet(nn.Module):
                 self.conv(3, 64, 3, stride=2, padding=1, bias=False),
                 self.conv(64, 64, 3, stride=1, padding=1, bias=False),
                 self.conv(64, 64, 3, stride=1, padding=1, bias=False))
+
         self.bn1 = self.norm(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
         self.layer1 = self._make_layer(block,  64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], data_stride) # stirde 2 for imagene stride 1 for cifar
         self.layer3 = self._make_layer(block, 256, layers[2], data_stride) # stirde 2 for imagenet stride 1 for cifar
         self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=2 , multi=[1,2,4])
+
         # remove require_grad for self.layer4
         for param in self.layer4.parameters():
             param.requires_grad = False
 
         # self.pyramid_gnn = GSP(num_classes, 256 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l) # 512 * block.expansion for pascal
         print(num_classes, block.expansion, self.embedding_size, self.n_layer)
+
         self.pyramid_gnn = GSP(num_classes, 256 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l , grid_size = grid_size) # 512 * block.expansion for pascal
         #num_classes, depth, embedding_size, n_layer, norm=nn.BatchNorm2d, n_skip_l =
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
@@ -441,28 +452,35 @@ class ResNet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        size = (x.shape[2], x.shape[3])
+        size = (x.shape[2], x.shape[3]) 
+        backbone_layers_output = []
+
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
+
         x = self.maxpool(x)
 
         x = self.layer1(x) #block1
+        backbone_layers_output.append(x)
+
         x = self.layer2(x) #block2
+        backbone_layers_output.append(x)
+
         x = self.layer3(x) #block3
+        backbone_layers_output.append(x)
+
         #x = self.layer4(x) #block4
 
-        x = self.pyramid_gnn(x)
+        x, gsp_layer_outputs = self.pyramid_gnn(x)
 
         return_gsp_output= x
 
-
-
-        x= self.global_avg_pool(x)
+        x = self.global_avg_pool(x)
         x = x.view(x.size(0), -1)
         x = self.FC(x)
 
-        return x, return_gsp_output
+        return x, gsp_layer_outputs, backbone_layers_output #return_gsp_output
 
 
 

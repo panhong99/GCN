@@ -6,6 +6,7 @@ import torch.utils.model_zoo as model_zoo
 from torch.nn import functional as F
 from torch_geometric.data import Data, Batch
 from torch_geometric.nn import GCNConv, SAGEConv
+import copy
 
 __all__ = ['ResNet', 'resnet50', 'resnet101', 'resnet152']
 
@@ -294,7 +295,6 @@ class GSP(nn.Module):
         x_origin = x
         x_s_f = self.encoder(x)
 
-
         edge_idx = self.edge(self.grid_size)
         x = self.feature2graph(x_s_f[0], edge_idx)
 
@@ -310,7 +310,7 @@ class GSP(nn.Module):
                 x_s_f.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),
                                                 feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
 
-
+        gsp_layer_outputs = copy.deepcopy(x_s_f)
 
         #for i in x_s_f:
         #    print(i.size())
@@ -324,8 +324,7 @@ class GSP(nn.Module):
         x = self.conv2(output)
         # x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
-        return x
-
+        return x, gsp_layer_outputs
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -444,6 +443,7 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         size = (x.shape[2], x.shape[3])
+        backbone_layers_output = []
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -451,17 +451,25 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x)  # block1
+        backbone_layers_output.append(x)
+
         x = self.layer2(x)  # block2
+        backbone_layers_output.append(x)
+
         x = self.layer3(x)  # block3
+        backbone_layers_output.append(x)
+
         # x = self.layer4(x)  # block4
 
-        x = self.pyramid_gnn(x)
-        return_gsp_output = x
-        x = self.global_avg_pool(x)
+        x, gsp_layer_outputs = self.pyramid_gnn(x)
 
+        return_gsp_output = x
+
+        x = self.global_avg_pool(x)
         x = x.view(x.size(0), -1)
         x = self.FC(x)
-        return x,return_gsp_output
+
+        return x, gsp_layer_outputs, backbone_layers_output #return_gsp_output
 
 
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
