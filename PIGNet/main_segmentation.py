@@ -270,12 +270,12 @@ def main(config):
         model = model.to(device)
         model.eval()
 
-        checkpoint = torch.load(f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}')
+        checkpoint = torch.load(f'/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}')
 
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         print(model_fname)
         model.load_state_dict(state_dict)
-        cmap = loadmat('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/pascal_seg_colormap.mat')['colormap']
+        cmap = loadmat('/home/hail/Desktop/pan/GCN/PIGNet/data/pascal_seg_colormap.mat')['colormap']
         cmap = (cmap * 255).astype(np.uint8).flatten().tolist()
 
         inter_meter = AverageMeter()
@@ -311,8 +311,9 @@ def main(config):
 
             if config.dataset == 'pascal':
 
-                path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/segmentation_result/pascal/{config.model}'
-                path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+                path = f'/home/hail/Desktop/pan/GCN/PIGNet/segmentation_result/pascal/{config.model}'
+                path_GT = f"/home/hail/Desktop/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+
                 if os.path.exists(path):
                     mask_pred.save(os.path.join(path, imname))
                 else: 
@@ -326,9 +327,10 @@ def main(config):
                     gt_image.save(os.path.join(path_GT, imname))
                 
             elif config.dataset == 'cityscapes':
-                path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/segmentation_result/cityscape_val/{config.model}'
-                path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
-                
+
+                path = f'/home/hail/Desktop/pan/GCN/PIGNet/segmentation_result/cityscape_val/{config.model}'
+                path_GT = f"/home/hail/Deskto//pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+
                 if os.path.exists(path):
                     mask_pred.save(os.path.join(path, imname))
                 else: 
@@ -376,7 +378,7 @@ def main(config):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Load configuration from config.yaml")
-    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/HDD/pan/GCN/PIGNet/config_segmentation.yaml", help = "path to config.yaml")
+    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/pan/GCN/PIGNet/config_segmentation.yaml", help = "path to config.yaml")
     cli_args = parser.parse_args()
     
     try:
@@ -409,7 +411,7 @@ if __name__ == "__main__":
     elif config.mode == "infer":
         print("-- Starting Infer Mode --")
         
-        path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
+        path = f"/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
                 
         try:
             model_list = sorted(os.listdir(path))

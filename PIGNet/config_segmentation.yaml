@@ -5,7 +5,7 @@ factor: ""
 model: "Resnet"
 exp: "bn_lr7e-3"
 gpu: 0 
-backbone: "resnet101"
+backbone: "resnet50"
 dataset: "pascal"
 model_type: "pretrained"
 model_number: 1

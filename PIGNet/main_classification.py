@@ -313,7 +313,7 @@ def main(config):
         model = model.to(device)
         model.eval()
 
-        checkpoint = torch.load(f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}/{model_filename}')
+        checkpoint = torch.load(f'/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}/{model_filename}')
         
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         model.load_state_dict(state_dict)
@@ -431,7 +431,7 @@ def main(config):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Load configuration from config.yaml")
-    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/HDD/pan/GCN/PIGNet/config_classification.yaml", help = "path to config.yaml")
+    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/pan/GCN/PIGNet/config_classification.yaml", help = "path to config.yaml")
     cli_args = parser.parse_args()
     
     try:
@@ -464,7 +464,7 @@ if __name__ == "__main__":
     elif config.mode == "infer":
         print("-- Starting Infer Mode --")
         
-        path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}"
+        path = f"/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}"
                 
         try:
             model_list = sorted(os.listdir(path))
@@ -478,13 +478,9 @@ if __name__ == "__main__":
 
         rotate_degree = [0, 180, 150, 120, 90, 60, 45, 30, 15, -15, -30, -45, -60, -90, -120, -150, -180]
 
-        # output_dict = {model_name: {"zoom": [], "rotate": []} for model_name in model_list}
+        process_dict = {"zoom": zoom_ratio, "rotate": rotate_degree}
 
-        zoom_ratio = [0.1]
-
-        process_dict = {"zoom": zoom_ratio}
-
-        output_dict = {model_name: {"zoom": []} for model_name in model_list}
+        output_dict = {model_name: {"zoom": [], "rotate": []} for model_name in model_list}
 
         for name in model_list:
             for process_key, factor_list in process_dict.items():
