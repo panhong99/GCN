@@ -310,6 +310,7 @@ def main(config):
             mask_pred.putpalette(cmap)
 
             if config.dataset == 'pascal':
+
                 path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/segmentation_result/pascal/{config.model}'
                 path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
                 if os.path.exists(path):
@@ -447,14 +448,13 @@ if __name__ == "__main__":
                     print(f"Testing model: {name} | Process: {process_key} | Factor: {factor_value}")
                     print("\n")
     
-                    accuracy = main(iter_config)
+                    mIOU = main(iter_config)
 
-                    if accuracy is not None:
-                        output_dict[name][process_key].append(accuracy)
+                    if mIOU is not None:
+                        output_dict[name][process_key].append(mIOU)
                         
         print("\n--- Inference Results Summary ---")
 
-        # 결과를 보기 좋게 DataFrame으로 변환하여 저장
         records = []
         for model_name, result_dict in output_dict.items():
             for task, values in result_dict.items():
@@ -470,12 +470,10 @@ if __name__ == "__main__":
         
         df_wide = df_long.pivot_table(index=['model', 'task'], 
                                       columns='factor', 
-                                      values='accuracy').reset_index()
+                                      values='mIOU').reset_index()
         
-        # 열(column)의 이름을 깔끔하게 정리합니다.
         df_wide.rename_axis(columns=None, inplace=True)
 
-        # 3. 변환된 와이드 포맷의 DataFrame을 CSV 파일로 저장합니다.
         output_filename = f"output_wide_{config.model_number}_{config.model_type}_{config.dataset}.csv"
         df_wide.to_csv(output_filename, index=False)
         

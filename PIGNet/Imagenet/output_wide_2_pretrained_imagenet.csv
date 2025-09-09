@@ -1,0 +1,9 @@
+model,task,-180.0,-150.0,-120.0,-90.0,-60.0,-45.0,-30.0,-15.0,0.0,0.1,0.5,1.0,1.5,2.0,15.0,30.0,45.0,60.0,90.0,120.0,150.0,180.0
+classification_PIGNet_GSPonly_classification_resnet50_pretrained_imagenet_v3.pth,rotate,52.24,41.0,40.94,56.44,56.18,66.14,68.36,73.46,79.34,,,,,,72.32,67.08,65.52,56.24,55.98,40.78,40.12,52.24
+classification_PIGNet_GSPonly_classification_resnet50_pretrained_imagenet_v3.pth,zoom,,,,,,,,,,1.96,59.88,79.34,73.26,55.42,,,,,,,,
+classification_PIGNet_classification_resnet50_pretrained_imagenet_v3.pth,rotate,48.82,37.4,38.12,53.64,55.24,64.0,67.6,72.14,78.92,,,,,,71.26,66.76,63.3,53.84,54.48,38.32,37.66,48.82
+classification_PIGNet_classification_resnet50_pretrained_imagenet_v3.pth,zoom,,,,,,,,,,2.06,58.66,78.92,73.08,55.34,,,,,,,,
+classification_Resnet_resnet50_pretrained_imagenet_v3.pth,rotate,56.68,45.68,47.54,62.34,63.1,70.58,73.5,76.98,82.68,,,,,,76.68,73.72,71.02,62.1,62.02,46.6,46.18,56.68
+classification_Resnet_resnet50_pretrained_imagenet_v3.pth,zoom,,,,,,,,,,2.5,63.96,82.68,77.64,61.7,,,,,,,,
+classification_vit_resnet50_pretrained_imagenet_v3.pth,rotate,51.9,37.16,39.74,56.18,51.84,57.86,64.28,70.76,76.4,,,,,,70.3,63.98,58.6,51.62,57.08,37.94,38.88,51.9
+classification_vit_resnet50_pretrained_imagenet_v3.pth,zoom,,,,,,,,,,1.44,33.72,76.4,73.74,60.08,,,,,,,,

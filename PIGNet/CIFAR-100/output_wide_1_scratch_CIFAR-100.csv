@@ -1,0 +1,9 @@
+model,task,-180.0,-150.0,-120.0,-90.0,-60.0,-45.0,-30.0,-15.0,0.0,0.1,0.5,1.0,1.5,2.0,15.0,30.0,45.0,60.0,90.0,120.0,150.0,180.0
+classification_PIGNet_GSPonly_classification_resnet50_scratch_CIFAR-100_v3.pth,rotate,10.09,5.35,5.18,9.46,6.41,5.04,8.06,16.55,31.9,,,,,,18.24,9.1,5.07,5.62,9.41,5.37,4.76,10.09
+classification_PIGNet_GSPonly_classification_resnet50_scratch_CIFAR-100_v3.pth,zoom,,,,,,,,,,0.72,6.92,58.31,31.32,18.22,,,,,,,,
+classification_PIGNet_classification_resnet50_scratch_CIFAR-100_v3.pth,rotate,9.45,5.12,4.18,8.73,5.82,5.23,8.14,17.71,29.39,,,,,,18.29,8.82,4.99,4.99,8.66,4.49,4.47,9.45
+classification_PIGNet_classification_resnet50_scratch_CIFAR-100_v3.pth,zoom,,,,,,,,,,1.05,6.09,55.66,32.48,19.74,,,,,,,,
+classification_Resnet_resnet50_scratch_CIFAR-100_v3.pth,rotate,6.5,3.0,2.98,5.83,3.66,3.27,4.86,10.36,17.41,,,,,,9.71,4.54,3.38,3.35,5.73,3.0,2.94,6.5
+classification_Resnet_resnet50_scratch_CIFAR-100_v3.pth,zoom,,,,,,,,,,0.73,3.6,42.77,23.39,15.31,,,,,,,,
+classification_vit_resnet50_scratch_CIFAR-100_v3.pth,rotate,4.96,2.31,2.21,4.65,2.63,2.23,3.04,4.99,12.55,,,,,,5.78,3.34,2.36,2.68,4.84,2.3,2.28,4.96
+classification_vit_resnet50_scratch_CIFAR-100_v3.pth,zoom,,,,,,,,,,0.99,2.5,30.63,16.4,12.38,,,,,,,,

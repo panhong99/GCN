@@ -1,0 +1,7 @@
+model,task,-180.0,-150.0,-120.0,-90.0,-60.0,-45.0,-30.0,-15.0,0.0,0.1,0.5,1.0,1.5,2.0,15.0,30.0,45.0,60.0,90.0,120.0,150.0,180.0
+classification_PIGNet_GSPonly_classification_resnet50_pretrained_CIFAR-100_v3.pth,rotate,16.22,7.27,8.22,14.92,9.18,9.77,13.98,26.41,49.03,,,,,,24.18,13.33,10.38,9.98,15.06,7.79,8.16,16.22
+classification_PIGNet_GSPonly_classification_resnet50_pretrained_CIFAR-100_v3.pth,zoom,,,,,,,,,,1.14,8.34,70.4,38.02,19.77,,,,,,,,
+classification_PIGNet_classification_resnet50_pretrained_CIFAR-100_v3.pth,rotate,17.36,7.98,8.15,15.92,9.87,11.0,13.95,26.38,51.79,,,,,,25.18,14.52,10.68,9.41,16.12,7.71,7.84,17.36
+classification_PIGNet_classification_resnet50_pretrained_CIFAR-100_v3.pth,zoom,,,,,,,,,,0.75,8.86,71.51,40.59,21.35,,,,,,,,
+classification_Resnet_resnet50_pretrained_CIFAR-100_v3.pth,rotate,13.66,6.52,6.22,12.49,7.64,6.58,8.81,18.91,40.07,,,,,,17.73,9.88,6.33,6.56,12.38,6.32,6.09,13.66
+classification_Resnet_resnet50_pretrained_CIFAR-100_v3.pth,zoom,,,,,,,,,,0.83,5.95,59.96,30.58,17.14,,,,,,,,

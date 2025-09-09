@@ -171,7 +171,6 @@ def main(config):
             else:
                 print('=> no checkpoint found at {0}'.format(config.resume))
 
-
         best_loss = 1e+10
         patience = 0
 
@@ -296,7 +295,6 @@ def main(config):
 
                 # train_log = train_log.append({"epoch": epoch, "train_loss":  losses_test / len(valid_dataset), "train_accuracy": accuracy},
                 #                              ignore_index=True)
-
 
                 log['test/epoch/loss'] = losses_test / len(valid_dataset)
                 log['test/epoch/accuracy'] = accuracy
@@ -480,9 +478,13 @@ if __name__ == "__main__":
 
         rotate_degree = [0, 180, 150, 120, 90, 60, 45, 30, 15, -15, -30, -45, -60, -90, -120, -150, -180]
 
-        process_dict = {"zoom": zoom_ratio, "rotate": rotate_degree}
+        # output_dict = {model_name: {"zoom": [], "rotate": []} for model_name in model_list}
 
-        output_dict = {model_name: {"zoom": [], "rotate": []} for model_name in model_list}
+        zoom_ratio = [0.1]
+
+        process_dict = {"zoom": zoom_ratio}
+
+        output_dict = {model_name: {"zoom": []} for model_name in model_list}
 
         for name in model_list:
             for process_key, factor_list in process_dict.items():
