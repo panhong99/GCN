@@ -31,6 +31,7 @@ import yaml
 import copy
 from make_segmentation_dataset import get_dataset
 from make_segmentation_model import get_model
+import random
 
 warnings.filterwarnings("ignore")
 
@@ -66,7 +67,7 @@ def main(config):
     # assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
 
-    model_fname = f'model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/segmentation{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
+    model_fname = f'model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/segmentation/{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
 
     if config.mode == "train":
         dataset, valid_dataset = get_dataset(config)
@@ -270,7 +271,8 @@ def main(config):
         model = model.to(device)
         model.eval()
 
-        checkpoint = torch.load(f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}')
+        checkpoint = torch.load(f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
+                                , map_location = device)
 
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         print(model_fname)
@@ -290,7 +292,7 @@ def main(config):
 
         for i in tqdm(range(len(dataset))):
 
-            inputs, target, gt_image = dataset[i]
+            inputs, target, gt_image, color_target = dataset[i]
             if inputs==None:
                 continue
 
@@ -309,62 +311,94 @@ def main(config):
             mask_pred = Image.fromarray(pred)
             mask_pred.putpalette(cmap)
 
-            if config.dataset == 'pascal':
-                path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/segmentation_result/pascal/{config.model}'
-                path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
-                if os.path.exists(path):
-                    mask_pred.save(os.path.join(path, imname))
-                else: 
-                    os.mkdir(path)
-                    mask_pred.save(os.path.join(path, imname))
-                
-                if os.path.exists(path_GT):
-                    gt_image.save(os.path.join(path_GT, imname))
-                else: 
-                    os.mkdir(path_GT)
-                    gt_image.save(os.path.join(path_GT, imname))
-                
-            elif config.dataset == 'cityscapes':
-                path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/segmentation_result/cityscape_val/{config.model}'
-                path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
-                
-                if os.path.exists(path):
-                    mask_pred.save(os.path.join(path, imname))
-                else: 
-                    os.mkdir(path)
-                    mask_pred.save(os.path.join(path, imname))
-                
-                if os.path.exists(path_GT):
-                    gt_image.save(os.path.join(path_GT, imname))
-                else: 
-                    os.mkdir(path_GT)
-                    gt_image.save(os.path.join(path_GT, imname))
-
-            # print('eval: {0}/{1}'.format(i + 1, len(dataset)))
-
             inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
+            
+
+            if (inter.sum() / union.sum()) > 0.9:
+
+                if config.dataset == 'pascal':
+                    path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/segmentation_result/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+                    path_color_mask = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+
+                    if os.path.exists(path):
+                        mask_pred.save(os.path.join(path, imname))
+                    else: 
+                        os.makedirs(path)
+                        mask_pred.save(os.path.join(path, imname))
+                    
+                    if os.path.exists(path_GT):    
+                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        gt_image.save(os.path.join(path_GT, imname))
+                    else:
+                        os.makedirs(path_GT)
+                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        gt_image.save(os.path.join(path_GT, imname))
+
+                    if os.path.exists(path_color_mask):    
+                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target.save(os.path.join(path_color_mask, imname))
+                    else:
+                        os.makedirs(path_color_mask)
+                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target.save(os.path.join(path_color_mask, imname))
+                        
+                elif config.dataset == 'cityscape':
+                    path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/segmentation_result/cityscape_val/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/infer_segmentation_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+                    path_color_mask = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+
+                    if os.path.exists(path):
+                        mask_pred.save(os.path.join(path, imname))
+                    else: 
+                        os.makedirs(path)
+                        mask_pred.save(os.path.join(path, imname))
+                    
+                    if os.path.exists(path_GT):
+                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        gt_image.save(os.path.join(path_GT, imname))
+                    else: 
+                        os.makedirs(path_GT)
+                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        gt_image.save(os.path.join(path_GT, imname))
+                        
+                    if os.path.exists(path_color_mask):    
+                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target.save(os.path.join(path_color_mask, imname))
+                    else:
+                        os.makedirs(path_color_mask)
+                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target.save(os.path.join(path_color_mask, imname))
+
+                        
             inter_meter.update(inter)
             union_meter.update(union)
-
+                                    
         backbone_path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/backbone_activity"
         layers_path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/layers_activity"
         
-        if config.model != "Mask2Former":
+        if (config.infer_params.process_type == "zoom") and (config.factor == 1):
 
-            if os.path.exists(backbone_path):
-                pass
-            else: # not exists(path)
-                os.makedirs(backbone_path, exist_ok=True)
-                torch.save(backbone_layers_output, os.path.join(backbone_path, "backbone.pth"))                
-            
-            if os.path.exists(layers_path):
-                pass
-            else: # not exists(path)
-                os.makedirs(layers_path, exist_ok=True)
-                torch.save(layers_output, os.path.join(layers_path, "model_layers.pth"))                
+            if config.model != "Mask2Former":
 
-        else: # Mask2Former
-            pass
+                if os.path.exists(backbone_path):
+                    torch.save(backbone_layers_output, os.path.join(backbone_path, "backbone.pth"))                
+
+                else: # not exists(path)
+                    os.makedirs(backbone_path, exist_ok=True)
+                    torch.save(backbone_layers_output, os.path.join(backbone_path, "backbone.pth"))                
+                
+                if os.path.exists(layers_path):
+                    torch.save(backbone_layers_output, os.path.join(backbone_path, "backbone.pth"))                
+
+                else: # not exists(path)
+                    os.makedirs(layers_path, exist_ok=True)
+                    torch.save(layers_output, os.path.join(layers_path, "model_layers.pth"))                
+
+            else: # Mask2Former
+                pass
+
+        print('eval: {0}/{1}'.format(i + 1, len(dataset)))
 
         iou = inter_meter.sum / (union_meter.sum + 1e-10)
         for i, val in enumerate(iou):
@@ -431,7 +465,7 @@ if __name__ == "__main__":
             "overlap" : overlap_percentage ,
             "repeat" : pattern_repeat_count
         }
-
+       
         for name in model_list:
             for process_key , factor_list in process_dict.items():
                 for factor_value in factor_list:

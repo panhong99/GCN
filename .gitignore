@@ -46,3 +46,6 @@ __pycache__/
 /PIGNet/Rotate_120.png
 /PIGNet/infer_segmentation_images/
 /PIGNet/overlap__.png
+/PIGNet/GT_segmentation_masks/
+/PIGNet/layers_activity/
+/PIGNet/new_results51/

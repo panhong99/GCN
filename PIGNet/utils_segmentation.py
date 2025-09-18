@@ -26,6 +26,19 @@ import wandb
 import warnings
 import re
 
+def tensor_to_image(tensor_image):
+    
+    if tensor_image.shape[0] <= 3:
+        image = tensor_image.permute(1,2,0).detach().cpu().numpy()
+        image = (image * 255).astype(np.uint8)
+        image = Image.fromarray(image)
+    else: # shape[0] > 3
+        image = tensor_image.detach().cpu().numpy()
+        image = image.astype(np.uint8)
+        image = Image.fromarray(image)    
+
+    return image
+
 def make_batch_fn(samples, batch_size, feature_shape):
     return make_batch(samples, batch_size, feature_shape)
 

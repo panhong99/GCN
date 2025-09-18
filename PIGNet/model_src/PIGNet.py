@@ -19,7 +19,6 @@ model_urls = {
     'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
 }
 
-
 def model_size(model):
     total_size = 0
     for param in model.parameters():
@@ -308,7 +307,7 @@ class GSP(nn.Module):
         for ii in range(len(self.gn_layers)):
             x, edge = self.gn_layers[ii](x, edge_idx)
             # x_s[ii] = x
-            if (ii + 1) % self.n_skip_l == 0:
+            if (ii + 1) % self.n_skip_l == 0: # skip layer
                 x_s_f.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),
                                                 feature_shape=(self.embedding_size, 33, 33)))
                 
@@ -325,7 +324,6 @@ class GSP(nn.Module):
         # x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
         return x, gsp_layers_output
-
 
 class Bottleneck(nn.Module):
     expansion = 4
