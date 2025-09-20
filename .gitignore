@@ -49,3 +49,5 @@ __pycache__/
 /PIGNet/GT_segmentation_masks/
 /PIGNet/layers_activity/
 /PIGNet/new_results51/
+/PIGNet/GT_input_images/
+/PIGNet/pred_segmentation_masks/

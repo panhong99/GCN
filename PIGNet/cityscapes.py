@@ -34,12 +34,11 @@ _DATA_FORMAT_MAP = {
     'color': 'png'
 }
 
-
 class Cityscapes(data.Dataset):
   CLASSES = [
       'road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light',
       'traffic sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
-      'truck', 'bus', 'train', 'motorcycle', 'bicycle'
+      'truck', 'bus', 'train', 'motorcycle', 'bicycle','unlabeled'
   ]
 
   def __init__(self, root, train=True, transform=None, target_transform=None, download=False, crop_size=None ,
@@ -54,6 +53,7 @@ class Cityscapes(data.Dataset):
     self.process_value = process_value
     self.overlap_percentage = overlap_percentage
     self.pattern_repeat_count = pattern_repeat_count
+    self.dataset_name = "cityscape"
 
     if download:
       self.download()
@@ -99,7 +99,7 @@ class Cityscapes(data.Dataset):
 
         return None,None,None,None
 
-    _img, _target, unnorm_image, _color_target = preprocess(_img, _target, _color_target,
+    _img, _target, unnorm_image, _color_target = preprocess(_img, _target, _color_target,self. dataset_name, self.process_value, self.process,
                                flip=True if self.train else False,
                                scale=(0.5, 2.0) if self.train else None,
                                crop=(self.crop_size, self.crop_size))
@@ -196,6 +196,11 @@ class Cityscapes(data.Dataset):
       result_mask = Image.fromarray(canvas_mask)
       result_color_mask = Image.fromarray(canvas_color_mask)
 
+      # beta
+      result_image = result_image.resize((513, 513))
+      result_mask = result_mask.resize((513, 513))
+      result_color_mask = result_color_mask.resize((513, 513))
+      
       return result_image, result_mask, result_color_mask
 
   def repeat(self,image, mask, color_mask, pattern_repeat_count):
@@ -236,9 +241,9 @@ class Cityscapes(data.Dataset):
             new_mask.paste(inner_mask1_resize, (i * image_size[0], j * image_size[1]))
             new_color_mask.paste(inner_color_mask1_resize, (i * image_size[0], j * image_size[1]))
 
-    final_image = new_image.resize(image_size)
-    final_mask = new_mask.resize(image_size)
-    final_color_mask = new_color_mask.resize(image_size)
+    final_image = new_image.resize((513, 513))
+    final_mask = new_mask.resize((513, 513))
+    final_color_mask = new_color_mask.resize((513, 513))
     
     return final_image, final_mask, final_color_mask
 
@@ -287,8 +292,8 @@ class Cityscapes(data.Dataset):
       new_mask.paste(resized_mask, ((width - new_width) // 2, (height - new_height) // 2))
       new_color_mask.paste(resized_color_mask, ((width - new_width) // 2, (height - new_height) // 2))
 
-      image = new_image
-      mask = new_mask
-      color_mask = new_color_mask
+      image = new_image.resize((513, 513))
+      mask = new_mask.resize((513, 513))
+      color_mask = new_color_mask.resize((513, 513))
 
     return image, mask, color_mask

@@ -53,7 +53,7 @@ def inter_and_union(pred, mask, num_class):
 
   return (area_inter, area_union)
 
-def preprocess(image, mask, color_mask, flip=False, scale=None, crop=None):
+def preprocess(image, mask, color_mask, dataset_name, process_value, process, flip=False, scale=None, crop=None):
   seed = 42
 
   random.seed(seed)
@@ -81,23 +81,39 @@ def preprocess(image, mask, color_mask, flip=False, scale=None, crop=None):
       transforms.ToTensor(),
       transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
+
   image = data_transforms(image)
   mask = torch.LongTensor(np.array(mask).astype(np.int64))
-  color_mask = torch.LongTensor(np.array(color_mask).astype(np.int64))
+  
+  if dataset_name == "pascal":
+    vis_transforms = transforms.ToTensor()
+    color_mask = vis_transforms(color_mask)
+
+  else:
+    color_mask = torch.LongTensor(np.array(color_mask).astype(np.int64))
     
   if crop:
     h, w = image.shape[1], image.shape[2]
     pad_tb = max(0, crop[0] - h)
     pad_lr = max(0, crop[1] - w)
     image = torch.nn.ZeroPad2d((0, pad_lr, 0, pad_tb))(image)
-    mask = torch.nn.ConstantPad2d((0, pad_lr, 0, pad_tb), 255)(mask)
-    color_mask = torch.nn.ConstantPad2d((0, pad_lr, 0, pad_tb), 255)(color_mask)
+    mask = torch.nn.ConstantPad2d((0, pad_lr, 0, pad_tb), 0)(mask)
+    color_mask = torch.nn.ConstantPad2d((0, pad_lr, 0, pad_tb), 0)(color_mask)
     
     h, w = image.shape[1], image.shape[2]
-
-    i = random.randint(0, h - crop[0])
-    j = random.randint(0, w - crop[1])
-
+    
+    if (process != "zoom"):
+      i = random.randint(0, h - crop[0])
+      j = random.randint(0, w - crop[1])
+    
+    elif (process == "zoom") and (process_value > 0.5):
+      i = random.randint(0, h - crop[0])
+      j = random.randint(0, w - crop[1])
+    
+    else: # process == "zoom" and process_value <= 0.5:
+      i = (h - crop[0]) // 2
+      j = (w - crop[1]) // 2
+      
     image = image[:, i:i + crop[0], j:j + crop[1]]
     mask = mask[i:i + crop[0], j:j + crop[1]]
     color_mask = color_mask[i:i + crop[0], j:j + crop[1]]

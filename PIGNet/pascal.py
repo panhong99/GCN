@@ -34,6 +34,7 @@ class VOCSegmentation(data.Dataset):
     self.process_value = process_value
     self.overlap_percentage = overlap_percentage
     self.pattern_repeat_count = pattern_repeat_count
+    self.dataset_name = "pascal"
     if download:
       self.download()
 
@@ -78,7 +79,7 @@ class VOCSegmentation(data.Dataset):
       None
   
     else:
-      _color_target = Image.open(self.color_masks[index])
+      _color_target = Image.open(self.color_masks[index]).convert("RGB")
 
     if self.process != None:
       _target= _target.convert('L')
@@ -95,7 +96,7 @@ class VOCSegmentation(data.Dataset):
       if len(self.color_masks) < index:
         None
       else:
-        next_color_target = Image.open(self.color_masks[index+1])
+        next_color_target = Image.open(self.color_masks[index+1]).convert("RGB")
       
       _img, _target, _color_target = self.overlap(_img, _target, _color_target ,next_img,next_target, next_color_target, self.overlap_percentage)
       if _img==None:
@@ -108,7 +109,7 @@ class VOCSegmentation(data.Dataset):
 
     #if self.process == None:
     
-    _img, _target, unnorm_image, _color_target = preprocess(_img, _target, _color_target,
+    _img, _target, unnorm_image, _color_target = preprocess(_img, _target, _color_target,self.dataset_name, self.process_value, self.process,
                                flip=True if self.train else False,
                                scale=(0.5, 2.0) if self.train else None,
                                crop=(self.crop_size, self.crop_size))
@@ -197,6 +198,10 @@ class VOCSegmentation(data.Dataset):
       result_image = Image.fromarray(canvas_image)
       result_mask = Image.fromarray(canvas_mask)
       result_color_mask = Image.fromarray(canvas_color_mask)
+      
+      result_image = result_image.resize((self.crop_size, self.crop_size))
+      result_mask = result_mask.resize((self.crop_size, self.crop_size))
+      result_color_mask = result_color_mask.resize((self.crop_size, self.crop_size))
 
       return result_image, result_mask, result_color_mask
 
@@ -238,9 +243,9 @@ class VOCSegmentation(data.Dataset):
             new_mask.paste(inner_mask1_resize, (i * image_size[0], j * image_size[1]))
             new_color_mask.paste(inner_color_mask1_resize, (i * image_size[0], j * image_size[1]))
 
-    final_image = new_image.resize(image_size)
-    final_mask = new_mask.resize(image_size)
-    final_color_mask = new_color_mask.resize(image_size)
+    final_image = new_image.resize((self.crop_size, self.crop_size))
+    final_mask = new_mask.resize((self.crop_size, self.crop_size))
+    final_color_mask = new_color_mask.resize((self.crop_size, self.crop_size))
     
     return final_image, final_mask, final_color_mask
 
@@ -289,9 +294,9 @@ class VOCSegmentation(data.Dataset):
       new_mask.paste(resized_mask, ((width - new_width) // 2, (height - new_height) // 2))
       new_color_mask.paste(resized_color_mask, ((width - new_width) // 2, (height - new_height) // 2))
 
-      image = new_image
-      mask = new_mask
-      new_color_mask = new_color_mask
+      image = new_image.resize((self.crop_size, self.crop_size))
+      mask = new_mask.resize((self.crop_size, self.crop_size))
+      color_mask = new_color_mask.resize((self.crop_size, self.crop_size))
 
-    return image, mask, new_color_mask
+    return image, mask, color_mask
 
