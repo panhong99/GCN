@@ -54,6 +54,7 @@ def inter_and_union(pred, mask, num_class):
   return (area_inter, area_union)
 
 def preprocess(image, mask, color_mask, dataset_name, process_value, process, flip=False, scale=None, crop=None):
+
   seed = 42
 
   random.seed(seed)
@@ -66,7 +67,6 @@ def preprocess(image, mask, color_mask, dataset_name, process_value, process, fl
       mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
       color_mask = color_mask.transpose(Image.FLIP_LEFT_RIGHT)
 
-
   if scale:
     w, h = image.size
     rand_log_scale = math.log(scale[0], 2) + random.random() * (math.log(scale[1], 2) - math.log(scale[0], 2))
@@ -75,7 +75,6 @@ def preprocess(image, mask, color_mask, dataset_name, process_value, process, fl
     image = image.resize(new_size, Image.Resampling.LANCZOS)
     mask = mask.resize(new_size, Image.Resampling.NEAREST)
     color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
-
 
   data_transforms = transforms.Compose([
       transforms.ToTensor(),
@@ -113,7 +112,10 @@ def preprocess(image, mask, color_mask, dataset_name, process_value, process, fl
     else: # process == "zoom" and process_value <= 0.5:
       i = (h - crop[0]) // 2
       j = (w - crop[1]) // 2
-      
+
+    i = random.randint(0, h - crop[0])
+    j = random.randint(0, w - crop[1])
+
     image = image[:, i:i + crop[0], j:j + crop[1]]
     mask = mask[i:i + crop[0], j:j + crop[1]]
     color_mask = color_mask[i:i + crop[0], j:j + crop[1]]
@@ -124,3 +126,4 @@ def preprocess(image, mask, color_mask, dataset_name, process_value, process, fl
   unnorm_image = image * std + mean
 
   return image, mask, unnorm_image, color_mask
+  

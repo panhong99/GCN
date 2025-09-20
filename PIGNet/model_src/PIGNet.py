@@ -325,6 +325,7 @@ class GSP(nn.Module):
 
         return x, gsp_layers_output
 
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -463,12 +464,12 @@ class ResNet(nn.Module):
 
         x, gsp_layers_outputs = self.pyramid_gnn(x)
 
-        return_gsp_output = x
+        x = self.pyramid_gnn(x)
 
+        return_gsp_output = x
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
         return x, gsp_layers_outputs, backbone_layers_output #return_gsp_output
-
 
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.

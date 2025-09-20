@@ -98,7 +98,7 @@ def main(config):
     # assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
 
-    model_fname = f'model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/segmentation/{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
+    model_fname = f'model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
 
     if config.mode == "train":
         dataset, valid_dataset = get_dataset(config)
@@ -110,6 +110,9 @@ def main(config):
 
     if config.mode == "train":
         print("Training !!! ")
+        
+        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
+            config=config.__dict__)
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
         model = nn.DataParallel(model).to(device)
@@ -198,7 +201,7 @@ def main(config):
                 optimizer.param_groups[1]['lr'] = lr * config.last_mult
                 inputs = Variable(inputs.to(device))
                 target = Variable(target.to(device)).long()
-                outputs , _, _ = model(inputs)
+                outputs , _ = model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -325,8 +328,6 @@ def main(config):
             pin_memory=True, num_workers=config.workers,
             collate_fn=lambda samples: utils_segmentation.make_batch(samples, config.batch_size, feature_shape))
 
-        not_bad_images_imname = []
-
         for i in tqdm(range(len(dataset))):
 
             inputs, target, gt_image, color_target = dataset[i]
@@ -350,64 +351,61 @@ def main(config):
 
             inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
             
-            if (inter.sum() / union.sum()) > 0.5:
-                not_bad_images_imname.append(imname)
-
+            if (inter.sum() / union.sum()) > 0.9:
             
-            if config.dataset == 'pascal':
-                path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
-                path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
-                path_color_mask = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+                if config.dataset == 'pascal':
+                    path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+                    path_color_mask = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
 
-                if os.path.exists(path):
-                    mask_pred.save(os.path.join(path, imname))
-                else: 
-                    os.makedirs(path)
-                    mask_pred.save(os.path.join(path, imname))
-                
-                if os.path.exists(path_GT):    
-                    gt_image = utils_segmentation.tensor_to_image(gt_image)
-                    gt_image.save(os.path.join(path_GT, imname))
-                else:
-                    os.makedirs(path_GT)
-                    gt_image = utils_segmentation.tensor_to_image(gt_image)
-                    gt_image.save(os.path.join(path_GT, imname))
-
-                if os.path.exists(path_color_mask):    
-                    color_target = utils_segmentation.tensor_to_image(color_target)
-                    color_target.save(os.path.join(path_color_mask, imname))
-                else:
-                    os.makedirs(path_color_mask)
-                    color_target = utils_segmentation.tensor_to_image(color_target)
-                    color_target.save(os.path.join(path_color_mask, imname))
+                    if os.path.exists(path):
+                        mask_pred.save(os.path.join(path, imname))
+                    else: 
+                        os.makedirs(path)
+                        mask_pred.save(os.path.join(path, imname))
                     
-            elif config.dataset == 'cityscape':
-                path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/pred_segmentation_masks/cityscape/{config.model}/{config.infer_params.process_type}/{config.factor}'
-                path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
-                path_color_mask = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+                    if os.path.exists(path_GT):    
+                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        gt_image.save(os.path.join(path_GT, imname))
+                    else:
+                        os.makedirs(path_GT)
+                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        gt_image.save(os.path.join(path_GT, imname))
 
-                if os.path.exists(path):
-                    mask_pred.save(os.path.join(path, imname))
-                else: 
-                    os.makedirs(path)
-                    mask_pred.save(os.path.join(path, imname))
-                
-                if os.path.exists(path_GT):
-                    gt_image = utils_segmentation.tensor_to_image(gt_image)
-                    gt_image.save(os.path.join(path_GT, imname))
-                else: 
-                    os.makedirs(path_GT)
-                    gt_image = utils_segmentation.tensor_to_image(gt_image)
-                    gt_image.save(os.path.join(path_GT, imname))
+                    if os.path.exists(path_color_mask):    
+                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target.save(os.path.join(path_color_mask, imname))
+                    else:
+                        os.makedirs(path_color_mask)
+                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target.save(os.path.join(path_color_mask, imname))
+                        
+                elif config.dataset == 'cityscape':
+                    path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/pred_segmentation_masks/cityscape/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+                    path_color_mask = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+
+                    if os.path.exists(path):
+                        mask_pred.save(os.path.join(path, imname))
+                    else: 
+                        os.makedirs(path)
+                        mask_pred.save(os.path.join(path, imname))
                     
-                if os.path.exists(path_color_mask):    
-                    color_target = utils_segmentation.tensor_to_image(color_target)
-                    color_target.save(os.path.join(path_color_mask, imname))
-                else:
-                    os.makedirs(path_color_mask)
-                    color_target = utils_segmentation.tensor_to_image(color_target)
-                    color_target.save(os.path.join(path_color_mask, imname))
-
+                    if os.path.exists(path_GT):
+                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        gt_image.save(os.path.join(path_GT, imname))
+                    else: 
+                        os.makedirs(path_GT)
+                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        gt_image.save(os.path.join(path_GT, imname))
+                        
+                    if os.path.exists(path_color_mask):    
+                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target.save(os.path.join(path_color_mask, imname))
+                    else:
+                        os.makedirs(path_color_mask)
+                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target.save(os.path.join(path_color_mask, imname))
                         
             inter_meter.update(inter)
             union_meter.update(union)
@@ -438,14 +436,11 @@ def main(config):
 
         print('eval: {0}/{1}'.format(i + 1, len(dataset)))
 
-        print(not_bad_images_imname)
-
         iou = inter_meter.sum / (union_meter.sum + 1e-10)
         for i, val in enumerate(iou):
             print('IoU {0}: {1:.2f}'.format(dataset.CLASSES[i], val * 100))
         print('Mean IoU: {0:.2f}'.format(iou.mean() * 100))
         return iou.mean() * 100
-
 
 if __name__ == "__main__":
     
@@ -506,18 +501,6 @@ if __name__ == "__main__":
             "overlap" : overlap_percentage ,
             "repeat" : pattern_repeat_count
         }
-
-        # zoom_factor = [0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
-
-        # # overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-
-        # # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
-
-        # output_dict = {model_name : {"zoom" : []} for model_name in model_list}
-
-        # process_dict = {
-        #     "zoom" : zoom_factor , 
-        # }
                
         for name in model_list:
             for process_key , factor_list in process_dict.items():

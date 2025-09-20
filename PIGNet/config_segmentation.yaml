@@ -1,14 +1,14 @@
-mode: "train"
+mode: "infer"
 
 # shared setting
 factor: ""
-model: "PIGNet"
+model: ""
 exp: "bn_lr7e-3"
 gpu: 0 
 backbone: "resnet101"
-dataset: "cityscape"
+dataset: "pascal"
 model_type: "pretrained"
-model_number: 4
+model_number: 2
 workers: 4
 resume: null
 infer: True

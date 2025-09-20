@@ -68,11 +68,14 @@ class Cityscapes(data.Dataset):
 
     self.images = self._get_files('image', dataset_split)
     self.masks = self._get_files('label', dataset_split)
+
     self.color_masks = self._get_files('color', dataset_split)
   
   def __getitem__(self, index):
+
     _img = Image.open(self.images[index]).convert('RGB')
     _target = Image.open(self.masks[index])
+
     _color_target  = Image.open(self.color_masks[index])
 
     if self.process != None:
@@ -104,6 +107,7 @@ class Cityscapes(data.Dataset):
                                scale=(0.5, 2.0) if self.train else None,
                                crop=(self.crop_size, self.crop_size))
 
+
     if self.transform is not None:
       _img = self.transform(_img)
 
@@ -114,7 +118,6 @@ class Cityscapes(data.Dataset):
       _color_target = _color_target.unsqueeze(0)
       _color_target = self.target_transform(_target)
       
-
     return _img, _target, unnorm_image, _color_target
 
   def _get_files(self, data, dataset_split):
