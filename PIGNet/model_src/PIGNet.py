@@ -174,7 +174,6 @@ class SPP(nn.Module):
 
         return [x1, x2, x3, x5]
 
-
 class GSP(nn.Module):
     def __init__(self, num_classes, depth, embedding_size, n_layer, norm=nn.BatchNorm2d, n_skip_l=1):
         # PyramidGNN(num_classes, 512 * block.expansion, self.embedding_size, self.n_layer, n_skip_l = self.n_skip_l)
@@ -444,7 +443,6 @@ class ResNet(nn.Module):
         size = (x.shape[2], x.shape[3])
         backbone_layers_output = []
 
-
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -464,9 +462,8 @@ class ResNet(nn.Module):
 
         x, gsp_layers_outputs = self.pyramid_gnn(x)
 
-        x = self.pyramid_gnn(x)
-
         return_gsp_output = x
+
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
         return x, gsp_layers_outputs, backbone_layers_output #return_gsp_output

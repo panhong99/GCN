@@ -17,7 +17,6 @@ model_urls = {
     'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
 }
 
-
 def model_size(model):
     total_size = 0
     for param in model.parameters():

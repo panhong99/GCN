@@ -201,7 +201,7 @@ def main(config):
                 optimizer.param_groups[1]['lr'] = lr * config.last_mult
                 inputs = Variable(inputs.to(device))
                 target = Variable(target.to(device)).long()
-                outputs , _ = model(inputs)
+                outputs , _, _= model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -345,13 +345,18 @@ def main(config):
             _, pred = torch.max(outputs, 1)
             pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
             mask = target.numpy().astype(np.uint8)
+            
+            # search padding location
+            pad_location = (mask == 255)
+            
             imname = dataset.masks[i].split('/')[-1]
+            pred[pad_location] = 255
             mask_pred = Image.fromarray(pred)
             mask_pred.putpalette(cmap)
 
             inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
             
-            if (inter.sum() / union.sum()) > 0.9:
+            if (inter.sum() / union.sum()) > 0.8:
             
                 if config.dataset == 'pascal':
                     path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
@@ -501,6 +506,18 @@ if __name__ == "__main__":
             "overlap" : overlap_percentage ,
             "repeat" : pattern_repeat_count
         }
+        
+        # # zoom_factor = [0.5,1] # zoom in, out value 양수면 줌 음수면 줌아웃
+
+        # # overlap_percentage = [0.2] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+
+        # pattern_repeat_count = [6] # 반복 횟수 2이면 2*2
+
+        # output_dict = {model_name : {"repeat" : []} for model_name in model_list}
+
+        # process_dict = {
+        #     "repeat" : pattern_repeat_count , 
+        # }
                
         for name in model_list:
             for process_key , factor_list in process_dict.items():
@@ -554,23 +571,3 @@ if __name__ == "__main__":
 
     else:
         print(f"[ERROR] Unknown mode: '{config.mode}'. Please set mode to 'train' or 'infer' in '{cli_args.config}'")
-
-
-# 텐서 크기에서 중심 좌표를 자동으로 설정 (H/2, W/2)
-# H, W = layer_outputs.shape[2], layer_outputs.shape[3]
-# center_x, center_y = H // 2, W // 2
-#
-# 중심점 feature 벡터 (512차원)
-# center_vector = layer_outputs[0, :, center_x, center_y]
-#
-# 각 거리에 대해 코사인 유사도 계산
-# for distance in distances:
-#     coords = get_coords_by_distance(center_x, center_y, distance, H, W)  # 거리별 좌표 구하기
-#     cos_sims = calculate_cosine_similarity(coords, center_vector, layer_outputs)  # 유사도 계산
-#     mean_cos_sim = sum(cos_sims) / len(cos_sims)  # 평균 코사인 유사도 계산
-#     index = distances.index(distance)
-#     distances_sum[index] += mean_cos_sim
-
-# for idx, model in enumerate(pixel_similarity_value):
-#    for idx_, data_ in enumerate(model):
-#        pixel_similarity_value[idx][idx_]=data_/count

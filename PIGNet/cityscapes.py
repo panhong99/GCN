@@ -38,7 +38,7 @@ class Cityscapes(data.Dataset):
   CLASSES = [
       'road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light',
       'traffic sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car',
-      'truck', 'bus', 'train', 'motorcycle', 'bicycle','unlabeled'
+      'truck', 'bus', 'train', 'motorcycle', 'bicycle'
   ]
 
   def __init__(self, root, train=True, transform=None, target_transform=None, download=False, crop_size=None ,
@@ -101,12 +101,17 @@ class Cityscapes(data.Dataset):
       if _img==None:
 
         return None,None,None,None
+      
+    else: # train
+      _img, _target, _color_target = self.image_resizing(_img, _target, _color_target)
+
+      if _img == None:
+        return None, None, None, None
 
     _img, _target, unnorm_image, _color_target = preprocess(_img, _target, _color_target,self. dataset_name, self.process_value, self.process,
                                flip=True if self.train else False,
                                scale=(0.5, 2.0) if self.train else None,
                                crop=(self.crop_size, self.crop_size))
-
 
     if self.transform is not None:
       _img = self.transform(_img)
@@ -133,6 +138,19 @@ class Cityscapes(data.Dataset):
   def download(self):
     raise NotImplementedError('Automatic download not yet implemented.')
   
+  def image_resizing(self, img, mask, color_mask):
+    h, w = img.size[:2] # image type is PIL image
+    scale = self.crop_size / max(h, w)
+    
+    new_h = int(scale * h)
+    new_w = int(scale * w)
+      
+    new_image = img.resize((new_h, new_w), Image.Resampling.LANCZOS)
+    new_mask = mask.resize((new_h, new_w), Image.Resampling.NEAREST)
+    new_color_mask = color_mask.resize((new_h, new_w), Image.Resampling.NEAREST)
+      
+    return new_image, new_mask, new_color_mask
+
   def find_contours(self, mask):
     mask_array = np.array(mask)
     _, binary_mask = cv2.threshold(mask_array, 128, 255, cv2.THRESH_BINARY)
@@ -199,11 +217,8 @@ class Cityscapes(data.Dataset):
       result_mask = Image.fromarray(canvas_mask)
       result_color_mask = Image.fromarray(canvas_color_mask)
 
-      # beta
-      result_image = result_image.resize((513, 513))
-      result_mask = result_mask.resize((513, 513))
-      result_color_mask = result_color_mask.resize((513, 513))
-      
+      result_image, result_mask, result_color_mask = self.image_resizing(result_image, result_mask, result_color_mask)
+
       return result_image, result_mask, result_color_mask
 
   def repeat(self,image, mask, color_mask, pattern_repeat_count):
@@ -243,13 +258,11 @@ class Cityscapes(data.Dataset):
             new_image.paste(inner_image1_resize, (i * image_size[0], j * image_size[1]))
             new_mask.paste(inner_mask1_resize, (i * image_size[0], j * image_size[1]))
             new_color_mask.paste(inner_color_mask1_resize, (i * image_size[0], j * image_size[1]))
+          
+    new_image, new_mask, new_color_mask = self.image_resizing(new_image, new_mask, new_color_mask)
 
-    final_image = new_image.resize((513, 513))
-    final_mask = new_mask.resize((513, 513))
-    final_color_mask = new_color_mask.resize((513, 513))
+    return new_image, new_mask, new_color_mask
     
-    return final_image, final_mask, final_color_mask
-
   def zoom_center(self, image, mask, color_mask, zoom_factor):
     """
     Zooms into or out of the image and mask around the center by the given zoom_factor.
@@ -289,14 +302,16 @@ class Cityscapes(data.Dataset):
       # Create a new black image and paste the resized image and mask in the center
       new_image = Image.new('RGB', (width, height), (0, 0, 0))
       new_mask = Image.new('L', (width, height), 0)
-      new_color_mask = Image.new('RGB', (width, height), 0)
+      new_color_mask = Image.new('RGB', (width, height), (0, 0, 0))
 
       new_image.paste(resized_image, ((width - new_width) // 2, (height - new_height) // 2))
       new_mask.paste(resized_mask, ((width - new_width) // 2, (height - new_height) // 2))
       new_color_mask.paste(resized_color_mask, ((width - new_width) // 2, (height - new_height) // 2))
 
-      image = new_image.resize((513, 513))
-      mask = new_mask.resize((513, 513))
-      color_mask = new_color_mask.resize((513, 513))
+      image = new_image
+      mask = new_mask
+      color_mask = new_color_mask
+
+    image, mask, color_mask = self.image_resizing(image, mask, color_mask)
 
     return image, mask, color_mask

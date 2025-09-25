@@ -194,15 +194,22 @@ class VOCSegmentation(data.Dataset):
                   canvas_image[i, start_x + j] = inner_image2_np[i, j]
                   canvas_mask[i, start_x + j] = inner_mask2_np[i, j]
                   canvas_color_mask[i, start_x + j] = next_color_mask_np[i, j]
-
+  
       result_image = Image.fromarray(canvas_image)
       result_mask = Image.fromarray(canvas_mask)
       result_color_mask = Image.fromarray(canvas_color_mask)
-      
-      result_image = result_image.resize((self.crop_size, self.crop_size))
-      result_mask = result_mask.resize((self.crop_size, self.crop_size))
-      result_color_mask = result_color_mask.resize((self.crop_size, self.crop_size))
 
+      
+      h, w = result_image.size[:2]
+      scale = self.crop_size / max(h,w)
+
+      new_h = int(scale * h)
+      new_w = int(scale * w)
+                
+      result_image = result_image.resize((new_h, new_w))
+      result_mask = result_mask.resize((new_h, new_w))
+      result_color_mask = result_color_mask.resize((new_h, new_w))
+      
       return result_image, result_mask, result_color_mask
 
   def repeat(self,image, mask, color_mask, pattern_repeat_count):
@@ -219,7 +226,7 @@ class VOCSegmentation(data.Dataset):
     inner_image1_resize = inner_image1.resize(
         (image_size[0], image_size[1])
     )
-
+    
     numpy_mask = np.array(mask)
     inner_mask1 = self.extract_inner_region(numpy_mask, contour1[0])
     inner_mask1_resize = Image.fromarray(inner_mask1).resize(
@@ -242,12 +249,19 @@ class VOCSegmentation(data.Dataset):
             new_image.paste(inner_image1_resize, (i * image_size[0], j * image_size[1]))
             new_mask.paste(inner_mask1_resize, (i * image_size[0], j * image_size[1]))
             new_color_mask.paste(inner_color_mask1_resize, (i * image_size[0], j * image_size[1]))
-
-    final_image = new_image.resize((self.crop_size, self.crop_size))
-    final_mask = new_mask.resize((self.crop_size, self.crop_size))
-    final_color_mask = new_color_mask.resize((self.crop_size, self.crop_size))
+               
     
-    return final_image, final_mask, final_color_mask
+    h, w = new_image.size[:2]
+    scale = self.crop_size / max(h,w)
+
+    new_h = int(scale * h)
+    new_w = int(scale * w)
+              
+    new_image = new_image.resize((new_h, new_w))
+    new_mask = new_mask.resize((new_h, new_w))
+    new_color_mask = new_color_mask.resize((new_h, new_w))
+          
+    return new_image, new_mask, new_color_mask
 
   def zoom_center(self, image, mask, color_mask, zoom_factor):
     """
@@ -274,7 +288,7 @@ class VOCSegmentation(data.Dataset):
       image = image.crop((left, top, right, bottom)).resize((width, height), Image.Resampling.LANCZOS)
       mask = mask.crop((left, top, right, bottom)).resize((width, height), Image.Resampling.NEAREST)
       color_mask = color_mask.crop((left, top, right, bottom)).resize((width, height), Image.Resampling.NEAREST)
-
+      
     elif zoom_factor < 1:
       # Zoom out
       new_width = int(width * zoom_factor)
@@ -288,15 +302,15 @@ class VOCSegmentation(data.Dataset):
       # Create a new black image and paste the resized image and mask in the center
       new_image = Image.new('RGB', (width, height), (0, 0, 0))
       new_mask = Image.new('L', (width, height), 0)
-      new_color_mask = Image.new('RGB', (width, height), 0)
+      new_color_mask = Image.new('RGB', (width, height), (0, 0, 0))
 
       new_image.paste(resized_image, ((width - new_width) // 2, (height - new_height) // 2))
       new_mask.paste(resized_mask, ((width - new_width) // 2, (height - new_height) // 2))
       new_color_mask.paste(resized_color_mask, ((width - new_width) // 2, (height - new_height) // 2))
 
-      image = new_image.resize((self.crop_size, self.crop_size))
-      mask = new_mask.resize((self.crop_size, self.crop_size))
-      color_mask = new_color_mask.resize((self.crop_size, self.crop_size))
+      image = new_image
+      mask = new_mask
+      color_mask = new_color_mask
 
     return image, mask, color_mask
 

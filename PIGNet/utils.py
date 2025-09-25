@@ -67,40 +67,50 @@ def preprocess(image, mask, color_mask, dataset_name, process_value, process, fl
       mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
       color_mask = color_mask.transpose(Image.FLIP_LEFT_RIGHT)
 
-  if scale:
-    w, h = image.size
-    rand_log_scale = math.log(scale[0], 2) + random.random() * (math.log(scale[1], 2) - math.log(scale[0], 2))
-    random_scale = math.pow(2, rand_log_scale)
-    new_size = (int(round(w * random_scale)), int(round(h * random_scale)))
-    image = image.resize(new_size, Image.Resampling.LANCZOS)
-    mask = mask.resize(new_size, Image.Resampling.NEAREST)
-    color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
+  # if scale:
+  #   w, h = image.size
+  #   rand_log_scale = math.log(scale[0], 2) + random.random() * (math.log(scale[1], 2) - math.log(scale[0], 2))
+  #   random_scale = math.pow(2, rand_log_scale)
+  #   new_size = (int(round(w * random_scale)), int(round(h * random_scale)))
+  #   image = image.resize(new_size, Image.Resampling.LANCZOS)
+  #   mask = mask.resize(new_size, Image.Resampling.NEAREST)
+  #   color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
 
   data_transforms = transforms.Compose([
       transforms.ToTensor(),
       transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-  image = data_transforms(image)
-  mask = torch.LongTensor(np.array(mask).astype(np.int64))
-  
-  if dataset_name == "pascal":
-    vis_transforms = transforms.ToTensor()
-    color_mask = vis_transforms(color_mask)
-
-  else:
-    color_mask = torch.LongTensor(np.array(color_mask).astype(np.int64))
+  # PIL to numpy
+  image = np.array(image)
+  mask = np.array(mask)
+  color_mask = np.array(color_mask)    
     
   if crop:
-    h, w = image.shape[1], image.shape[2]
+    h, w = image.shape[0], image.shape[1]
+
+    # modify image size
     pad_tb = max(0, crop[0] - h)
     pad_lr = max(0, crop[1] - w)
-    image = torch.nn.ZeroPad2d((0, pad_lr, 0, pad_tb))(image)
-    mask = torch.nn.ConstantPad2d((0, pad_lr, 0, pad_tb), 0)(mask)
-    color_mask = torch.nn.ConstantPad2d((0, pad_lr, 0, pad_tb), 0)(color_mask)
+
+    image = np.pad(image,
+                    pad_width=((0, pad_tb), (0, pad_lr), (0, 0)),
+                    mode='constant',
+                    constant_values=0)
+
+    mask = np.pad(mask,
+                  pad_width=((0, pad_tb), (0, pad_lr)),
+                  mode='constant',
+                  constant_values=255)    
     
-    h, w = image.shape[1], image.shape[2]
+    # color_mask = np.pad(color_mask,
+    #                     pad_width=((0, pad_tb), (0, pad_lr), (0, 0)),
+    #                     mode='constant',
+    #                     constant_values=0)    
+
+    h, w = image.shape[0], image.shape[1]
     
+    # image crop
     if (process != "zoom"):
       i = random.randint(0, h - crop[0])
       j = random.randint(0, w - crop[1])
@@ -109,16 +119,28 @@ def preprocess(image, mask, color_mask, dataset_name, process_value, process, fl
       i = random.randint(0, h - crop[0])
       j = random.randint(0, w - crop[1])
     
-    else: # process == "zoom" and process_value <= 0.5:
+    elif (process == "zoom") and (process_value <= 0.5):
       i = (h - crop[0]) // 2
       j = (w - crop[1]) // 2
 
-    i = random.randint(0, h - crop[0])
-    j = random.randint(0, w - crop[1])
+    else:# process == None
+      i = random.randint(0, h - crop[0])
+      j = random.randint(0, w - crop[1])
 
-    image = image[:, i:i + crop[0], j:j + crop[1]]
+    image = image[i:i + crop[0], j:j + crop[1],:]
     mask = mask[i:i + crop[0], j:j + crop[1]]
-    color_mask = color_mask[i:i + crop[0], j:j + crop[1]]
+    color_mask = color_mask[i:i + crop[0], j:j + crop[1],:]
+
+  # numpy to tensor
+  image = data_transforms(image)
+  mask = torch.LongTensor(mask.astype(np.int64))
+
+  if dataset_name == "pascal":
+    vis_transforms = transforms.ToTensor()
+    color_mask = vis_transforms(color_mask)
+
+  else:
+    color_mask = torch.LongTensor(np.array(color_mask).astype(np.int64))
     
   mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
   std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
@@ -126,4 +148,3 @@ def preprocess(image, mask, color_mask, dataset_name, process_value, process, fl
   unnorm_image = image * std + mean
 
   return image, mask, unnorm_image, color_mask
-  
