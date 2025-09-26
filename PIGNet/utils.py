@@ -65,14 +65,6 @@ def preprocess(image, mask, dataset_name, process, process_value , flip=False, s
     if random.random() < 0.5:
       image = image.transpose(Image.FLIP_LEFT_RIGHT)
       mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
-        
-  if scale:
-    w, h = image.size
-    rand_log_scale = math.log(scale[0], 2) + random.random() * (math.log(scale[1], 2) - math.log(scale[0], 2))
-    random_scale = math.pow(2, rand_log_scale)
-    new_size = (int(round(w * random_scale)), int(round(h * random_scale)))
-    image = image.resize(new_size, Image.Resampling.LANCZOS)
-    mask = mask.resize(new_size, Image.Resampling.NEAREST)
 
   data_transforms = transforms.Compose([
       transforms.ToTensor(),
