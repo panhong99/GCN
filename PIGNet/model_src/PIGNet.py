@@ -310,7 +310,8 @@ class GSP(nn.Module):
                 x_s_f.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),
                                                 feature_shape=(self.embedding_size, 33, 33)))
                 
-        gsp_layers_output = [t.detach().cpu() for t in x_s_f]
+
+        # gsp_layers_output = [t.detach().cpu() for t in x_s_f]
 
         output = torch.cat(x_s_f, dim=1)
 
@@ -322,8 +323,8 @@ class GSP(nn.Module):
         x = self.conv2(output)
         # x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
-        return x, gsp_layers_output
-
+        # return x, #gsp_layers_output
+        return x, x
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -449,24 +450,26 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x)  # block1
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
 
         x = self.layer2(x)  # block2
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
     
         x = self.layer3(x)  # block3
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
     
         x = self.layer4(x)  # block4
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
 
-        x, gsp_layers_outputs = self.pyramid_gnn(x)
+        # x, gsp_layers_outputs = self.pyramid_gnn(x)
+        x, _ = self.pyramid_gnn(x)
 
         return_gsp_output = x
 
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
-        return x, gsp_layers_outputs, backbone_layers_output #return_gsp_output
+        # return x, gsp_layers_outputs, backbone_layers_output #return_gsp_output
+        return x, x, x
 
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.

@@ -31,7 +31,6 @@ import copy
 
 def get_dataset(config):
 
-    
     config.train = True if config.mode == "train" else False
 
     if config.dataset == 'pascal':
@@ -60,13 +59,14 @@ def get_dataset(config):
                                                 pattern_repeat_count=config.factor)
 
     elif config.dataset == 'cityscape':
+
         if config.train:
             print("train dataset cityscape")
 
             dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/cityscape',
                                  train=config.train, crop_size=config.crop_size)
 
-            valid_dataset = Cityscapes('/home/hail/Desktop/pan/GCN/PIGNet/data/cityscape',
+            valid_dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/cityscape',
                                  train=not (config.train), crop_size=config.crop_size)
 
         else: # val

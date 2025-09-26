@@ -12,10 +12,6 @@ from utils import preprocess
 import copy
 import torch
 
-seed_value = 42 
-random.seed(seed_value)
-torch.manual_seed(seed_value)
-
 _FOLDERS_MAP = {
     'image': 'leftImg8bit',
     'label': 'gtFine',

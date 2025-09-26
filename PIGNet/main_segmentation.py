@@ -111,7 +111,7 @@ def main(config):
     if config.mode == "train":
         print("Training !!! ")
         
-        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
+        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"_embed_"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
             config=config.__dict__)
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
@@ -201,7 +201,7 @@ def main(config):
                 optimizer.param_groups[1]['lr'] = lr * config.last_mult
                 inputs = Variable(inputs.to(device))
                 target = Variable(target.to(device)).long()
-                outputs , _, _= model(inputs)
+                outputs , _, _ = model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -259,13 +259,13 @@ def main(config):
 
             with torch.no_grad():
                 model.eval()
-                losses_test = 0.0
+                losses_test = 0.0   
                 log = {}
                 for i in tqdm(range(len(valid_dataset))):
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(device))
                     target = Variable(target.to(device)).long()
-                    outputs , _ = model(inputs.unsqueeze(0))
+                    outputs , _, _ = model(inputs.unsqueeze(0))
                     outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -299,6 +299,7 @@ def main(config):
             model.train()
 
         wandb.finish()
+
     else:
         print("Evaluating !!! ")
         torch.cuda.set_device(config.gpu)

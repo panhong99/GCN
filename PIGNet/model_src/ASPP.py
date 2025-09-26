@@ -315,25 +315,23 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x) #block1
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
 
         x = self.layer2(x) #block2
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
 
         x = self.layer3(x) #block3
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
 
         x = self.layer4(x) #block4
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
 
         x, aspp_layers_output = self.aspp(x)
 
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
-
-        return x, aspp_layers_output, backbone_layers_output
-
-
+        # return x, aspp_layers_output, backbone_layers_output
+        return x, x, x
 
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.
@@ -461,10 +459,11 @@ class ASPP(nn.Module):
         for conv in self.convs:
             res.append(conv(x))
         
-        aspp_layers_output = [t.detach().cpu() for t in res]
+        # aspp_layers_output = [t.detach().cpu() for t in res]
         res = torch.cat(res, dim=1)
 
-        return self.project(res), aspp_layers_output
+        # return self.project(res), aspp_layers_output
+        return self.project(res), res 
 
 class DeepLabHead(nn.Module):
     def __init__(self, in_channels, num_classes, aspp_dilate=[12, 24, 36]):
