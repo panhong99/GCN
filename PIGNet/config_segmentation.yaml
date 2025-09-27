@@ -1,8 +1,8 @@
-mode: "train"
+mode: "infer"
 
 # shared setting
 factor: ""
-model: "PIGNet"
+model: ""
 exp: "bn_lr7e-3"
 gpu: 0 
 backbone: "resnet101"

@@ -315,7 +315,7 @@ def main(config):
         model = model.to(device)
         model.eval()
 
-        checkpoint = torch.load(f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}/{model_filename}')
+        checkpoint = torch.load(f'/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}/{model_filename}')
         
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         model.load_state_dict(state_dict)
@@ -357,8 +357,8 @@ def main(config):
                 total += labels.size(0)
                 correct += predicted.eq(labels).sum().item()
             
-            backbone_path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/backbone_activity"
-            layers_path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/layers_activity"
+            backbone_path = f"/home/hail/Desktop/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/backbone_activity"
+            layers_path = f"/home/hail/Desktop/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/layers_activity"
             
             if config.model == "PIGNet_GSPonly_classification" or config.model == "PIGNet_classification":
 
@@ -433,7 +433,7 @@ def main(config):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Load configuration from config.yaml")
-    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/HDD/pan/GCN/PIGNet/config_classification.yaml", help = "path to config.yaml")
+    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/pan/GCN/PIGNet/config_classification.yaml", help = "path to config.yaml")
     cli_args = parser.parse_args()
     
     try:
@@ -466,7 +466,7 @@ if __name__ == "__main__":
     elif config.mode == "infer":
         print("-- Starting Infer Mode --")
         
-        path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}"
+        path = f"/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}"
                 
         try:
             model_list = sorted(os.listdir(path))

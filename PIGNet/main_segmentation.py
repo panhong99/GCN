@@ -111,7 +111,7 @@ def main(config):
     if config.mode == "train":
         print("Training !!! ")
         
-        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"_embed_"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
+        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
             config=config.__dict__)
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
@@ -201,7 +201,7 @@ def main(config):
                 optimizer.param_groups[1]['lr'] = lr * config.last_mult
                 inputs = Variable(inputs.to(device))
                 target = Variable(target.to(device)).long()
-                outputs , _, _ = model(inputs)
+                outputs , _, _= model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -259,13 +259,13 @@ def main(config):
 
             with torch.no_grad():
                 model.eval()
-                losses_test = 0.0   
+                losses_test = 0.0
                 log = {}
                 for i in tqdm(range(len(valid_dataset))):
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(device))
                     target = Variable(target.to(device)).long()
-                    outputs , _, _ = model(inputs.unsqueeze(0))
+                    outputs , _ = model(inputs.unsqueeze(0))
                     outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -299,14 +299,13 @@ def main(config):
             model.train()
 
         wandb.finish()
-
     else:
         print("Evaluating !!! ")
         torch.cuda.set_device(config.gpu)
         model = model.to(device)
         model.eval()
 
-        checkpoint = torch.load(f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
+        checkpoint = torch.load(f'/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
                                 , map_location = device)
 
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
@@ -314,7 +313,7 @@ def main(config):
         model.load_state_dict(state_dict)
         
         if config.dataset == "pascal":
-            cmap = loadmat('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/pascal_seg_colormap.mat')['colormap']
+            cmap = loadmat('/home/hail/Desktop/pan/GCN/PIGNet/data/pascal_seg_colormap.mat')['colormap']
             cmap = (cmap * 255).astype(np.uint8).flatten().tolist()
         else:
             cmap = cityscapes_cmap
@@ -360,9 +359,9 @@ def main(config):
             if (inter.sum() / union.sum()) > 0.8:
             
                 if config.dataset == 'pascal':
-                    path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
-                    path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
-                    path_color_mask = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+                    path = f'/home/hail/Desktop/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path_GT = f"/home/hail/Desktop/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+                    path_color_mask = f"/home/hail/Desktop/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
 
                     if os.path.exists(path):
                         mask_pred.save(os.path.join(path, imname))
@@ -387,9 +386,9 @@ def main(config):
                         color_target.save(os.path.join(path_color_mask, imname))
                         
                 elif config.dataset == 'cityscape':
-                    path = f'/home/hail/Desktop/HDD/pan/GCN/PIGNet/pred_segmentation_masks/cityscape/{config.model}/{config.infer_params.process_type}/{config.factor}'
-                    path_GT = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
-                    path_color_mask = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+                    path = f'/home/hail/Desktop/pan/GCN/PIGNet/pred_segmentation_masks/cityscape/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path_GT = f"/home/hail/Desktop/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+                    path_color_mask = f"/home/hail/Desktop/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
 
                     if os.path.exists(path):
                         mask_pred.save(os.path.join(path, imname))
@@ -416,8 +415,8 @@ def main(config):
             inter_meter.update(inter)
             union_meter.update(union)
                                     
-        backbone_path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/backbone_activity"
-        layers_path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/layers_activity"
+        backbone_path = f"/home/hail/Desktop/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/backbone_activity"
+        layers_path = f"/home/hail/Desktop/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/layers_activity"
         
         if (config.infer_params.process_type == "zoom") and (config.factor == 1):
 
@@ -451,7 +450,7 @@ def main(config):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Load configuration from config.yaml")
-    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/HDD/pan/GCN/PIGNet/config_segmentation.yaml", help = "path to config.yaml")
+    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/pan/GCN/PIGNet/config_segmentation.yaml", help = "path to config.yaml")
     cli_args = parser.parse_args()
     
     try:
@@ -484,7 +483,7 @@ if __name__ == "__main__":
     elif config.mode == "infer":
         print("-- Starting Infer Mode --")
         
-        path = f"/home/hail/Desktop/HDD/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
+        path = f"/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
                 
         try:
             model_list = sorted(os.listdir(path))
@@ -494,31 +493,31 @@ if __name__ == "__main__":
             print(f"[ERROR] Model directory not found at '{path}'")
             exit()
     
-        zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+        # zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
 
-        overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+        # overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
-        pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+        # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
 
-        output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
+        # output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
-        process_dict = {
-            "zoom" : zoom_factor , 
-            "overlap" : overlap_percentage ,
-            "repeat" : pattern_repeat_count
-        }
+        # process_dict = {
+        #     "zoom" : zoom_factor , 
+        #     "overlap" : overlap_percentage ,
+        #     "repeat" : pattern_repeat_count
+        # }
         
-        # # zoom_factor = [0.5,1] # zoom in, out value 양수면 줌 음수면 줌아웃
+        zoom_factor = [0.5,1] # zoom in, out value 양수면 줌 음수면 줌아웃
 
-        # # overlap_percentage = [0.2] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+        # overlap_percentage = [0.2] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
         # pattern_repeat_count = [6] # 반복 횟수 2이면 2*2
 
-        # output_dict = {model_name : {"repeat" : []} for model_name in model_list}
+        output_dict = {model_name : {"zoom" : []} for model_name in model_list}
 
-        # process_dict = {
-        #     "repeat" : pattern_repeat_count , 
-        # }
+        process_dict = {
+            "zoom" : zoom_factor , 
+        }
                
         for name in model_list:
             for process_key , factor_list in process_dict.items():

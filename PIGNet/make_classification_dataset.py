@@ -41,7 +41,7 @@ def get_dataset(config):
         # 데이터셋 경로 및 변환 정의
         image_size=224
 
-        data_dir = '/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/imagenet-100'
+        data_dir = '/home/hail/Desktop/pan/GCN/PIGNet/data/imagenet-100'
             # Set the zoom factor (e.g., 1.2 to zoom in, 0.8 to zoom out)
         if config.mode == "train":
             # Define transformations

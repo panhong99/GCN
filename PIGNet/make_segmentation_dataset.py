@@ -38,21 +38,21 @@ def get_dataset(config):
         if config.mode == "train":
 
             print("train dataset")
-            dataset = VOCSegmentation('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/VOCdevkit',
+            dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/PIGNet/data/VOCdevkit',
                                       train=config.train, crop_size=config.crop_size)
-            valid_dataset = VOCSegmentation('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/VOCdevkit',
+            valid_dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/PIGNet/data/VOCdevkit',
                                             train=not (config.train), crop_size=config.crop_size)
         else:
 
             if config.infer_params.process_type != None:
                 print(config.infer_params.process_type)
-                dataset = VOCSegmentation('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/PIGNet/data/VOCdevkit',
                                                 train=config.train, crop_size=config.crop_size,
                                                 process=config.infer_params.process_type, process_value=config.factor,
                                                 overlap_percentage=config.factor,
                                                 pattern_repeat_count=config.factor)
             else:
-                dataset = VOCSegmentation('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/VOCdevkit',
+                dataset = VOCSegmentation('/home/hail/Desktop/pan/GCN/PIGNet/data/VOCdevkit',
                                                 train=config.train, crop_size=config.crop_size,
                                                 process=None, process_value=config.factor,
                                                 overlap_percentage=config.factor,
@@ -63,22 +63,22 @@ def get_dataset(config):
         if config.train:
             print("train dataset cityscape")
 
-            dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/cityscape',
+            dataset = Cityscapes('/home/hail/Desktop/pan/GCN/PIGNet/data/cityscape',
                                  train=config.train, crop_size=config.crop_size)
 
-            valid_dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/cityscape',
+            valid_dataset = Cityscapes('/home/hail/Desktop/pan/GCN/PIGNet/data/cityscape',
                                  train=not (config.train), crop_size=config.crop_size)
 
         else: # val
             if config.infer_params.process_type != None:
                 print(config.infer_params.process_type)
-                dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/cityscape',
+                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/PIGNet/data/cityscape',
                                           train=config.train, crop_size=config.crop_size,
                                           process=config.infer_params.process_type, process_value=config.factor,
                                           overlap_percentage=config.factor,
                                           pattern_repeat_count=config.factor)
             else:
-                dataset = Cityscapes('/home/hail/Desktop/HDD/pan/GCN/PIGNet/data/cityscape',
+                dataset = Cityscapes('/home/hail/Desktop/pan/GCN/PIGNet/data/cityscape',
                                           train=config.train, crop_size=config.crop_size,
                                           process=None, process_value=config.factor,
                                           overlap_percentage=config.factor,
