@@ -32,6 +32,10 @@ import copy
 from make_segmentation_dataset import get_dataset
 from make_segmentation_model import get_model
 import random
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.utils.data import DataLoader , DistributedSampler
+import torch.distributed as dist
+import torch.multiprocessing as mp
 
 warnings.filterwarnings("ignore")
 
@@ -66,10 +70,31 @@ for train_id, color in cityscapes_colormap.items():
 
 cityscapes_cmap = palette.flatten().tolist()
 
-def main(config):
+def setup(rank , world_size):
+    dist.init_process_group(
+        "nccl" , 
+        init_method = "env://",
+        rank = rank , 
+        world_size = world_size
+        )
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"    
-    print(f"cuda available : {device}")
+def cleanup():
+    dist.destroy_process_group()
+
+def main(config):
+    
+    # for Mask2Former train at 3way server
+    local_rank = int(os.environ["LOCAL_RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    setup(local_rank , world_size)
+
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
+
+    if dist.get_rank() == 0:
+        print(f"cuda available : {device}")
+        print(f"local_rank : {local_rank}")
+        print(f"world_size : {world_size}")
     
     is_training = (config.mode == "train")
 
@@ -109,13 +134,18 @@ def main(config):
     model = get_model(config, dataset)
 
     if config.mode == "train":
-        print("Training !!! ")
         
-        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
-            config=config.__dict__)
+        device = f"cuda:{local_rank}"
+        torch.cuda.set_device(local_rank)
+        print("Training !!! ")        
+
+        # if dist.get_rank() == 0:
+        #     wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"_embed_"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
+        #         config=config.__dict__)
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
-        model = nn.DataParallel(model).to(device)
+        model = model.to(device)
+        model = DDP(model , device_ids = [local_rank] , output_device = local_rank , find_unused_parameters=True)
         model.train()
 
         if config.freeze_bn:
@@ -156,10 +186,15 @@ def main(config):
 
         collate_fn = partial(utils_segmentation.make_batch_fn, batch_size=config.batch_size, feature_shape=feature_shape)
 
+        sampler = DistributedSampler(dataset , num_replicas = world_size , rank = local_rank)
+
+        batch_size_per_gpu = config.batch_size // world_size
+
         dataset_loader = torch.utils.data.DataLoader(
             dataset,
-            batch_size=config.batch_size,
-            shuffle=config.train,
+            sampler = sampler,
+            batch_size=batch_size_per_gpu,
+            shuffle= False, # when using DistributedSampler don't need shuffle
             pin_memory=True,
             num_workers=config.workers,
             collate_fn=collate_fn
@@ -187,12 +222,19 @@ def main(config):
         train_step = 0
 
         for epoch in range(start_epoch, config.epochs):
-            print("EPOCHS : ", epoch + 1, " / ", config.epochs)
+            sampler.set_epoch(epoch)
+
+            if local_rank == 1:
+                print("EPOCHS : ", epoch + 1, " / ", config.epochs)
 
             loss_sum = 0
             cnt = 0
 
-            for inputs, target in tqdm(iter(dataset_loader)):
+            data_iter = dataset_loader
+            if dist.get_rank() == 0:
+                data_iter = tqdm(iter(dataset_loader))
+
+            for inputs, target in data_iter:
                 log = {}
                 cur_iter = epoch * len(dataset_loader) + cnt
                 lr = config.base_lr * (1 - float(cur_iter) / max_iter) ** 0.9
@@ -201,7 +243,7 @@ def main(config):
                 optimizer.param_groups[1]['lr'] = lr * config.last_mult
                 inputs = Variable(inputs.to(device))
                 target = Variable(target.to(device)).long()
-                outputs , _, _= model(inputs)
+                outputs = model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -227,7 +269,8 @@ def main(config):
             loss_avg = loss_sum / len(dataset_loader)
             log['train/epoch/loss'] = loss_avg
 
-            wandb.log(log)
+            # if dist.get_rank() == 1:
+            #     wandb.log(log)
 
             loss_list.append(loss_avg)
             print('epoch: {0}\t'
@@ -238,13 +281,15 @@ def main(config):
             if best_loss > loss_avg:
                 best_loss = loss_avg
                 patience = 0
-
+                
                 torch.save({
                     'epoch': epoch + 1,
                     'state_dict': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                 }, model_fname)
+
                 print("model save complete!!!")
+
             else:
                 patience += 1
                 print("patience : ", patience)
@@ -259,13 +304,13 @@ def main(config):
 
             with torch.no_grad():
                 model.eval()
-                losses_test = 0.0
+                losses_test = 0.0   
                 log = {}
                 for i in tqdm(range(len(valid_dataset))):
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(device))
                     target = Variable(target.to(device)).long()
-                    outputs , _ = model(inputs.unsqueeze(0))
+                    outputs = model(inputs.unsqueeze(0))
                     outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -295,17 +340,20 @@ def main(config):
                 log['test/epoch/iou'] = miou.item()
             # time.sleep(60)
 
-            wandb.log(log)
-            model.train()
+        #     if dist.get_rank() == 0:
+        #         wandb.log(log)
+        #         model.train()
 
-        wandb.finish()
+        # if dist.get_rank() == 0:
+        #     wandb.finish()
+
     else:
         print("Evaluating !!! ")
         torch.cuda.set_device(config.gpu)
         model = model.to(device)
         model.eval()
 
-        checkpoint = torch.load(f'/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
+        checkpoint = torch.load(f'/home/hail/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
                                 , map_location = device)
 
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
@@ -313,11 +361,10 @@ def main(config):
         model.load_state_dict(state_dict)
         
         if config.dataset == "pascal":
-            cmap = loadmat('/home/hail/Desktop/pan/GCN/PIGNet/data/pascal_seg_colormap.mat')['colormap']
+            cmap = loadmat('/home/hail/pan/GCN/PIGNet/data/pascal_seg_colormap.mat')['colormap']
             cmap = (cmap * 255).astype(np.uint8).flatten().tolist()
         else:
             cmap = cityscapes_cmap
-
         inter_meter = AverageMeter()
         union_meter = AverageMeter()
 
@@ -359,9 +406,9 @@ def main(config):
             if (inter.sum() / union.sum()) > 0.8:
             
                 if config.dataset == 'pascal':
-                    path = f'/home/hail/Desktop/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
-                    path_GT = f"/home/hail/Desktop/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
-                    path_color_mask = f"/home/hail/Desktop/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+                    path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path_GT = f"/home/hail/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+                    path_color_mask = f"/home/hail/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
 
                     if os.path.exists(path):
                         mask_pred.save(os.path.join(path, imname))
@@ -386,9 +433,9 @@ def main(config):
                         color_target.save(os.path.join(path_color_mask, imname))
                         
                 elif config.dataset == 'cityscape':
-                    path = f'/home/hail/Desktop/pan/GCN/PIGNet/pred_segmentation_masks/cityscape/{config.model}/{config.infer_params.process_type}/{config.factor}'
-                    path_GT = f"/home/hail/Desktop/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
-                    path_color_mask = f"/home/hail/Desktop/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+                    path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/cityscape/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path_GT = f"/home/hail/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+                    path_color_mask = f"/home/hail/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
 
                     if os.path.exists(path):
                         mask_pred.save(os.path.join(path, imname))
@@ -415,8 +462,8 @@ def main(config):
             inter_meter.update(inter)
             union_meter.update(union)
                                     
-        backbone_path = f"/home/hail/Desktop/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/backbone_activity"
-        layers_path = f"/home/hail/Desktop/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/layers_activity"
+        backbone_path = f"/home/hail/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/backbone_activity"
+        layers_path = f"/home/hail/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/layers_activity"
         
         if (config.infer_params.process_type == "zoom") and (config.factor == 1):
 
@@ -450,7 +497,7 @@ def main(config):
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser(description="Load configuration from config.yaml")
-    parser.add_argument("--config", type = str, default = "/home/hail/Desktop/pan/GCN/PIGNet/config_segmentation.yaml", help = "path to config.yaml")
+    parser.add_argument("--config", type = str, default = "/home/hail/pan/GCN/PIGNet/config_segmentation.yaml", help = "path to config.yaml")
     cli_args = parser.parse_args()
     
     try:
@@ -483,7 +530,7 @@ if __name__ == "__main__":
     elif config.mode == "infer":
         print("-- Starting Infer Mode --")
         
-        path = f"/home/hail/Desktop/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
+        path = f"/home/hail/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
                 
         try:
             model_list = sorted(os.listdir(path))
@@ -493,31 +540,31 @@ if __name__ == "__main__":
             print(f"[ERROR] Model directory not found at '{path}'")
             exit()
     
-        # zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+        zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
 
-        # overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+        overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
-        # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+        pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
 
-        # output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
-
-        # process_dict = {
-        #     "zoom" : zoom_factor , 
-        #     "overlap" : overlap_percentage ,
-        #     "repeat" : pattern_repeat_count
-        # }
-        
-        zoom_factor = [0.5,1] # zoom in, out value 양수면 줌 음수면 줌아웃
-
-        # overlap_percentage = [0.2] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-
-        # pattern_repeat_count = [6] # 반복 횟수 2이면 2*2
-
-        output_dict = {model_name : {"zoom" : []} for model_name in model_list}
+        output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
         process_dict = {
             "zoom" : zoom_factor , 
+            "overlap" : overlap_percentage ,
+            "repeat" : pattern_repeat_count
         }
+        
+        # # zoom_factor = [0.5,1] # zoom in, out value 양수면 줌 음수면 줌아웃
+
+        # # overlap_percentage = [0.2] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+
+        # pattern_repeat_count = [6] # 반복 횟수 2이면 2*2
+
+        # output_dict = {model_name : {"repeat" : []} for model_name in model_list}
+
+        # process_dict = {
+        #     "repeat" : pattern_repeat_count , 
+        # }
                
         for name in model_list:
             for process_key , factor_list in process_dict.items():
