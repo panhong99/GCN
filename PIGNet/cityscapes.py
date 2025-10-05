@@ -12,6 +12,10 @@ from utils import preprocess
 import copy
 import torch
 
+seed_value = 42 
+random.seed(seed_value)
+torch.manual_seed(seed_value)
+
 _FOLDERS_MAP = {
     'image': 'leftImg8bit',
     'label': 'gtFine',
@@ -65,42 +69,46 @@ class Cityscapes(data.Dataset):
     self.images = self._get_files('image', dataset_split)
     self.masks = self._get_files('label', dataset_split)
 
+    self.color_masks = self._get_files('color', dataset_split)
+  
   def __getitem__(self, index):
 
     _img = Image.open(self.images[index]).convert('RGB')
-
     _target = Image.open(self.masks[index])
+
+    _color_target  = Image.open(self.color_masks[index])
 
     if self.process != None:
         _target = _target.convert("L")
 
     # add image process for test
     if self.process == 'zoom':
-      _img, _target = self.zoom_center(_img, _target, self.process_value)
+      _img, _target, _color_target = self.zoom_center(_img, _target, _color_target, self.process_value)
 
     elif self.process == 'overlap' and index < len(self.images) - 1:
 
       next_img=Image.open(self.images[index+1]).convert('RGB')
       next_target=Image.open(self.masks[index+1])
+      next_color_target=Image.open(self.color_masks[index+1])
 
-      _img, _target = self.overlap(_img, _target, next_img, next_target, self.overlap_percentage)
+      _img, _target, _color_target = self.overlap(_img, _target,_color_target, next_img, next_target, next_color_target, self.overlap_percentage)
       
       if _img==None:
-        return None,None
+        return None,None,None,None
 
     elif self.process == 'repeat':
-      _img, _target = self.repeat(_img, _target, self.pattern_repeat_count)
+      _img, _target, _color_target = self.repeat(_img, _target, _color_target, self.pattern_repeat_count)
       if _img==None:
 
-        return None,None
+        return None,None,None,None
       
     else: # train
-      _img, _target = self.image_resizing(_img, _target)
+      _img, _target, _color_target = self.image_resizing(_img, _target, _color_target)
 
       if _img == None:
-        return None, None
+        return None, None, None, None
 
-    _img, _target = preprocess(_img, _target, self. dataset_name, self.process_value, self.process,
+    _img, _target, unnorm_image, _color_target = preprocess(_img, _target, _color_target,self. dataset_name, self.process_value, self.process,
                                flip=True if self.train else False,
                                scale=(0.5, 2.0) if self.train else None,
                                crop=(self.crop_size, self.crop_size))
@@ -112,7 +120,10 @@ class Cityscapes(data.Dataset):
       _target = _target.unsqueeze(0)
       _target = self.target_transform(_target)
 
-    return _img, _target
+      _color_target = _color_target.unsqueeze(0)
+      _color_target = self.target_transform(_target)
+      
+    return _img, _target, unnorm_image, _color_target
 
   def _get_files(self, data, dataset_split):
     pattern = '*%s.%s' % (_POSTFIX_MAP[data], _DATA_FORMAT_MAP[data])
@@ -127,7 +138,7 @@ class Cityscapes(data.Dataset):
   def download(self):
     raise NotImplementedError('Automatic download not yet implemented.')
   
-  def image_resizing(self, img, mask):
+  def image_resizing(self, img, mask, color_mask):
     h, w = img.size[:2] # image type is PIL image
     scale = self.crop_size / max(h, w)
     
@@ -136,8 +147,9 @@ class Cityscapes(data.Dataset):
       
     new_image = img.resize((new_h, new_w), Image.Resampling.LANCZOS)
     new_mask = mask.resize((new_h, new_w), Image.Resampling.NEAREST)
+    new_color_mask = color_mask.resize((new_h, new_w), Image.Resampling.NEAREST)
       
-    return new_image, new_mask
+    return new_image, new_mask, new_color_mask
 
   def find_contours(self, mask):
     mask_array = np.array(mask)

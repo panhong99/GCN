@@ -32,10 +32,6 @@ import copy
 from make_segmentation_dataset import get_dataset
 from make_segmentation_model import get_model
 import random
-from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.utils.data import DataLoader , DistributedSampler
-import torch.distributed as dist
-import torch.multiprocessing as mp
 
 warnings.filterwarnings("ignore")
 
@@ -70,31 +66,10 @@ for train_id, color in cityscapes_colormap.items():
 
 cityscapes_cmap = palette.flatten().tolist()
 
-def setup(rank , world_size):
-    dist.init_process_group(
-        "nccl" , 
-        init_method = "env://",
-        rank = rank , 
-        world_size = world_size
-        )
-
-def cleanup():
-    dist.destroy_process_group()
-
 def main(config):
-    
-    # for Mask2Former train at 3way server
-    local_rank = int(os.environ["LOCAL_RANK"])
-    world_size = int(os.environ["WORLD_SIZE"])
-    setup(local_rank , world_size)
-
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
-
-    if dist.get_rank() == 0:
-        print(f"cuda available : {device}")
-        print(f"local_rank : {local_rank}")
-        print(f"world_size : {world_size}")
+    print(f"cuda available : {device}")
     
     is_training = (config.mode == "train")
 
@@ -134,18 +109,13 @@ def main(config):
     model = get_model(config, dataset)
 
     if config.mode == "train":
+        print("Training !!! ")
         
-        device = f"cuda:{local_rank}"
-        torch.cuda.set_device(local_rank)
-        print("Training !!! ")        
-
-        # if dist.get_rank() == 0:
-        #     wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"_embed_"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
-        #         config=config.__dict__)
+        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"_embed_"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
+            config=config.__dict__)
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
-        model = model.to(device)
-        model = DDP(model , device_ids = [local_rank] , output_device = local_rank , find_unused_parameters=True)
+        model = nn.DataParallel(model).to(device)
         model.train()
 
         if config.freeze_bn:
@@ -186,15 +156,10 @@ def main(config):
 
         collate_fn = partial(utils_segmentation.make_batch_fn, batch_size=config.batch_size, feature_shape=feature_shape)
 
-        sampler = DistributedSampler(dataset , num_replicas = world_size , rank = local_rank)
-
-        batch_size_per_gpu = config.batch_size // world_size
-
         dataset_loader = torch.utils.data.DataLoader(
             dataset,
-            sampler = sampler,
-            batch_size=batch_size_per_gpu,
-            shuffle= False, # when using DistributedSampler don't need shuffle
+            batch_size=config.batch_size,
+            shuffle=config.train,
             pin_memory=True,
             num_workers=config.workers,
             collate_fn=collate_fn
@@ -222,19 +187,12 @@ def main(config):
         train_step = 0
 
         for epoch in range(start_epoch, config.epochs):
-            sampler.set_epoch(epoch)
-
-            if local_rank == 1:
-                print("EPOCHS : ", epoch + 1, " / ", config.epochs)
+            print("EPOCHS : ", epoch + 1, " / ", config.epochs)
 
             loss_sum = 0
             cnt = 0
 
-            data_iter = dataset_loader
-            if dist.get_rank() == 0:
-                data_iter = tqdm(iter(dataset_loader))
-
-            for inputs, target in data_iter:
+            for inputs, target in tqdm(iter(dataset_loader)):
                 log = {}
                 cur_iter = epoch * len(dataset_loader) + cnt
                 lr = config.base_lr * (1 - float(cur_iter) / max_iter) ** 0.9
@@ -243,7 +201,7 @@ def main(config):
                 optimizer.param_groups[1]['lr'] = lr * config.last_mult
                 inputs = Variable(inputs.to(device))
                 target = Variable(target.to(device)).long()
-                outputs = model(inputs)
+                outputs , _, _ = model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -269,8 +227,7 @@ def main(config):
             loss_avg = loss_sum / len(dataset_loader)
             log['train/epoch/loss'] = loss_avg
 
-            # if dist.get_rank() == 1:
-            #     wandb.log(log)
+            wandb.log(log)
 
             loss_list.append(loss_avg)
             print('epoch: {0}\t'
@@ -281,15 +238,13 @@ def main(config):
             if best_loss > loss_avg:
                 best_loss = loss_avg
                 patience = 0
-                
+
                 torch.save({
                     'epoch': epoch + 1,
                     'state_dict': model.state_dict(),
                     'optimizer': optimizer.state_dict(),
                 }, model_fname)
-
                 print("model save complete!!!")
-
             else:
                 patience += 1
                 print("patience : ", patience)
@@ -310,7 +265,7 @@ def main(config):
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(device))
                     target = Variable(target.to(device)).long()
-                    outputs = model(inputs.unsqueeze(0))
+                    outputs , _, _ = model(inputs.unsqueeze(0))
                     outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -340,12 +295,10 @@ def main(config):
                 log['test/epoch/iou'] = miou.item()
             # time.sleep(60)
 
-        #     if dist.get_rank() == 0:
-        #         wandb.log(log)
-        #         model.train()
+            wandb.log(log)
+            model.train()
 
-        # if dist.get_rank() == 0:
-        #     wandb.finish()
+        wandb.finish()
 
     else:
         print("Evaluating !!! ")
@@ -365,6 +318,7 @@ def main(config):
             cmap = (cmap * 255).astype(np.uint8).flatten().tolist()
         else:
             cmap = cityscapes_cmap
+
         inter_meter = AverageMeter()
         union_meter = AverageMeter()
 
@@ -403,7 +357,7 @@ def main(config):
 
             inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
             
-            if (inter.sum() / union.sum()) > 0.8:
+            if (inter.sum() / union.sum()) > 0.2:
             
                 if config.dataset == 'pascal':
                     path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
@@ -540,7 +494,7 @@ if __name__ == "__main__":
             print(f"[ERROR] Model directory not found at '{path}'")
             exit()
     
-        zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+        zoom_factor = [0.1 , 1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
 
         overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
