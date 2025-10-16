@@ -35,40 +35,32 @@ import random
 
 warnings.filterwarnings("ignore")
 
-cityscapes_colormap = {
-    0: (128, 64, 128),   # road
-    1: (244, 35, 232),   # sidewalk
-    2: (70, 70, 70),     # building
-    3: (102, 102, 156),  # wall
-    4: (190, 153, 153),  # fence
-    5: (153, 153, 153),  # pole
-    6: (250, 170, 30),   # traffic light
-    7: (220, 220, 0),    # traffic sign
-    8: (107, 142, 35),   # vegetation
-    9: (152, 251, 152),  # terrain
-    10: (70, 130, 180),  # sky
-    11: (220, 20, 60),   # person
-    12: (255, 0, 0),     # rider
-    13: (0, 0, 142),     # car
-    14: (0, 0, 70),      # truck
-    15: (0, 60, 100),    # bus
-    16: (0, 80, 100),    # on rails
-    17: (0, 0, 230),     # motorcycle
-    18: (119, 11, 32),   # bicycle
-    255: (0, 0, 0)       # unlabeled / void
+cityscapes_base_colors = {
+    24: (220, 20, 60),   # person
+    25: (255, 0, 0),     # rider
+    26: (0, 0, 142),     # car
+    27: (0, 0, 70),      # truck
+    28: (0, 60, 100),    # bus
+    29: (0, 0, 90),      # on rails
+    30: (0, 0, 230),     # motorcycle
+    31: (119, 11, 32),   # bicycle
 }
 
-palette = np.zeros((256, 3), dtype=np.uint8)
-
-for train_id, color in cityscapes_colormap.items():
-    if train_id < 256:
-        palette[train_id] = color
-
-cityscapes_cmap = palette.flatten().tolist()
+def get_instance_color(instance_id):
+    if instance_id < 1000:
+        return (0, 0, 0)  # unlabeled/background
+    class_id = instance_id // 1000
+    inst_num = instance_id % 1000
+    
+    base_color = np.array(cityscapes_base_colors.get(class_id, (0, 0, 0)))
+    np.random.seed(inst_num)
+    offset = np.random.randint(0, 80, 3)  # 약간 랜덤하게 변형
+    color = np.clip(base_color + offset, 0, 255)
+    return tuple(color.astype(int))
 
 def main(config):
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")    
+    device = "cuda" if torch.cuda.is_available() else "cpu"    
     print(f"cuda available : {device}")
     
     is_training = (config.mode == "train")
@@ -111,7 +103,7 @@ def main(config):
     if config.mode == "train":
         print("Training !!! ")
         
-        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"_embed_"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
+        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
             config=config.__dict__)
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
@@ -201,7 +193,7 @@ def main(config):
                 optimizer.param_groups[1]['lr'] = lr * config.last_mult
                 inputs = Variable(inputs.to(device))
                 target = Variable(target.to(device)).long()
-                outputs , _, _ = model(inputs)
+                outputs , _, _= model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -259,13 +251,13 @@ def main(config):
 
             with torch.no_grad():
                 model.eval()
-                losses_test = 0.0   
+                losses_test = 0.0
                 log = {}
                 for i in tqdm(range(len(valid_dataset))):
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(device))
                     target = Variable(target.to(device)).long()
-                    outputs , _, _ = model(inputs.unsqueeze(0))
+                    outputs , _ = model(inputs.unsqueeze(0))
                     outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -299,7 +291,6 @@ def main(config):
             model.train()
 
         wandb.finish()
-
     else:
         print("Evaluating !!! ")
         torch.cuda.set_device(config.gpu)
@@ -316,8 +307,6 @@ def main(config):
         if config.dataset == "pascal":
             cmap = loadmat('/home/hail/pan/GCN/PIGNet/data/pascal_seg_colormap.mat')['colormap']
             cmap = (cmap * 255).astype(np.uint8).flatten().tolist()
-        else:
-            cmap = cityscapes_cmap
 
         inter_meter = AverageMeter()
         union_meter = AverageMeter()
@@ -331,7 +320,7 @@ def main(config):
 
         for i in tqdm(range(len(dataset))):
 
-            inputs, target, gt_image, color_target = dataset[i]
+            inputs, target, gt_image, color_target, H, W = dataset[i]
             if inputs==None:
                 continue
 
@@ -348,13 +337,31 @@ def main(config):
             mask = target.numpy().astype(np.uint8)
             
             # search padding location
-            pad_location = (mask == 255)
-            
-            imname = dataset.masks[i].split('/')[-1]
-            pred[pad_location] = 255
-            mask_pred = Image.fromarray(pred)
-            mask_pred.putpalette(cmap)
+            pred = pred[: pred.shape[0] - H, : pred.shape[1] - W]
+            mask = mask[: mask.shape[0] - H, : mask.shape[1] - W]
 
+            if config.dataset == "cityscape":
+                pad_location = (mask == 255)
+                pred[pad_location] = 255
+
+            imname = dataset.masks[i].split('/')[-1]
+            
+            if config.dataset == "pascal":
+                mask_pred = Image.fromarray(pred)
+                mask_pred.putpalette(cmap)
+
+            elif config.dataset == "cityscape":
+                H, W = pred.shape
+                colored_mask = np.zeros((H, W, 3), dtype=np.uint8)
+                unique_instance_ids = np.unique(pred)
+                
+                for instance_id in unique_instance_ids:
+                    if instance_id == 0:
+                        continue
+                    color = get_instance_color(instance_id)
+                    colored_mask[mask_pred == instance_id] = color
+                    mask_pred = Image.fromarray(colored_mask)
+            
             inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
             
             if (inter.sum() / union.sum()) > 0.2:
@@ -369,21 +376,23 @@ def main(config):
                     else: 
                         os.makedirs(path)
                         mask_pred.save(os.path.join(path, imname))
-                    
+
                     if os.path.exists(path_GT):    
-                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        # gt_image = utils_segmentation.tensor_to_image(gt_image)
                         gt_image.save(os.path.join(path_GT, imname))
                     else:
                         os.makedirs(path_GT)
-                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        # gt_image = utils_segmentation.tensor_to_image(gt_image)
                         gt_image.save(os.path.join(path_GT, imname))
 
                     if os.path.exists(path_color_mask):    
-                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        # color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target = Image.fromarray(color_target)
                         color_target.save(os.path.join(path_color_mask, imname))
                     else:
                         os.makedirs(path_color_mask)
-                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        # color_target = utils_segmentation.tensor_to_image(color_target)
+                        color_target = Image.fromarray(color_target)
                         color_target.save(os.path.join(path_color_mask, imname))
                         
                 elif config.dataset == 'cityscape':
@@ -398,19 +407,19 @@ def main(config):
                         mask_pred.save(os.path.join(path, imname))
                     
                     if os.path.exists(path_GT):
-                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        # gt_image = utils_segmentation.tensor_to_image(gt_image)
                         gt_image.save(os.path.join(path_GT, imname))
                     else: 
                         os.makedirs(path_GT)
-                        gt_image = utils_segmentation.tensor_to_image(gt_image)
+                        # gt_image = utils_segmentation.tensor_to_image(gt_image)
                         gt_image.save(os.path.join(path_GT, imname))
                         
                     if os.path.exists(path_color_mask):    
-                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        # color_target = utils_segmentation.tensor_to_image(color_target)
                         color_target.save(os.path.join(path_color_mask, imname))
                     else:
                         os.makedirs(path_color_mask)
-                        color_target = utils_segmentation.tensor_to_image(color_target)
+                        # color_target = utils_segmentation.tensor_to_image(color_target)
                         color_target.save(os.path.join(path_color_mask, imname))
                         
             inter_meter.update(inter)
@@ -494,31 +503,31 @@ if __name__ == "__main__":
             print(f"[ERROR] Model directory not found at '{path}'")
             exit()
     
-        zoom_factor = [0.1 , 1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+        # zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
 
-        overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+        # overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
-        pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+        # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
 
-        output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
-
-        process_dict = {
-            "zoom" : zoom_factor , 
-            "overlap" : overlap_percentage ,
-            "repeat" : pattern_repeat_count
-        }
-        
-        # # zoom_factor = [0.5,1] # zoom in, out value 양수면 줌 음수면 줌아웃
-
-        # # overlap_percentage = [0.2] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-
-        # pattern_repeat_count = [6] # 반복 횟수 2이면 2*2
-
-        # output_dict = {model_name : {"repeat" : []} for model_name in model_list}
+        # output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
         # process_dict = {
-        #     "repeat" : pattern_repeat_count , 
+        #     "zoom" : zoom_factor , 
+        #     "overlap" : overlap_percentage ,
+        #     "repeat" : pattern_repeat_count
         # }
+        
+        # zoom_factor = [1] # zoom in, out value 양수면 줌 음수면 줌아웃
+
+        # overlap_percentage = [0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+
+        pattern_repeat_count = [3] # 반복 횟수 2이면 2*2
+
+        output_dict = {model_name : {"repeat" : []} for model_name in model_list}
+
+        process_dict = {
+            "repeat" : pattern_repeat_count , 
+        }
                
         for name in model_list:
             for process_key , factor_list in process_dict.items():

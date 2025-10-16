@@ -9,6 +9,7 @@ import random
 from utils import preprocess
 import copy
 import torch
+import math
 
 seed_value = 42 
 random.seed(seed_value)
@@ -75,7 +76,7 @@ class VOCSegmentation(data.Dataset):
     _img = Image.open(self.images[index]).convert('RGB')
     _target = Image.open(self.masks[index])
 
-    _color_target  = Image.open(self.color_masks[index])
+    _color_target  = Image.open(self.color_masks[index]).convert('RGB')
 
     if self.process != None:
         _target = _target.convert("L")
@@ -88,7 +89,7 @@ class VOCSegmentation(data.Dataset):
 
       next_img=Image.open(self.images[index+1]).convert('RGB')
       next_target=Image.open(self.masks[index+1])
-      next_color_target=Image.open(self.color_masks[index+1])
+      next_color_target=Image.open(self.color_masks[index+1]).convert('RGB')
 
       _img, _target, _color_target = self.overlap(_img, _target,_color_target, next_img, next_target, next_color_target, self.overlap_percentage)
       
@@ -118,9 +119,6 @@ class VOCSegmentation(data.Dataset):
     if self.target_transform is not None:
       _target = _target.unsqueeze(0)
       _target = self.target_transform(_target)
-
-      _color_target = _color_target.unsqueeze(0)
-      _color_target = self.target_transform(_target)
       
     return _img, _target, unnorm_image, _color_target
   
@@ -130,14 +128,30 @@ class VOCSegmentation(data.Dataset):
   def download(self):
     raise NotImplementedError('Automatic download not yet implemented.')
   
-  def image_resizing(self, img, mask, color_mask):
-    h, w = img.size[:2] # image type is PIL image
+  def image_resizing(self, image, mask, color_mask, flip=True, scale=(0.5, 2.0)):
+
+    if flip:
+      if random.random() < 0.5:
+        image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
+        color_mask = color_mask.transpose(Image.FLIP_LEFT_RIGHT)
+
+    if scale:
+      w, h = image.size
+      rand_log_scale = math.log(scale[0], 2) + random.random() * (math.log(scale[1], 2) - math.log(scale[0], 2))
+      random_scale = math.pow(2, rand_log_scale)
+      new_size = (int(round(w * random_scale)), int(round(h * random_scale)))
+      image = image.resize(new_size, Image.Resampling.LANCZOS)
+      mask = mask.resize(new_size, Image.Resampling.NEAREST)
+      color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
+    
+    h, w = image.size[:2] # image type is PIL image
     scale = self.crop_size / max(h, w)
     
     new_h = int(scale * h)
     new_w = int(scale * w)
       
-    new_image = img.resize((new_h, new_w), Image.Resampling.LANCZOS)
+    new_image = image.resize((new_h, new_w), Image.Resampling.LANCZOS)
     new_mask = mask.resize((new_h, new_w), Image.Resampling.NEAREST)
     new_color_mask = color_mask.resize((new_h, new_w), Image.Resampling.NEAREST)
       
@@ -191,7 +205,7 @@ class VOCSegmentation(data.Dataset):
       canvas_image = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
       canvas_mask = np.zeros((canvas_height, canvas_width), dtype=np.uint8)
       
-      canvas_color_mask = np.zeros((canvas_height, canvas_width, 4), dtype=np.uint8)
+      canvas_color_mask = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
 
       canvas_image[:inner_image1_np.shape[0], :inner_image1_np.shape[1]] = inner_image1_np
       canvas_mask[:inner_mask1_np.shape[0], :inner_mask1_np.shape[1]] = inner_mask1_np

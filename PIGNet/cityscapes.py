@@ -11,6 +11,7 @@ import numpy as np
 from utils import preprocess
 import copy
 import torch
+import math
 
 seed_value = 42 
 random.seed(seed_value)
@@ -24,7 +25,7 @@ _FOLDERS_MAP = {
 
 _POSTFIX_MAP = {
     'image': '_leftImg8bit',
-    'label': '_gtFine_labelTrainIds',
+    'label': '_gtFine_instanceIds',
     'color': '_gtFine_color'
 }
 
@@ -68,15 +69,13 @@ class Cityscapes(data.Dataset):
 
     self.images = self._get_files('image', dataset_split)
     self.masks = self._get_files('label', dataset_split)
-
     self.color_masks = self._get_files('color', dataset_split)
   
   def __getitem__(self, index):
 
     _img = Image.open(self.images[index]).convert('RGB')
     _target = Image.open(self.masks[index])
-
-    _color_target  = Image.open(self.color_masks[index])
+    _color_target  = Image.open(self.color_masks[index]).convert('RGB')
 
     if self.process != None:
         _target = _target.convert("L")
@@ -89,26 +88,26 @@ class Cityscapes(data.Dataset):
 
       next_img=Image.open(self.images[index+1]).convert('RGB')
       next_target=Image.open(self.masks[index+1])
-      next_color_target=Image.open(self.color_masks[index+1])
+      next_color_target=Image.open(self.color_masks[index+1]).convert('RGB')
 
       _img, _target, _color_target = self.overlap(_img, _target,_color_target, next_img, next_target, next_color_target, self.overlap_percentage)
       
       if _img==None:
-        return None,None,None,None
+        return None,None,None,None,None,None
 
     elif self.process == 'repeat':
       _img, _target, _color_target = self.repeat(_img, _target, _color_target, self.pattern_repeat_count)
       if _img==None:
 
-        return None,None,None,None
+        return None,None,None,None,None,None
       
     else: # train
       _img, _target, _color_target = self.image_resizing(_img, _target, _color_target)
 
       if _img == None:
-        return None, None, None, None
+        return None,None,None,None,None,None
 
-    _img, _target, unnorm_image, _color_target = preprocess(_img, _target, _color_target,self. dataset_name, self.process_value, self.process,
+    _img, _target, unnorm_image, _color_target, H, W = preprocess(_img, _target, _color_target,self. dataset_name, self.process_value, self.process,
                                flip=True if self.train else False,
                                scale=(0.5, 2.0) if self.train else None,
                                crop=(self.crop_size, self.crop_size))
@@ -123,7 +122,7 @@ class Cityscapes(data.Dataset):
       _color_target = _color_target.unsqueeze(0)
       _color_target = self.target_transform(_target)
       
-    return _img, _target, unnorm_image, _color_target
+    return _img, _target, unnorm_image, _color_target, H, W
 
   def _get_files(self, data, dataset_split):
     pattern = '*%s.%s' % (_POSTFIX_MAP[data], _DATA_FORMAT_MAP[data])
@@ -138,14 +137,22 @@ class Cityscapes(data.Dataset):
   def download(self):
     raise NotImplementedError('Automatic download not yet implemented.')
   
-  def image_resizing(self, img, mask, color_mask):
-    h, w = img.size[:2] # image type is PIL image
+  def image_resizing(self, img, mask, color_mask, aug_scale=(0.5, 2.0)):
+    w, h = img.size # image type is PIL image
+
     scale = self.crop_size / max(h, w)
-    
+
     new_h = int(scale * h)
     new_w = int(scale * w)
-      
-    new_image = img.resize((new_h, new_w), Image.Resampling.LANCZOS)
+
+    rand_log_scale = math.log(aug_scale[0], 2) + random.random() * (math.log(aug_scale[1], 2) - math.log(aug_scale[0], 2))
+    random_scale = math.pow(2, rand_log_scale)
+    new_size = (int(round(w * random_scale)), int(round(h * random_scale)))
+    image = img.resize(new_size, Image.Resampling.LANCZOS)
+    mask = mask.resize(new_size, Image.Resampling.NEAREST)
+    color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
+
+    new_image = image.resize((new_h, new_w), Image.Resampling.LANCZOS)
     new_mask = mask.resize((new_h, new_w), Image.Resampling.NEAREST)
     new_color_mask = color_mask.resize((new_h, new_w), Image.Resampling.NEAREST)
       
@@ -198,8 +205,7 @@ class Cityscapes(data.Dataset):
       canvas_height = max(inner_image1_np.shape[0], inner_image2_np.shape[0])
       canvas_image = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
       canvas_mask = np.zeros((canvas_height, canvas_width), dtype=np.uint8)
-      
-      canvas_color_mask = np.zeros((canvas_height, canvas_width, 4), dtype=np.uint8)
+      canvas_color_mask = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
 
       canvas_image[:inner_image1_np.shape[0], :inner_image1_np.shape[1]] = inner_image1_np
       canvas_mask[:inner_mask1_np.shape[0], :inner_mask1_np.shape[1]] = inner_mask1_np
