@@ -367,18 +367,8 @@ def main(config):
             if config.dataset == "cityscape":
                 pad_location = (mask == 255)
                 pred[pad_location] = 255
-
+                        
             imname = dataset.masks[i].split('/')[-1]
-            
-            _, pred = torch.max(outputs, 1)
-            pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
-            mask = target.numpy().astype(np.uint8)
-            
-            # search padding location
-            pad_location = (mask == 255)
-            
-            imname = dataset.masks[i].split('/')[-1]
-            pred[pad_location] = 255
             mask_pred = Image.fromarray(pred)
             mask_pred.putpalette(cmap)
 

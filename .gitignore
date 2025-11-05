@@ -51,3 +51,6 @@ __pycache__/
 /PIGNet/new_results51/
 /PIGNet/GT_input_images/
 /PIGNet/pred_segmentation_masks/
+/PIGNet/101_csvs/
+/PIGNet/collect_img/
+/PIGNet/model_101/
