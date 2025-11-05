@@ -94,23 +94,22 @@ class VOCSegmentation(data.Dataset):
       _img, _target, _color_target = self.overlap(_img, _target,_color_target, next_img, next_target, next_color_target, self.overlap_percentage)
       
       if _img==None:
-        return None,None,None,None
+        return None,None,None,None,None,None
 
     elif self.process == 'repeat':
       _img, _target, _color_target = self.repeat(_img, _target, _color_target, self.pattern_repeat_count)
       if _img==None:
 
-        return None,None,None,None
+        return None,None,None,None,None,None
       
     else: # train
       _img, _target, _color_target = self.image_resizing(_img, _target, _color_target)
 
       if _img == None:
-        return None, None, None, None
+        return None,None,None,None,None,None
 
-    _img, _target, unnorm_image, _color_target = preprocess(_img, _target, _color_target,self. dataset_name, self.process_value, self.process,
+    _img, _target, unnorm_image, _color_target, H, W = preprocess(_img, _target, _color_target,
                                flip=True if self.train else False,
-                               scale=(0.5, 2.0) if self.train else None,
                                crop=(self.crop_size, self.crop_size))
 
     if self.transform is not None:
@@ -120,7 +119,7 @@ class VOCSegmentation(data.Dataset):
       _target = _target.unsqueeze(0)
       _target = self.target_transform(_target)
       
-    return _img, _target, unnorm_image, _color_target
+    return _img, _target, unnorm_image, _color_target, H, W
   
   def __len__(self):
     return len(self.images)
@@ -128,33 +127,28 @@ class VOCSegmentation(data.Dataset):
   def download(self):
     raise NotImplementedError('Automatic download not yet implemented.')
   
-  def image_resizing(self, image, mask, color_mask, flip=True, scale=(0.5, 2.0)):
+  def image_resizing(self, img, mask ,color_mask):
+  
+    aug_scale=(0.5, 2.0)
+  
+    w, h = img.size # image type is PIL image
 
-    if flip:
-      if random.random() < 0.5:
-        image = image.transpose(Image.FLIP_LEFT_RIGHT)
-        mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
-        color_mask = color_mask.transpose(Image.FLIP_LEFT_RIGHT)
-
-    if scale:
-      w, h = image.size
-      rand_log_scale = math.log(scale[0], 2) + random.random() * (math.log(scale[1], 2) - math.log(scale[0], 2))
-      random_scale = math.pow(2, rand_log_scale)
-      new_size = (int(round(w * random_scale)), int(round(h * random_scale)))
-      image = image.resize(new_size, Image.Resampling.LANCZOS)
-      mask = mask.resize(new_size, Image.Resampling.NEAREST)
-      color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
-    
-    h, w = image.size[:2] # image type is PIL image
     scale = self.crop_size / max(h, w)
-    
+
     new_h = int(scale * h)
     new_w = int(scale * w)
-      
-    new_image = image.resize((new_h, new_w), Image.Resampling.LANCZOS)
-    new_mask = mask.resize((new_h, new_w), Image.Resampling.NEAREST)
-    new_color_mask = color_mask.resize((new_h, new_w), Image.Resampling.NEAREST)
-      
+
+    rand_log_scale = math.log(aug_scale[0], 2) + random.random() * (math.log(aug_scale[1], 2) - math.log(aug_scale[0], 2))
+    random_scale = math.pow(2, rand_log_scale)
+    new_size = (int(round(w * random_scale)), int(round(h * random_scale)))
+    image = img.resize(new_size, Image.Resampling.LANCZOS)
+    mask = mask.resize(new_size, Image.Resampling.NEAREST)
+    color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
+
+    new_image = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    new_mask = mask.resize((new_w, new_h), Image.Resampling.NEAREST)
+    new_color_mask = color_mask.resize((new_w, new_h), Image.Resampling.NEAREST)
+    
     return new_image, new_mask, new_color_mask
 
   def find_contours(self, mask):

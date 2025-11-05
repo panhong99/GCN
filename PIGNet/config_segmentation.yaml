@@ -4,11 +4,11 @@ mode: "infer"
 factor: ""
 model: ""
 exp: "bn_lr7e-3"
-gpu: 0
-backbone: "resnet101"
-dataset: "cityscape"
+backbone: "resnet50"
+dataset: "pascal"
 model_type: "pretrained"
-model_number: 1
+model_number: 3
+gpu: 1
 workers: 4
 resume: null
 infer: True

@@ -327,11 +327,12 @@ class ResNet(nn.Module):
         backbone_layers_output.append(x)
 
         x, aspp_layers_output = self.aspp(x)
+        # x = self.aspp(x)
 
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
-
         return x, aspp_layers_output, backbone_layers_output
+        # return x
 
 
 
@@ -465,6 +466,7 @@ class ASPP(nn.Module):
         res = torch.cat(res, dim=1)
 
         return self.project(res), aspp_layers_output
+        # return self.project(res)
 
 class DeepLabHead(nn.Module):
     def __init__(self, in_channels, num_classes, aspp_dilate=[12, 24, 36]):

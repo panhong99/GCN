@@ -307,16 +307,12 @@ class GSP(nn.Module):
 
         output = torch.cat(x_s_f, dim=1)
 
-        # Decoder
-        # x = self.decoder(x)
-        # x = self.convx(output)
-
         # Output
         x = self.conv2(output)
         # x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
         return x, gsp_layers_output
-
+        # return x,x
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -461,8 +457,8 @@ class ResNet(nn.Module):
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
         return x, gsp_layers_outputs, backbone_layers_output #return_gsp_output
-
-
+        # return x
+    
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.
 

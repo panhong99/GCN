@@ -35,31 +35,52 @@ import random
 
 warnings.filterwarnings("ignore")
 
-cityscapes_base_colors = {
-    24: (220, 20, 60),   # person
-    25: (255, 0, 0),     # rider
-    26: (0, 0, 142),     # car
-    27: (0, 0, 70),      # truck
-    28: (0, 60, 100),    # bus
-    29: (0, 0, 90),      # on rails
-    30: (0, 0, 230),     # motorcycle
-    31: (119, 11, 32),   # bicycle
+def set_seed(seed_value=42):
+
+    if torch.cuda.is_available():
+
+        torch.cuda.manual_seed(seed_value)
+        torch.cuda.manual_seed_all(seed_value)
+
+        torch.backends.cudnn.deterministic = True
+        
+        torch.backends.cudnn.benchmark = False
+        
+cityscapes_colormap = {
+    0: (128, 64, 128),   # road
+    1: (244, 35, 232),   # sidewalk
+    2: (70, 70, 70),     # building
+    3: (102, 102, 156),  # wall
+    4: (190, 153, 153),  # fence
+    5: (153, 153, 153),  # pole
+    6: (250, 170, 30),   # traffic light
+    7: (220, 220, 0),    # traffic sign
+    8: (107, 142, 35),   # vegetation
+    9: (152, 251, 152),  # terrain
+    10: (70, 130, 180),  # sky
+    11: (220, 20, 60),   # person
+    12: (255, 0, 0),     # rider
+    13: (0, 0, 142),     # car
+    14: (0, 0, 70),      # truck
+    15: (0, 60, 100),    # bus
+    16: (0, 80, 100),    # on rails
+    17: (0, 0, 230),     # motorcycle
+    18: (119, 11, 32),   # bicycle
+    255: (0, 0, 0)       # unlabeled / void
 }
 
-def get_instance_color(instance_id):
-    if instance_id < 1000:
-        return (0, 0, 0)  # unlabeled/background
-    class_id = instance_id // 1000
-    inst_num = instance_id % 1000
-    
-    base_color = np.array(cityscapes_base_colors.get(class_id, (0, 0, 0)))
-    np.random.seed(inst_num)
-    offset = np.random.randint(0, 80, 3)  # 약간 랜덤하게 변형
-    color = np.clip(base_color + offset, 0, 255)
-    return tuple(color.astype(int))
+palette = np.zeros((256, 3), dtype=np.uint8)
+
+for train_id, color in cityscapes_colormap.items():
+    if train_id < 256:
+        palette[train_id] = color
+
+cityscapes_cmap = palette.flatten().tolist()
 
 def main(config):
-
+    
+    set_seed(42)
+    
     device = "cuda" if torch.cuda.is_available() else "cpu"    
     print(f"cuda available : {device}")
     
@@ -193,7 +214,8 @@ def main(config):
                 optimizer.param_groups[1]['lr'] = lr * config.last_mult
                 inputs = Variable(inputs.to(device))
                 target = Variable(target.to(device)).long()
-                outputs , _, _= model(inputs)
+                # outputs , _, _= model(inputs)
+                outputs = model(inputs)
                 outputs = outputs.float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
@@ -257,7 +279,7 @@ def main(config):
                     inputs, target = valid_dataset[i]
                     inputs = Variable(inputs.to(device))
                     target = Variable(target.to(device)).long()
-                    outputs , _ = model(inputs.unsqueeze(0))
+                    outputs = model(inputs.unsqueeze(0))
                     outputs = outputs.float()
                     _, pred = torch.max(outputs, 1)
                     pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -307,6 +329,8 @@ def main(config):
         if config.dataset == "pascal":
             cmap = loadmat('/home/hail/pan/GCN/PIGNet/data/pascal_seg_colormap.mat')['colormap']
             cmap = (cmap * 255).astype(np.uint8).flatten().tolist()
+        elif config.dataset == "cityscape":
+            cmap = cityscapes_cmap
 
         inter_meter = AverageMeter()
         union_meter = AverageMeter()
@@ -346,25 +370,21 @@ def main(config):
 
             imname = dataset.masks[i].split('/')[-1]
             
-            if config.dataset == "pascal":
-                mask_pred = Image.fromarray(pred)
-                mask_pred.putpalette(cmap)
-
-            elif config.dataset == "cityscape":
-                H, W = pred.shape
-                colored_mask = np.zeros((H, W, 3), dtype=np.uint8)
-                unique_instance_ids = np.unique(pred)
-                
-                for instance_id in unique_instance_ids:
-                    if instance_id == 0:
-                        continue
-                    color = get_instance_color(instance_id)
-                    colored_mask[mask_pred == instance_id] = color
-                    mask_pred = Image.fromarray(colored_mask)
+            _, pred = torch.max(outputs, 1)
+            pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
+            mask = target.numpy().astype(np.uint8)
             
+            # search padding location
+            pad_location = (mask == 255)
+            
+            imname = dataset.masks[i].split('/')[-1]
+            pred[pad_location] = 255
+            mask_pred = Image.fromarray(pred)
+            mask_pred.putpalette(cmap)
+
             inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
             
-            if (inter.sum() / union.sum()) > 0.2:
+            if (inter.sum() / union.sum()) > 0.7:
             
                 if config.dataset == 'pascal':
                     path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
@@ -387,12 +407,10 @@ def main(config):
 
                     if os.path.exists(path_color_mask):    
                         # color_target = utils_segmentation.tensor_to_image(color_target)
-                        color_target = Image.fromarray(color_target)
                         color_target.save(os.path.join(path_color_mask, imname))
                     else:
                         os.makedirs(path_color_mask)
                         # color_target = utils_segmentation.tensor_to_image(color_target)
-                        color_target = Image.fromarray(color_target)
                         color_target.save(os.path.join(path_color_mask, imname))
                         
                 elif config.dataset == 'cityscape':
@@ -458,11 +476,14 @@ def main(config):
         return iou.mean() * 100
 
 if __name__ == "__main__":
+
+    set_seed(42)
     
     parser = argparse.ArgumentParser(description="Load configuration from config.yaml")
     parser.add_argument("--config", type = str, default = "/home/hail/pan/GCN/PIGNet/config_segmentation.yaml", help = "path to config.yaml")
     cli_args = parser.parse_args()
-    
+
+
     try:
         with open(cli_args.config, "r") as f:
             config_dict = yaml.safe_load(f)
@@ -503,32 +524,32 @@ if __name__ == "__main__":
             print(f"[ERROR] Model directory not found at '{path}'")
             exit()
     
-        # zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+        zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
 
-        # overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+        overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
-        # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+        pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
 
-        # output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
-
-        # process_dict = {
-        #     "zoom" : zoom_factor , 
-        #     "overlap" : overlap_percentage ,
-        #     "repeat" : pattern_repeat_count
-        # }
-        
-        # zoom_factor = [1] # zoom in, out value 양수면 줌 음수면 줌아웃
-
-        # overlap_percentage = [0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-
-        pattern_repeat_count = [3] # 반복 횟수 2이면 2*2
-
-        output_dict = {model_name : {"repeat" : []} for model_name in model_list}
+        output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
         process_dict = {
-            "repeat" : pattern_repeat_count , 
+            "zoom" : zoom_factor , 
+            "overlap" : overlap_percentage ,
+            "repeat" : pattern_repeat_count
         }
-               
+        
+        # # zoom_factor = [1] # zoom in, out value 양수면 줌 음수면 줌아웃
+
+        # # overlap_percentage = [0.3] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+
+        # # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+
+        # output_dict = {model_name : {"overlap" : []} for model_name in model_list}
+
+        # process_dict = {
+        #     "overlap" : overlap_percentage , 
+        # }
+        
         for name in model_list:
             for process_key , factor_list in process_dict.items():
                 for factor_value in factor_list:

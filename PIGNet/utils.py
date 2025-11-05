@@ -54,13 +54,14 @@ def inter_and_union(pred, mask, num_class):
 
   return (area_inter, area_union)
 
-def preprocess(image, mask, color_mask, dataset_name, process_value, process, flip=False, scale=None, crop=None):
+def preprocess(image, mask, color_mask, flip=False , crop=None):
+# def preprocess(image, mask , process_value, process, flip=False , crop=None):
 
   if flip:
     if random.random() < 0.5:
       image = image.transpose(Image.FLIP_LEFT_RIGHT)
       mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
-      color_mask = color_mask.transpose(Image.FLIP_LEFT_RIGHT)
+      # color_mask = color_mask.transpose(Image.FLIP_LEFT_RIGHT)
 
   data_transforms = transforms.Compose([
       transforms.ToTensor(),
@@ -89,30 +90,9 @@ def preprocess(image, mask, color_mask, dataset_name, process_value, process, fl
                   pad_width=((0, H), (0, W)),
                   mode='constant',
                   constant_values=255)    
-
-    h, w = image.shape[0], image.shape[1]
-    
-    # image crop
-    if (process != "zoom"):
-      i = random.randint(0, h - crop[0])
-      j = random.randint(0, w - crop[1])
-    
-    elif (process == "zoom") and (process_value > 0.5):
-      i = random.randint(0, h - crop[0])
-      j = random.randint(0, w - crop[1])
-    
-    elif (process == "zoom") and (process_value <= 0.5):
-      i = (h - crop[0]) // 2
-      j = (w - crop[1]) // 2
-
-    else:# process == None
-      i = random.randint(0, h - crop[0])
-      j = random.randint(0, w - crop[1])
-
-    image = image[i:i + crop[0], j:j + crop[1],:]
-    mask = mask[i:i + crop[0], j:j + crop[1]]
       
   image = data_transforms(image)
   mask = torch.LongTensor(mask.astype(np.int64))
 
   return image, mask, unnorm_image, color_mask, H, W
+  # return image, mask
