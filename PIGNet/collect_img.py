@@ -9,34 +9,34 @@ overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값
 
 pattern_repeat_count = [1, 3, 6, 9, 12]
 
-# zoom_collect = ["2007_000061.png", "2007_000123.png", "2007_000033.png", "2007_000783.png", "2007_007084.png"]
+zoom_collect = ["2007_000061.png", "2007_000123.png", "2007_000033.png", "2007_000783.png", "2007_007084.png"]
 
-# overlap_collect = ["2010_004519.png", "2007_002618.png", "2009_003217.png", "2009_003810.png", "2009_001332.png"]
+overlap_collect = ["2010_004519.png", "2007_002618.png", "2009_003217.png", "2009_003810.png", "2009_001332.png"]
 
-# repeat_collect = ["2007_002619.png", "2207_000676.png", "2007_003349.png", "2009_000924.png", "2007_000061.png"]
+repeat_collect = ["2007_002619.png", "2007_000676.png", "2007_003349.png", "2009_000924.png", "2007_000061.png"]
 
-zoom_collect =  ["frankfurt_000000_000576_gtFine_labelTrainIds.png",
-                   "frankfurt_000000_000294_gtFine_labelTrainIds.png",
-                   "frankfurt_000001_032018_gtFine_labelTrainIds.png",
-                   "frankfurt_000000_013382_gtFine_labelTrainIds.png",
-                   "frankfurt_000000_003025_gtFine_labelTrainIds.png"]
+# zoom_collect =  ["frankfurt_000000_000576_gtFine_labelTrainIds.png",
+#                    "frankfurt_000000_000294_gtFine_labelTrainIds.png",
+#                    "frankfurt_000001_032018_gtFine_labelTrainIds.png",
+#                    "frankfurt_000000_013382_gtFine_labelTrainIds.png",
+#                    "frankfurt_000000_003025_gtFine_labelTrainIds.png"]
 
-overlap_collect = ["frankfurt_000000_003357_gtFine_labelTrainIds.png",
-                   "frankfurt_000000_010763_gtFine_labelTrainIds.png",
-                   "frankfurt_000000_000294_gtFine_labelTrainIds.png",
-                   "frankfurt_000000_000294_gtFine_labelTrainIds.png",
-                   "munster_000016_000019_gtFine_labelTrainIds.png"]
+# overlap_collect = ["frankfurt_000000_003357_gtFine_labelTrainIds.png",
+#                    "frankfurt_000000_010763_gtFine_labelTrainIds.png",
+#                    "frankfurt_000000_000294_gtFine_labelTrainIds.png",
+#                    "frankfurt_000000_000294_gtFine_labelTrainIds.png",
+#                    "munster_000016_000019_gtFine_labelTrainIds.png"]
 
-repeat_collect = ["frankfurt_000001_025512_gtFine_labelTrainIds.png",
-                   "munster_000016_000019_gtFine_labelTrainIds.png",
-                   "frankfurt_000001_009854_gtFine_labelTrainIds.png",
-                   "frankfurt_000000_000576_gtFine_labelTrainIds.png",
-                   "frankfurt_000001_052594_gtFine_labelTrainIds.png"]
+# repeat_collect = ["frankfurt_000001_002512_gtFine_labelTrainIds.png",
+#                    "munster_000016_000019_gtFine_labelTrainIds.png",
+#                    "frankfurt_000001_009854_gtFine_labelTrainIds.png",
+#                    "frankfurt_000000_000576_gtFine_labelTrainIds.png",
+#                    "frankfurt_000001_052594_gtFine_labelTrainIds.png"]
 
 
 ratio_dict = {task[0]: zoom_factor, task[1]: overlap_percentage, task[2]: pattern_repeat_count}
 
-dataset = "cityscape"
+dataset = "pascal"
 image_type = "GT_masks"
 make_dir_path = "/home/hail/pan/GCN/PIGNet/collect_img"
 model_path = f"/home/hail/pan/GCN/PIGNet/GT_segmentation_masks/{dataset}"

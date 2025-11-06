@@ -54,7 +54,7 @@ def inter_and_union(pred, mask, num_class):
 
   return (area_inter, area_union)
 
-def preprocess(image, mask, color_mask, flip=False , crop=None):
+def preprocess(image, mask, color_mask, flip=False , crop=None, train = False):
 # def preprocess(image, mask , process_value, process, flip=False , crop=None):
 
   if flip:
@@ -94,5 +94,10 @@ def preprocess(image, mask, color_mask, flip=False , crop=None):
   image = data_transforms(image)
   mask = torch.LongTensor(mask.astype(np.int64))
 
-  return image, mask, unnorm_image, color_mask, H, W
+  if train:
+    return image, mask
+
+  else:
+    return image, mask, unnorm_image, color_mask, H, W
+
   # return image, mask

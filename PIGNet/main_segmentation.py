@@ -32,8 +32,21 @@ import copy
 from make_segmentation_dataset import get_dataset
 from make_segmentation_model import get_model
 import random
+from torch.utils.data.distributed import DistributedSampler
+import torch.multiprocessing as mp
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 
 warnings.filterwarnings("ignore")
+
+def init_distributed():  
+    world_size = int(os.environ['WORLD_SIZE'])
+    local_rank = int(os.environ['LOCAL_RANK'])
+    torch.cuda.set_device(local_rank)                       
+    dist.init_process_group("nccl",                   
+                            rank=local_rank,               
+                            world_size=world_size)
 
 def set_seed(seed_value=42):
 
@@ -78,13 +91,22 @@ for train_id, color in cityscapes_colormap.items():
 cityscapes_cmap = palette.flatten().tolist()
 
 def main(config):
+    # Inference 모드에서는 DDP를 사용하지 않음
+    is_training = (config.mode == "train")
     
-    set_seed(42)
+    if is_training:
+        local_rank = int(os.environ.get('LOCAL_RANK', '0'))
+        init_distributed()
+    else:
+        local_rank = 0
+    
+    # set_seed(42)
     
     device = "cuda" if torch.cuda.is_available() else "cpu"    
-    print(f"cuda available : {device}")
     
-    is_training = (config.mode == "train")
+    if local_rank == 0:
+        print(f"cuda available : {device}")
+
 
     if not is_training:
    
@@ -103,7 +125,8 @@ def main(config):
     else:
         config.model = config.model
 
-    print(f"Mode: {config.mode} | Model: {config.model} | Dataset: {config.dataset} | Device: {device}")
+    if local_rank == 0:
+        print(f"Mode: {config.mode} | Model: {config.model} | Dataset: {config.dataset} | Device: {device}")
     
     loss_data = pd.DataFrame(columns=["train_loss"])
     loss_list = []
@@ -122,13 +145,23 @@ def main(config):
     model = get_model(config, dataset)
 
     if config.mode == "train":
-        print("Training !!! ")
+
+        if local_rank == 0:
+            print("Training !!! ")
         
-        wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
-            config=config.__dict__)
+        if local_rank == 0:
+            wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
+                config=config.__dict__)
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
-        model = nn.DataParallel(model).to(device)
+        # model = nn.DataParallel(model).to(device)
+        model.to(local_rank)
+        
+        model = DDP(model,
+                    device_ids=[local_rank],
+                    output_device=local_rank,
+                    find_unused_parameters=True)
+        
         model.train()
 
         if config.freeze_bn:
@@ -172,7 +205,8 @@ def main(config):
         dataset_loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=config.batch_size,
-            shuffle=config.train,
+            shuffle=False,
+            sampler=DistributedSampler(dataset),
             pin_memory=True,
             num_workers=config.workers,
             collate_fn=collate_fn
@@ -200,12 +234,23 @@ def main(config):
         train_step = 0
 
         for epoch in range(start_epoch, config.epochs):
-            print("EPOCHS : ", epoch + 1, " / ", config.epochs)
+
+            dataset_loader.sampler.set_epoch(epoch)
+
+            if local_rank == 0:
+                print("EPOCHS : ", epoch + 1, " / ", config.epochs)
 
             loss_sum = 0
             cnt = 0
 
-            for inputs, target in tqdm(iter(dataset_loader)):
+            if local_rank == 0:
+                data_iterator = tqdm(iter(dataset_loader))
+            else:
+                data_iterator = iter(dataset_loader)
+                        
+            for inputs, target in data_iterator:
+                inputs = inputs.to(local_rank)
+                target = target.to(local_rank)
                 log = {}
                 cur_iter = epoch * len(dataset_loader) + cnt
                 lr = config.base_lr * (1 - float(cur_iter) / max_iter) ** 0.9
@@ -216,7 +261,7 @@ def main(config):
                 target = Variable(target.to(device)).long()
                 # outputs , _, _= model(inputs)
                 outputs = model(inputs)
-                outputs = outputs.float()
+                outputs = outputs[0].float()
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
                     pdb.set_trace()
@@ -241,7 +286,8 @@ def main(config):
             loss_avg = loss_sum / len(dataset_loader)
             log['train/epoch/loss'] = loss_avg
 
-            wandb.log(log)
+            if local_rank == 0:
+                wandb.log(log)
 
             loss_list.append(loss_avg)
             print('epoch: {0}\t'
@@ -255,7 +301,8 @@ def main(config):
 
                 torch.save({
                     'epoch': epoch + 1,
-                    'state_dict': model.state_dict(),
+                    # 'state_dict': model.state_dict(),
+                    'state_dict': model.module.state_dict(),
                     'optimizer': optimizer.state_dict(),
                 }, model_fname)
                 print("model save complete!!!")
@@ -270,50 +317,106 @@ def main(config):
 
             inter_meter = AverageMeter()
             union_meter = AverageMeter()
+            
+            valid_sampler = DistributedSampler(valid_dataset, shuffle=False)
+            valid_loader = torch.utils.data.DataLoader(
+                valid_dataset,
+                batch_size=config.batch_size, 
+                shuffle=False,
+                sampler=valid_sampler,
+                pin_memory=True,
+                num_workers=config.workers,
+                collate_fn=collate_fn 
+            )
 
             with torch.no_grad():
                 model.eval()
                 losses_test = 0.0
                 log = {}
-                for i in tqdm(range(len(valid_dataset))):
-                    inputs, target = valid_dataset[i]
-                    inputs = Variable(inputs.to(device))
-                    target = Variable(target.to(device)).long()
-                    outputs = model(inputs.unsqueeze(0))
-                    outputs = outputs.float()
+                
+                if local_rank == 0:
+                    eval_iterator = tqdm(valid_loader)
+                else:
+                    eval_iterator = valid_loader
+
+                for inputs, target in eval_iterator:
+                    
+                    # inputs, target = valid_dataset[i]
+
+                    inputs = inputs.to(local_rank)
+                    target = target.to(local_rank).long()
+
+                    # outputs = model(inputs.unsqueeze(0))
+                    outputs = model(inputs)
+                    outputs = outputs[0].float()
                     _, pred = torch.max(outputs, 1)
-                    pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
+    
+                    # pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
+                    # mask = target.cpu().numpy().astype(np.uint8)
+    
+                    pred = pred.data.cpu().numpy().astype(np.uint8)
                     mask = target.cpu().numpy().astype(np.uint8)
 
-                    inter, union = inter_and_union(pred, mask, len(valid_dataset.CLASSES))
-                    inter_meter.update(inter)
-                    union_meter.update(union)
+                    # inter, union = inter_and_union(pred, mask, len(valid_dataset.CLASSES))
+                    # inter_meter.update(inter)
+                    # union_meter.update(union)
+                    
+                    for p, m in zip(pred, mask):
+                        inter, union = inter_and_union(p, m, len(valid_dataset.CLASSES))
+                        inter_meter.update(inter)
+                        union_meter.update(union)
 
                     # calculate loss
-                    loss = criterion(outputs, target.unsqueeze(0))
+                    loss = criterion(outputs, target)
                     # add to losses_test
-                    losses_test += loss.item()
+                    losses_test += loss.item() * inputs.size(0)
 
                     # log['test/batch/loss'] = loss.to('cpu')
                     # log['test/batch/iou'] = (inter.sum() / (union.sum() + 1e-10))
 
                 train_step += 1
 
-                iou = inter_meter.sum / (union_meter.sum + 1e-10)
+                inter_sum = torch.tensor(inter_meter.sum, device=local_rank)
+                union_sum = torch.tensor(union_meter.sum, device=local_rank)
+
+                dist.all_reduce(inter_sum, op=dist.ReduceOp.SUM)
+                dist.all_reduce(union_sum, op=dist.ReduceOp.SUM)
+
+                # 합산된 결과를 CPU로 가져와 NumPy로 변환
+                final_inter = inter_sum.cpu().numpy()
+                final_union = union_sum.cpu().numpy()
+
+                # iou = inter_meter.sum / (union_meter.sum + 1e-10)
+                # miou = iou.mean()
+                
+                iou = final_inter / (final_union + 1e-10)
                 miou = iou.mean()
+                
+                total_valid_samples = len(valid_dataset) * dist.get_world_size() # 이 방법은 정확하지 않을 수 있습니다.
 
-                for i, val in enumerate(iou):
-                    print('IoU {0}: {1:.2f}'.format(valid_dataset.CLASSES[i], val * 100))
-                print('Mean IoU: {0:.2f}'.format(iou.mean() * 100))
-                log['test/epoch/loss'] = losses_test / len(dataset)
-                log['test/epoch/iou'] = miou.item()
-            # time.sleep(60)
-
-            wandb.log(log)
-            model.train()
-
-        wandb.finish()
-    else:
+                total_losses_test_tensor = torch.tensor(losses_test, device=local_rank)
+                dist.all_reduce(total_losses_test_tensor, op=dist.ReduceOp.SUM)
+                total_losses_test = total_losses_test_tensor.item()
+                
+                total_samples = len(valid_dataset) * dist.get_world_size()
+                
+                if local_rank == 0:
+                    for i, val in enumerate(iou):
+                        print('IoU {0}: {1:.2f}'.format(valid_dataset.CLASSES[i], val * 100))
+                    print('Mean IoU: {0:.2f}'.format(iou.mean() * 100))
+                    
+                    avg_valid_loss = total_losses_test / total_samples 
+                    log['test/epoch/loss'] = avg_valid_loss
+                    log['test/epoch/iou'] = miou.item()
+        
+            if local_rank == 0:
+                wandb.log(log)
+                model.train()
+        
+        if local_rank == 0:
+            wandb.finish()
+        
+    else:        
         print("Evaluating !!! ")
         torch.cuda.set_device(config.gpu)
         model = model.to(device)
@@ -322,7 +425,15 @@ def main(config):
         checkpoint = torch.load(f'/home/hail/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
                                 , map_location = device)
 
-        state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+        # DDP로 저장된 checkpoint의 "module." 프리픽스 제거
+        state_dict = checkpoint['state_dict']
+        if 'module.' in list(state_dict.keys())[0]:
+            # DDP 모델에서 저장된 경우: "module.xxx" -> "xxx"
+            state_dict = {k.replace('module.', ''): v for k, v in state_dict.items() if 'tracked' not in k}
+        else:
+            # 일반 모델에서 저장된 경우: 그대로 사용
+            state_dict = {k: v for k, v in state_dict.items() if 'tracked' not in k}
+        
         print(model_fname)
         model.load_state_dict(state_dict)
         
@@ -377,9 +488,9 @@ def main(config):
             if (inter.sum() / union.sum()) > 0.7:
             
                 if config.dataset == 'pascal':
-                    path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/pascal/{config.model}/{config.infer_params.process_type}/{config.factor}'
-                    path_GT = f"/home/hail/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
-                    path_color_mask = f"/home/hail/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.infer_params.process_type}/{config.factor}"
+                    path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path_GT = f"/home/hail/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
+                    path_color_mask = f"/home/hail/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
 
                     if os.path.exists(path):
                         mask_pred.save(os.path.join(path, imname))
@@ -404,7 +515,7 @@ def main(config):
                         color_target.save(os.path.join(path_color_mask, imname))
                         
                 elif config.dataset == 'cityscape':
-                    path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/cityscape/{config.model}/{config.infer_params.process_type}/{config.factor}'
+                    path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
                     path_GT = f"/home/hail/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
                     path_color_mask = f"/home/hail/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
 
@@ -467,7 +578,7 @@ def main(config):
 
 if __name__ == "__main__":
 
-    set_seed(42)
+    # set_seed(42)
     
     parser = argparse.ArgumentParser(description="Load configuration from config.yaml")
     parser.add_argument("--config", type = str, default = "/home/hail/pan/GCN/PIGNet/config_segmentation.yaml", help = "path to config.yaml")
@@ -503,6 +614,10 @@ if __name__ == "__main__":
         
     elif config.mode == "infer":
         print("-- Starting Infer Mode --")
+        
+        # Inference 모드에서는 DDP를 사용하지 않으므로 LOCAL_RANK 환경 변수를 설정
+        if 'LOCAL_RANK' not in os.environ:
+            os.environ['LOCAL_RANK'] = '0'
         
         path = f"/home/hail/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
                 
@@ -562,7 +677,6 @@ if __name__ == "__main__":
                         
         print("\n--- Inference Results Summary ---")
 
-        # 결과를 보기 좋게 DataFrame으로 변환하여 저장
         records = []
         for model_name, result_dict in output_dict.items():
             for task, values in result_dict.items():
@@ -580,10 +694,8 @@ if __name__ == "__main__":
                                       columns='factor', 
                                       values='accuracy').reset_index()
         
-        # 열(column)의 이름을 깔끔하게 정리합니다.
         df_wide.rename_axis(columns=None, inplace=True)
 
-        # 3. 변환된 와이드 포맷의 DataFrame을 CSV 파일로 저장합니다.
         output_filename = f"output_wide_{config.model_number}_{config.model_type}_{config.dataset}.csv"
         df_wide.to_csv(output_filename, index=False)
         

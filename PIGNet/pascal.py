@@ -75,8 +75,12 @@ class VOCSegmentation(data.Dataset):
 
     _img = Image.open(self.images[index]).convert('RGB')
     _target = Image.open(self.masks[index])
+    
+    if self.train:
+      _color_target  = copy.deepcopy(_target)
 
-    _color_target  = Image.open(self.color_masks[index]).convert('RGB')
+    else: 
+      _color_target  = Image.open(self.color_masks[index]).convert('RGB')
 
     if self.process != None:
         _target = _target.convert("L")
@@ -107,19 +111,29 @@ class VOCSegmentation(data.Dataset):
 
       if _img == None:
         return None,None,None,None,None,None
-
-    _img, _target, unnorm_image, _color_target, H, W = preprocess(_img, _target, _color_target,
-                               flip=True if self.train else False,
-                               crop=(self.crop_size, self.crop_size))
-
+    
+    if self.train:  
+      _img, _target = preprocess(_img, _target, _color_target,
+                                flip=True if self.train else False,
+                                crop=(self.crop_size, self.crop_size), 
+                                train=self.train)
+    else:
+      _img, _target, unnorm_image, _color_target, H, W = preprocess(_img, _target, _color_target,
+                                flip=True if self.train else False,
+                                crop=(self.crop_size, self.crop_size))
+    
     if self.transform is not None:
       _img = self.transform(_img)
 
     if self.target_transform is not None:
       _target = _target.unsqueeze(0)
       _target = self.target_transform(_target)
-      
-    return _img, _target, unnorm_image, _color_target, H, W
+    
+    if self.train:
+      return _img, _target
+  
+    else:
+      return _img, _target, unnorm_image, _color_target, H, W
   
   def __len__(self):
     return len(self.images)
@@ -128,7 +142,7 @@ class VOCSegmentation(data.Dataset):
     raise NotImplementedError('Automatic download not yet implemented.')
   
   def image_resizing(self, img, mask ,color_mask):
-  
+
     aug_scale=(0.5, 2.0)
   
     w, h = img.size # image type is PIL image

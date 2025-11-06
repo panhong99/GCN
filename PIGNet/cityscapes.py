@@ -13,6 +13,7 @@ import copy
 import torch
 import math
 
+
 _FOLDERS_MAP = {
     'image': 'leftImg8bit',
     'label': 'gtFine',
