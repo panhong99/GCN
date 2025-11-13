@@ -1,4 +1,4 @@
-# PIGNet: pixel-integrated graph convolution for light-weighted efficient segmentation
+# GSP + SPP(가제)
 -----------------------
 ## 개요(Overview)
 -----------------------
