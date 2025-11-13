@@ -5,7 +5,7 @@ factor: ""
 model: ""
 exp: "bn_lr7e-3"
 backbone: "resnet101"
-dataset: "pascal"
+dataset: "cityscape"
 model_type: "pretrained"
 model_number: 3
 gpu: 0

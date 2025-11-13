@@ -36,7 +36,7 @@ from torch.utils.data.distributed import DistributedSampler
 import torch.multiprocessing as mp
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-
+import sys
 
 warnings.filterwarnings("ignore")
 
@@ -91,22 +91,23 @@ for train_id, color in cityscapes_colormap.items():
 cityscapes_cmap = palette.flatten().tolist()
 
 def main(config):
-    # Inference 모드에서는 DDP를 사용하지 않음
-    is_training = (config.mode == "train")
+    # 디버깅 모드 감지
+    is_debug = (hasattr(sys, 'gettrace') and sys.gettrace()) or os.getenv('DEBUG', '') == '1'
     
-    if is_training:
-        local_rank = int(os.environ.get('LOCAL_RANK', '0'))
-        init_distributed()
-    else:
+    if is_debug:
+        print("Debug mode detected -> skipping distributed setup, using local_rank=0")
         local_rank = 0
-    
-    # set_seed(42)
-    
-    device = "cuda" if torch.cuda.is_available() else "cpu"    
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        torch.cuda.set_device(local_rank) if torch.cuda.is_available() else None
+    else:
+        local_rank = int(os.environ['LOCAL_RANK'])
+        init_distributed()
+        device = f"cuda:{local_rank}"
     
     if local_rank == 0:
         print(f"cuda available : {device}")
-
+    
+    is_training = (config.mode == "train")
 
     if not is_training:
    
@@ -159,8 +160,7 @@ def main(config):
         
         model = DDP(model,
                     device_ids=[local_rank],
-                    output_device=local_rank,
-                    find_unused_parameters=True)
+                    output_device=local_rank)
         
         model.train()
 
@@ -413,8 +413,7 @@ def main(config):
                 wandb.log(log)
                 model.train()
         
-        if local_rank == 0:
-            wandb.finish()
+        wandb.finish()
         
     else:        
         print("Evaluating !!! ")
@@ -425,15 +424,7 @@ def main(config):
         checkpoint = torch.load(f'/home/hail/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
                                 , map_location = device)
 
-        # DDP로 저장된 checkpoint의 "module." 프리픽스 제거
-        state_dict = checkpoint['state_dict']
-        if 'module.' in list(state_dict.keys())[0]:
-            # DDP 모델에서 저장된 경우: "module.xxx" -> "xxx"
-            state_dict = {k.replace('module.', ''): v for k, v in state_dict.items() if 'tracked' not in k}
-        else:
-            # 일반 모델에서 저장된 경우: 그대로 사용
-            state_dict = {k: v for k, v in state_dict.items() if 'tracked' not in k}
-        
+        state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         print(model_fname)
         model.load_state_dict(state_dict)
         
@@ -614,10 +605,6 @@ if __name__ == "__main__":
         
     elif config.mode == "infer":
         print("-- Starting Infer Mode --")
-        
-        # Inference 모드에서는 DDP를 사용하지 않으므로 LOCAL_RANK 환경 변수를 설정
-        if 'LOCAL_RANK' not in os.environ:
-            os.environ['LOCAL_RANK'] = '0'
         
         path = f"/home/hail/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
                 

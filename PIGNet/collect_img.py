@@ -3,43 +3,49 @@ from PIL import Image
 
 task = ["zoom", "overlap", "repeat"]
 
-zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+zoom_factor = [0.1,0.3,0.5,0.7,1,1.5,1.7,2] # zoom in, out value 양수면 줌 음수면 줌아웃
 
 overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
 pattern_repeat_count = [1, 3, 6, 9, 12]
 
-zoom_collect = ["2007_000061.png", "2007_000123.png", "2007_000033.png", "2007_000783.png", "2007_007084.png"]
+f_name = "frankfurt"
+m_name = "munster"
 
-overlap_collect = ["2010_004519.png", "2007_002618.png", "2009_003217.png", "2009_003810.png", "2009_001332.png"]
+zoom_collect = ["2011_000900.png","2007_006650.png","2007_000042.png","2007_000332.png","2007_000033.png","2007_005608.png","2007_000783.png","2007_002643.png"]
 
-repeat_collect = ["2007_002619.png", "2007_000676.png", "2007_003349.png", "2009_000924.png", "2007_000061.png"]
+overlap_collect = ["2007_003143.png","2011_003003.png","2008_002152.png","2011_001407.png","2008_000602.png"]
 
-# zoom_collect =  ["frankfurt_000000_000576_gtFine_labelTrainIds.png",
-#                    "frankfurt_000000_000294_gtFine_labelTrainIds.png",
-#                    "frankfurt_000001_032018_gtFine_labelTrainIds.png",
-#                    "frankfurt_000000_013382_gtFine_labelTrainIds.png",
-#                    "frankfurt_000000_003025_gtFine_labelTrainIds.png"]
+repeat_collect = ["2007_000332.png","2007_000676.png","2007_003051.png","2007_003714.png","2007_000061.png"]
 
-# overlap_collect = ["frankfurt_000000_003357_gtFine_labelTrainIds.png",
-#                    "frankfurt_000000_010763_gtFine_labelTrainIds.png",
-#                    "frankfurt_000000_000294_gtFine_labelTrainIds.png",
-#                    "frankfurt_000000_000294_gtFine_labelTrainIds.png",
-#                    "munster_000016_000019_gtFine_labelTrainIds.png"]
+# zoom_collect =  [f"{f_name}_000001_003588_gtFine_labelTrainIds.png",
+#                    f"{m_name}_000173_000019_gtFine_labelTrainIds.png",
+#                    f"{f_name}_000001_010600_gtFine_labelTrainIds.png",
+#                    f"{m_name}_000132_000019_gtFine_labelTrainIds.png",
+#                    f"{f_name}_000000_000294_gtFine_labelTrainIds.png",
+#                    f"{f_name}_000000_005543_gtFine_labelTrainIds.png",
+#                    f"{m_name}_000127_000019_gtFine_labelTrainIds.png",
+#                    f"{f_name}_000001_002759_gtFine_labelTrainIds.png",]
 
-# repeat_collect = ["frankfurt_000001_002512_gtFine_labelTrainIds.png",
-#                    "munster_000016_000019_gtFine_labelTrainIds.png",
-#                    "frankfurt_000001_009854_gtFine_labelTrainIds.png",
-#                    "frankfurt_000000_000576_gtFine_labelTrainIds.png",
-#                    "frankfurt_000001_052594_gtFine_labelTrainIds.png"]
+# overlap_collect = [f"{f_name}_000000_001751_gtFine_labelTrainIds.png",
+#                    f"{f_name}_000000_020215_gtFine_labelTrainIds.png",
+#                    f"{m_name}_000171_000019_gtFine_labelTrainIds.png",
+#                    f"{m_name}_000158_000019_gtFine_labelTrainIds.png",
+#                  f"{f_name}_000001_005898_gtFine_labelTrainIds.png"]
+
+# repeat_collect = [f"{f_name}_000000_002196_gtFine_labelTrainIds.png",
+#                  f"{f_name}_000000_000294_gtFine_labelTrainIds.png",
+#                    f"{f_name}_000000_013382_gtFine_labelTrainIds.png",
+#                    f"{f_name}_000001_005410_gtFine_labelTrainIds.png",
+#                    f"{m_name}_000119_000019_gtFine_labelTrainIds.png"]
 
 
 ratio_dict = {task[0]: zoom_factor, task[1]: overlap_percentage, task[2]: pattern_repeat_count}
 
 dataset = "pascal"
-image_type = "GT_masks"
+image_type = "GT"
 make_dir_path = "/home/hail/pan/GCN/PIGNet/collect_img"
-model_path = f"/home/hail/pan/GCN/PIGNet/GT_segmentation_masks/{dataset}"
+model_path = f"/home/hail/pan/GCN/PIGNet/final_output_image/GT_input_images/{dataset}"
 mname_list = os.listdir(model_path)
 
 for key, value in ratio_dict.items():
