@@ -312,7 +312,7 @@ class GSP(nn.Module):
                                                feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
             # gsp_layer_outputs.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
 
-        gsp_layer_outputs = copy.deepcopy(x_s_f)
+        # gsp_layer_outputs = copy.deepcopy(x_s_f)
         
         output = torch.cat(x_s_f, dim=1)
 
@@ -323,7 +323,7 @@ class GSP(nn.Module):
         # Output
         x = self.conv2(output)
 
-        return x, gsp_layer_outputs
+        return x, x#gsp_layer_outputs
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -481,8 +481,7 @@ class ResNet(nn.Module):
         x = self.FC(x)
 
         return x, gsp_layer_outputs, backbone_layers_output #return_gsp_output
-
-
+        
 
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.

@@ -1,13 +1,10 @@
-mode: "infer"
-
-# shared setting
 factor: ""
 model: ""
 exp: "bn_lr7e-3"
 backbone: "resnet101"
-dataset: "cityscape"
+dataset: "pascal"
 model_type: "pretrained"
-model_number: 3
+model_number: 1
 gpu: 0
 workers: 4
 resume: null

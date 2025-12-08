@@ -94,11 +94,11 @@ def main(config):
     # 디버깅 모드 감지
     is_debug = (hasattr(sys, 'gettrace') and sys.gettrace()) or os.getenv('DEBUG', '') == '1'
     
-    if is_debug:
-        print("Debug mode detected -> skipping distributed setup, using local_rank=0")
+    if is_debug or config.mode == "infer":
+        print("Debug mode or infer mode detected -> skipping distributed setup, using local_rank=0")
         local_rank = 0
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        torch.cuda.set_device(local_rank) if torch.cuda.is_available() else None
+        device = f"cuda:{config.gpu}" if torch.cuda.is_available() else "cpu"
+        torch.cuda.set_device(config.gpu) if torch.cuda.is_available() else None
     else:
         local_rank = int(os.environ['LOCAL_RANK'])
         init_distributed()
@@ -476,7 +476,7 @@ def main(config):
 
             inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
             
-            if (inter.sum() / union.sum()) > 0.7:
+            if (inter.sum() / union.sum()) > 0.1:
             
                 if config.dataset == 'pascal':
                     path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
@@ -616,31 +616,31 @@ if __name__ == "__main__":
             print(f"[ERROR] Model directory not found at '{path}'")
             exit()
     
-        zoom_factor = [1 , 0.1 , 0.5 ,  1.5 , 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+        # zoom_factor = [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2] # zoom in, out value 양수면 줌 음수면 줌아웃
 
-        overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+        # overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
-        pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+        # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
 
-        output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
+        # output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
+
+        # process_dict = {
+        #     "zoom" : zoom_factor , 
+        #     "overlap" : overlap_percentage ,
+        #     "repeat" : pattern_repeat_count
+        # }
+        
+        zoom_factor = [0.1] # zoom in, out value 양수면 줌 음수면 줌아웃
+
+        # overlap_percentage = [0.3] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+
+        # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+
+        output_dict = {model_name : {"zoom" : []} for model_name in model_list}
 
         process_dict = {
             "zoom" : zoom_factor , 
-            "overlap" : overlap_percentage ,
-            "repeat" : pattern_repeat_count
         }
-        
-        # # zoom_factor = [1] # zoom in, out value 양수면 줌 음수면 줌아웃
-
-        # # overlap_percentage = [0.3] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-
-        # # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
-
-        # output_dict = {model_name : {"overlap" : []} for model_name in model_list}
-
-        # process_dict = {
-        #     "overlap" : overlap_percentage , 
-        # }
         
         for name in model_list:
             for process_key , factor_list in process_dict.items():

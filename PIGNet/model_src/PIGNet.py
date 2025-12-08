@@ -29,7 +29,6 @@ def model_size(model):
         total_size += num_bytes
     return total_size
 
-
 class Conv2d(nn.Conv2d):
 
     def __init__(self, in_channels, out_channels, kernel_size, stride=1,
@@ -73,7 +72,6 @@ class EncoderCNN(nn.Module):
         # x = self.gelu(x)
 
         return x
-
 
 class DecoderCNN(nn.Module):
     def __init__(self):

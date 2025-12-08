@@ -29,13 +29,13 @@ import utils_segmentation as utils_segmentation
 import yaml
 import copy
 
-def get_dataset(config):
+def get_dataset(config, type=None):
 
-    config.train = True if config.mode == "train" else False
+    config.train = True if type == "train" else False
 
     if config.dataset == 'pascal':
 
-        if config.mode == "train":
+        if type == "train":
 
             print("train dataset")
             dataset = VOCSegmentation('/home/hail/pan/GCN/PIGNet/data/VOCdevkit',
