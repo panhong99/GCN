@@ -101,8 +101,11 @@ def main(config):
         torch.cuda.set_device(config.gpu) if torch.cuda.is_available() else None
     else:
         local_rank = int(os.environ['LOCAL_RANK'])
+        world_size = int(os.environ['WORLD_SIZE'])
         init_distributed()
         device = f"cuda:{local_rank}"
+        print(f"local rank {local_rank}")
+        print(f"world size {world_size}")
     
     if local_rank == 0:
         print(f"cuda available : {device}")
@@ -151,7 +154,7 @@ def main(config):
             print("Training !!! ")
         
         if local_rank == 0:
-            wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
+            wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"_embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
                 config=config.__dict__)
 
         criterion = nn.CrossEntropyLoss(ignore_index=255)
@@ -160,7 +163,8 @@ def main(config):
         
         model = DDP(model,
                     device_ids=[local_rank],
-                    output_device=local_rank)
+                    output_device=local_rank,
+                    find_unused_parameters=True)
         
         model.train()
 
@@ -206,7 +210,9 @@ def main(config):
             dataset,
             batch_size=config.batch_size,
             shuffle=False,
-            sampler=DistributedSampler(dataset),
+            sampler=DistributedSampler(dataset, 
+                                       num_replicas = world_size , 
+                                       rank = local_rank),
             pin_memory=True,
             num_workers=config.workers,
             collate_fn=collate_fn
@@ -261,7 +267,12 @@ def main(config):
                 target = Variable(target.to(device)).long()
                 # outputs , _, _= model(inputs)
                 outputs = model(inputs)
-                outputs = outputs[0].float()
+
+                if config.model == "Mask2Former":
+                    outputs = outputs.float()
+                else:
+                    outputs = outputs[0].float()
+
                 loss = criterion(outputs, target)
                 if np.isnan(loss.item()) or np.isinf(loss.item()):
                     pdb.set_trace()
@@ -323,7 +334,9 @@ def main(config):
                 valid_dataset,
                 batch_size=config.batch_size, 
                 shuffle=False,
-                sampler=valid_sampler,
+                sampler=DistributedSampler(valid_dataset, 
+                                        num_replicas = world_size , 
+                                        rank = local_rank),
                 pin_memory=True,
                 num_workers=config.workers,
                 collate_fn=collate_fn 
@@ -348,7 +361,12 @@ def main(config):
 
                     # outputs = model(inputs.unsqueeze(0))
                     outputs = model(inputs)
-                    outputs = outputs[0].float()
+                    
+                    if config.model == "Mask2Former":
+                        outputs = outputs.float()
+                    else:
+                        outputs = outputs[0].float()
+
                     _, pred = torch.max(outputs, 1)
     
                     # pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
@@ -365,6 +383,8 @@ def main(config):
                         inter, union = inter_and_union(p, m, len(valid_dataset.CLASSES))
                         inter_meter.update(inter)
                         union_meter.update(union)
+
+
 
                     # calculate loss
                     loss = criterion(outputs, target)

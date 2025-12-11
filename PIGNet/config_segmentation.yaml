@@ -1,5 +1,8 @@
+mode: "train"
+
+# shared setting
 factor: ""
-model: ""
+model: "Mask2Former"
 exp: "bn_lr7e-3"
 backbone: "resnet101"
 dataset: "pascal"

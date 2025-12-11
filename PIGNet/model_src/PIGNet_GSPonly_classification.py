@@ -301,18 +301,18 @@ class GSP(nn.Module):
 
         x = x.x
 
-        # gsp_layer_outputs=[]
+        gsp_layer_outputs=[]
 
-        #gsp_layer_outputs.append(gsp_layer_input)
+        gsp_layer_outputs.append(gsp_layer_input)
+
         for ii in range(len(self.gn_layers)):
             x, edge = self.gn_layers[ii](x, edge_idx)
             # x_s[ii] = x
             if (ii+1) % self.n_skip_l == 0:
                 x_s_f.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),
                                                feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
-            # gsp_layer_outputs.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
 
-        # gsp_layer_outputs = copy.deepcopy(x_s_f)
+        gsp_layers_output = [t.detach().cpu() for t in x_s_f]
         
         output = torch.cat(x_s_f, dim=1)
 
@@ -323,7 +323,7 @@ class GSP(nn.Module):
         # Output
         x = self.conv2(output)
 
-        return x, x#gsp_layer_outputs
+        return x, gsp_layers_output
 
 class Bottleneck(nn.Module):
     expansion = 4
