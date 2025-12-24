@@ -33,7 +33,7 @@ def get_model(config, dataset):
     
     config.scratch = True if config.model_type == "scratch" else False
     
-    if config.backbone in ["resnet50","resnet101","resnet152"]:
+    if config.backbone in ["resnet50","resnet101","resnet152","swin"]:
 
         if config.model == "PIGNet_GSPonly":
             model = getattr(PIGNet_GSPonly, config.backbone)(
@@ -69,7 +69,16 @@ def get_model(config, dataset):
                 n_skip_l = config.n_skip_l)
 
         elif config.model == "Mask2Former":
-            model = Mask2Former()
+            model = Mask2Former(
+                backbone = config.backbone,
+                num_classes=len(dataset.CLASSES),
+                pretrained=(not config.scratch),
+                num_groups=config.groups,
+                weight_std=config.weight_std,
+                beta=config.beta,
+                embedding_size = config.embedding_size,
+                n_layer = config.n_layer,
+                n_skip_l = config.n_skip_l)
 
     else:
         raise ValueError('Unknown backbone: {}'.format(config.backbone))

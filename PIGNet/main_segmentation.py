@@ -95,15 +95,18 @@ def main(config):
     is_debug = (hasattr(sys, 'gettrace') and sys.gettrace()) or os.getenv('DEBUG', '') == '1'
     
     if is_debug or config.mode == "infer":
-        print("Debug mode or infer mode detected -> skipping distributed setup, using local_rank=0")
+        print("Debug mode or infer mode detected -> skipping distributed setup, using single GPU")
         local_rank = 0
+        world_size = 1
         device = f"cuda:{config.gpu}" if torch.cuda.is_available() else "cpu"
         torch.cuda.set_device(config.gpu) if torch.cuda.is_available() else None
+        is_distributed = False
     else:
-        local_rank = int(os.environ['LOCAL_RANK'])
-        world_size = int(os.environ['WORLD_SIZE'])
+        local_rank = int(os.environ.get('LOCAL_RANK', 0))
+        world_size = int(os.environ.get('WORLD_SIZE', 1))
         init_distributed()
         device = f"cuda:{local_rank}"
+        is_distributed = True
         print(f"local rank {local_rank}")
         print(f"world size {world_size}")
     
@@ -161,10 +164,11 @@ def main(config):
         # model = nn.DataParallel(model).to(device)
         model.to(local_rank)
         
-        model = DDP(model,
-                    device_ids=[local_rank],
-                    output_device=local_rank,
-                    find_unused_parameters=True)
+        if is_distributed:
+            model = DDP(model,
+                        device_ids=[local_rank],
+                        output_device=local_rank,
+                        find_unused_parameters=True)
         
         model.train()
 
@@ -176,24 +180,27 @@ def main(config):
                     m.weight.requires_grad = False
                     m.bias.requires_grad = False
 
+        # Get base model (unwrap DDP if needed)
+        base_model = model.module if is_distributed else model
+
         if config.model != "Mask2Former":
             backbone_params = (
-                    list(model.module.conv1.parameters()) +
-                    list(model.module.bn1.parameters()) +
-                    list(model.module.layer1.parameters()) +
-                    list(model.module.layer2.parameters()) +
-                    list(model.module.layer3.parameters()) +
-                    list(model.module.layer4.parameters()))
+                    list(base_model.conv1.parameters()) +
+                    list(base_model.bn1.parameters()) +
+                    list(base_model.layer1.parameters()) +
+                    list(base_model.layer2.parameters()) +
+                    list(base_model.layer3.parameters()) +
+                    list(base_model.layer4.parameters()))
 
         if config.model == "PIGNet_GSPonly" or config.model=="PIGNet":
-            last_params = list(model.module.pyramid_gnn.parameters())
+            last_params = list(base_model.pyramid_gnn.parameters())
 
         elif config.model == "ASPP":
-            last_params = list(model.module.aspp.parameters())
+            last_params = list(base_model.aspp.parameters())
 
         else: # Masktoformer
-            backbone_params = list(model.module.backbone.parameters())
-            last_params = list(model.module.transformer_decoder.parameters())
+            backbone_params = list(base_model.backbone.parameters())
+            last_params = list(base_model.transformer_decoder.parameters())
 
         optimizer = optim.SGD([
             {'params': filter(lambda p: p.requires_grad, backbone_params)},
@@ -206,17 +213,27 @@ def main(config):
 
         collate_fn = partial(utils_segmentation.make_batch_fn, batch_size=config.batch_size, feature_shape=feature_shape)
 
-        dataset_loader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=config.batch_size,
-            shuffle=False,
-            sampler=DistributedSampler(dataset, 
-                                       num_replicas = world_size , 
-                                       rank = local_rank),
-            pin_memory=True,
-            num_workers=config.workers,
-            collate_fn=collate_fn
-        )
+        if is_distributed:
+            dataset_loader = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=config.batch_size,
+                shuffle=False,
+                sampler=DistributedSampler(dataset, 
+                                           num_replicas = world_size , 
+                                           rank = local_rank),
+                pin_memory=True,
+                num_workers=config.workers,
+                collate_fn=collate_fn
+            )
+        else:
+            dataset_loader = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=config.batch_size,
+                shuffle=True,
+                pin_memory=True,
+                num_workers=config.workers,
+                collate_fn=collate_fn
+            )
 
         max_iter = config.epochs * len(dataset_loader)
         losses = AverageMeter()
@@ -241,7 +258,8 @@ def main(config):
 
         for epoch in range(start_epoch, config.epochs):
 
-            dataset_loader.sampler.set_epoch(epoch)
+            if is_distributed:
+                dataset_loader.sampler.set_epoch(epoch)
 
             if local_rank == 0:
                 print("EPOCHS : ", epoch + 1, " / ", config.epochs)
@@ -329,18 +347,26 @@ def main(config):
             inter_meter = AverageMeter()
             union_meter = AverageMeter()
             
-            valid_sampler = DistributedSampler(valid_dataset, shuffle=False)
-            valid_loader = torch.utils.data.DataLoader(
-                valid_dataset,
-                batch_size=config.batch_size, 
-                shuffle=False,
-                sampler=DistributedSampler(valid_dataset, 
-                                        num_replicas = world_size , 
-                                        rank = local_rank),
-                pin_memory=True,
-                num_workers=config.workers,
-                collate_fn=collate_fn 
-            )
+            if is_distributed:
+                valid_sampler = DistributedSampler(valid_dataset, shuffle=False)
+                valid_loader = torch.utils.data.DataLoader(
+                    valid_dataset,
+                    batch_size=config.batch_size, 
+                    shuffle=False,
+                    sampler=valid_sampler,
+                    pin_memory=True,
+                    num_workers=config.workers,
+                    collate_fn=collate_fn 
+                )
+            else:
+                valid_loader = torch.utils.data.DataLoader(
+                    valid_dataset,
+                    batch_size=config.batch_size, 
+                    shuffle=False,
+                    pin_memory=True,
+                    num_workers=config.workers,
+                    collate_fn=collate_fn 
+                )
 
             with torch.no_grad():
                 model.eval()
@@ -396,15 +422,19 @@ def main(config):
 
                 train_step += 1
 
-                inter_sum = torch.tensor(inter_meter.sum, device=local_rank)
-                union_sum = torch.tensor(union_meter.sum, device=local_rank)
+                if is_distributed:
+                    inter_sum = torch.tensor(inter_meter.sum, device=local_rank)
+                    union_sum = torch.tensor(union_meter.sum, device=local_rank)
 
-                dist.all_reduce(inter_sum, op=dist.ReduceOp.SUM)
-                dist.all_reduce(union_sum, op=dist.ReduceOp.SUM)
+                    dist.all_reduce(inter_sum, op=dist.ReduceOp.SUM)
+                    dist.all_reduce(union_sum, op=dist.ReduceOp.SUM)
 
-                # 합산된 결과를 CPU로 가져와 NumPy로 변환
-                final_inter = inter_sum.cpu().numpy()
-                final_union = union_sum.cpu().numpy()
+                    # 합산된 결과를 CPU로 가져와 NumPy로 변환
+                    final_inter = inter_sum.cpu().numpy()
+                    final_union = union_sum.cpu().numpy()
+                else:
+                    final_inter = inter_meter.sum
+                    final_union = union_meter.sum
 
                 # iou = inter_meter.sum / (union_meter.sum + 1e-10)
                 # miou = iou.mean()
@@ -412,13 +442,15 @@ def main(config):
                 iou = final_inter / (final_union + 1e-10)
                 miou = iou.mean()
                 
-                total_valid_samples = len(valid_dataset) * dist.get_world_size() # 이 방법은 정확하지 않을 수 있습니다.
-
-                total_losses_test_tensor = torch.tensor(losses_test, device=local_rank)
-                dist.all_reduce(total_losses_test_tensor, op=dist.ReduceOp.SUM)
-                total_losses_test = total_losses_test_tensor.item()
-                
-                total_samples = len(valid_dataset) * dist.get_world_size()
+                if is_distributed:
+                    total_valid_samples = len(valid_dataset) * world_size
+                    total_losses_test_tensor = torch.tensor(losses_test, device=local_rank)
+                    dist.all_reduce(total_losses_test_tensor, op=dist.ReduceOp.SUM)
+                    total_losses_test = total_losses_test_tensor.item()
+                    total_samples = len(valid_dataset) * world_size
+                else:
+                    total_losses_test = losses_test
+                    total_samples = len(valid_dataset)
                 
                 if local_rank == 0:
                     for i, val in enumerate(iou):

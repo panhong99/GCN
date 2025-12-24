@@ -2,10 +2,18 @@ import torch.nn as nn
 from einops import rearrange
 from torch.autograd import Function
 from torch.autograd.function import once_differentiable
-
 from Mask2Former_models.msdeformattn import MSDeformAttnPixelDecoder
 from Mask2Former_models.position_encoding import PositionEmbeddingSine
 from Mask2Former_models.swin import Swin_transformer
+import torch.utils.model_zoo as model_zoo
+
+__all__ = ['ResNet', 'resnet50', 'resnet101', 'resnet152']
+
+model_urls = {
+    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
+    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
+    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
+}
 
 MultiScaleDeformableAttention=None
 # try:
@@ -18,7 +26,88 @@ MultiScaleDeformableAttention=None
 #     )
 #     raise ModuleNotFoundError(info_string)
 
+import warnings
+import copy
 
+warnings.filterwarnings("ignore")
+
+__all__ = ['ResNet', 'resnet50', 'resnet101', 'resnet152']
+
+model_urls = {
+    'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
+    'resnet101': 'https://download.pytorch.org/models/resnet101-5d3b4d8f.pth',
+    'resnet152': 'https://download.pytorch.org/models/resnet152-b121ed2d.pth',
+}
+
+
+def model_size(model):
+    total_size = 0
+    for param in model.parameters():
+        # °¢ ÆÄ¶ó¹ÌÅÍÀÇ ¿ø¼Ò °³¼ö °è»ê
+        num_elements = torch.prod(torch.tensor(param.size())).item()
+        # ¿ø¼Ò Å¸ÀÔ º°·Î ¹ÙÀÌÆ® Å©±â °è»ê (¿¹: float32 -> 4 bytes)
+        num_bytes = num_elements * param.element_size()
+        total_size += num_bytes
+    return total_size
+
+
+class Conv2d(nn.Conv2d):
+
+    def __init__(self, in_channels, out_channels, kernel_size, stride=1,
+                 padding=0, dilation=1, groups=1, bias=True):
+        super(Conv2d, self).__init__(in_channels, out_channels, kernel_size, stride,
+                                     padding, dilation, groups, bias)
+
+    def forward(self, x):
+        # return super(Conv2d, self).forward(x)
+        weight = self.weight
+        weight_mean = weight.mean(dim=1, keepdim=True).mean(dim=2,
+                                                            keepdim=True).mean(dim=3, keepdim=True)
+        weight = weight - weight_mean
+        std = weight.view(weight.size(0), -1).std(dim=1).view(-1, 1, 1, 1) + 1e-5
+        weight = weight / std.expand_as(weight)
+        return F.conv2d(x, weight, self.bias, self.stride,
+                        self.padding, self.dilation, self.groups)
+        
+class Bottleneck(nn.Module):
+    expansion = 4
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None, dilation=1, conv=None, norm=None):
+        super(Bottleneck, self).__init__()
+        self.conv1 = conv(inplanes, planes, kernel_size=1, bias=False)
+        self.bn1 = norm(planes)
+        self.conv2 = conv(planes, planes, kernel_size=3, stride=stride,
+                          dilation=dilation, padding=dilation, bias=False)
+        self.bn2 = norm(planes)
+        self.conv3 = conv(planes, planes * self.expansion, kernel_size=1, bias=False)
+        self.bn3 = norm(planes * self.expansion)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+    
+    
 class MSDeformAttnFunction(Function):
     @staticmethod
     def forward(ctx, value, value_spatial_shapes, value_level_start_index, sampling_locations, attention_weights, im2col_step):
@@ -484,23 +573,38 @@ class MSDeformAttnTransformerEncoder(nn.Module):
 
 
 class Mask2Former(nn.Module):
-    def __init__(self):
+    def __init__(self, backbone, num_classes, pretrained, num_groups=None, weight_std=False, **kwargs):
+
         super(Mask2Former,self).__init__()
-        # small swin tramsformer
-        self.backbone = Swin_transformer(
-            patch_size = 4,
-            window_size = 8,
-            merge_size = 2,
-            model_dim =96,
-            num_layers_in_stage = [2,2,6,2]
-        )
+        self.num_classes = num_classes
+        self.backbone_name = backbone
+        
+        if backbone == 'resnet50':
+            self.backbone = resnet50(num_classes = self.num_classes, pretrained=pretrained, num_groups=num_groups, weight_std=weight_std, **kwargs)
+
+        elif backbone == 'resnet101':
+            self.backbone = resnet101(num_classes = self.num_classes, pretrained=pretrained, num_groups=num_groups, weight_std=weight_std, **kwargs)
+
+        elif backbone == 'swin':
+            self.backbone = Swin_transformer(
+                patch_size = 4,
+                window_size = 8,
+                merge_size = 2,
+                model_dim =96,
+                num_layers_in_stage = [2,2,6,2]
+            )
+        else:
+            raise ValueError(f"Unknown backbone: {backbone}")
+        
+        use_resnet = backbone in ['resnet50', 'resnet101', 'resnet152']
+        
         ## Pixel Decoder configuration
         pixel_decoder_config = {}
         pixel_decoder_config['input_shape'] = {}
-        pixel_decoder_config['input_shape']['res2'] = ShapeSpec(channels=96, height=None, width=None, stride=4)
-        pixel_decoder_config['input_shape']['res3'] = ShapeSpec(channels=192, height=None, width=None, stride=8)
-        pixel_decoder_config['input_shape']['res4'] = ShapeSpec(channels=384, height=None, width=None, stride=16)
-        pixel_decoder_config['input_shape']['res5'] = ShapeSpec(channels=768, height=None, width=None, stride=32)
+        pixel_decoder_config['input_shape']['res2'] = ShapeSpec(channels=256, height=None, width=None, stride=4)
+        pixel_decoder_config['input_shape']['res3'] = ShapeSpec(channels=512, height=None, width=None, stride=8)
+        pixel_decoder_config['input_shape']['res4'] = ShapeSpec(channels=1024, height=None, width=None, stride=16)
+        pixel_decoder_config['input_shape']['res5'] = ShapeSpec(channels=2048, height=None, width=None, stride=16)
 
         pixel_decoder_config['transformer_dropout'] = 0.0
         pixel_decoder_config['transformer_nheads'] = 8
@@ -524,7 +628,7 @@ class Mask2Former(nn.Module):
             transformer_in_features = pixel_decoder_config['transformer_in_features'],
             common_stride = pixel_decoder_config['common_stride'])
         transformer_decoder_config = {}
-        transformer_decoder_config['n_class'] = 10
+        transformer_decoder_config['n_class'] = self.num_classes
         transformer_decoder_config['L'] = 3
         transformer_decoder_config['num_query'] = 100
         transformer_decoder_config['num_features'] = 3
@@ -539,12 +643,19 @@ class Mask2Former(nn.Module):
             num_heads = transformer_decoder_config['num_heads']
         )
 
+    def forward(self, imgs):
+        features_dict = self.backbone(imgs)
+        
+        use_resnet = self.backbone_name in ['resnet50', 'resnet101', 'resnet152']
 
-
-    def forward(self,imgs):
-        features = self.backbone(imgs)
+        if use_resnet:
+            # ResNet output: {res2, res3, res4, res5} - keep as dict for pixel_decoder
+            features = features_dict
+        else:
+            # Swin output - need to handle accordingly
+            features = features_dict
+        
         mask_features, transformer_encoder_features, multi_scale_features = self.pixel_decoder.forward_features(features)
-
 
         out = self.transformer_decoder(multi_scale_features, mask_features)
 
@@ -555,3 +666,167 @@ class Mask2Former(nn.Module):
             align_corners=False,
         )
         return mask_pred_results
+    
+class ResNet(nn.Module):
+
+    def __init__(self, block, layers, num_classes, num_groups=None, weight_std=False, beta=False, **kwargs):
+        if 'embedding_size' in kwargs:
+            self.embedding_size = kwargs['embedding_size']
+        else:
+            self.embedding_size = 21  # From WJM's code
+        if 'n_layer' in kwargs:
+            self.n_layer = kwargs['n_layer']
+        else:
+            self.n_layer = 12
+        if 'n_skip_l' in kwargs:
+            self.n_skip_l = kwargs['n_skip_l']
+        else:
+            self.n_skip_l = 1
+
+        self.inplanes = 64
+        self.norm = lambda planes, momentum=0.05: nn.BatchNorm2d(planes,
+                                                                 momentum=momentum) if num_groups is None else nn.GroupNorm(
+            num_groups, planes)
+        self.conv = Conv2d if weight_std else nn.Conv2d
+
+        super(ResNet, self).__init__()
+        if not beta:
+            self.conv1 = self.conv(3, 64, kernel_size=7, stride=2, padding=3,
+                                   bias=False)
+        else:
+            self.conv1 = nn.Sequential(
+                self.conv(3, 64, 3, stride=2, padding=1, bias=False),
+                self.conv(64, 64, 3, stride=1, padding=1, bias=False),
+                self.conv(64, 64, 3, stride=1, padding=1, bias=False))
+        self.bn1 = self.norm(64)
+        self.relu = nn.ReLU(inplace=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=2 , multi=[1,2,4])
+        # self.upsample = nn.Conv2d(in_channels=num_classes, out_channels=num_classes, kernel_size=2, stride=1, padding=1,dilation=2)
+
+        for m in self.modules():
+            if isinstance(m, self.conv):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))
+            elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.GroupNorm):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+    def _make_layer(self, block, planes, blocks, stride=1, dilation=1 , multi=[1,1,1]):
+        downsample = None
+        if stride != 1 or dilation != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                self.conv(self.inplanes, planes * block.expansion,
+                          kernel_size=1, stride=stride, dilation=(dilation * multi[0]), bias=False),
+                self.norm(planes * block.expansion),
+            )
+
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample, dilation=(dilation * multi[0]), conv=self.conv, norm=self.norm))
+        self.inplanes = planes * block.expansion
+
+        if (multi != [1, 1, 1]) and (blocks == len(multi)):
+            print(f"multi grid !!! : {multi} ")
+            for i in range(1, blocks):
+                layers.append(
+                    block(self.inplanes, planes, dilation=dilation * multi[i], conv=self.conv, norm=self.norm))
+        else:
+            for i in range(1, blocks):
+                layers.append(block(self.inplanes, planes, dilation=dilation, conv=self.conv, norm=self.norm))
+
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.maxpool(x)
+
+        res2 = self.layer1(x)  # block1
+        res3 = self.layer2(res2)  # block2
+        res4 = self.layer3(res3)  # block3
+        res5 = self.layer4(res4)  # block4
+
+        return {
+            'res2': res2,
+            'res3': res3,
+            'res4': res4,
+            'res5': res5,
+        }
+
+def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
+    """Constructs a ResNet-50 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+    """model = ResNet(Bottleneck, [3, 4, 6, 3], **kwargs)
+
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
+    return model"""
+    if pretrained:
+        print("Pretrained!!")
+        model_dict = model.state_dict()
+        if num_groups and weight_std:
+            print("1")
+            pretrained_dict = torch.load('data/R-101-GN-WS.pth.tar')
+            overlap_dict = {k[7:]: v for k, v in pretrained_dict.items() if k[7:] in model_dict}
+            assert len(overlap_dict) == 312
+        elif not num_groups and not weight_std:
+            # print("2")
+            pretrained_dict = model_zoo.load_url(model_urls['resnet50'])
+            overlap_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        else:
+            print("3")
+            raise ValueError('Currently only support BN or GN+WS')
+        model_dict.update(overlap_dict)
+        model.load_state_dict(model_dict)
+    else:
+        print("Not Pretrained!!")
+
+    return model
+
+
+def resnet101(pretrained=False, num_groups=None, weight_std=False, **kwargs):
+    """Constructs a ResNet-101 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNet(Bottleneck, [3, 4, 23, 3], num_groups=num_groups, weight_std=weight_std, **kwargs)
+    if pretrained:
+        print("0")
+        model_dict = model.state_dict()
+        if num_groups and weight_std:
+            print("1")
+            pretrained_dict = torch.load('data/R-101-GN-WS.pth.tar')
+            overlap_dict = {k[7:]: v for k, v in pretrained_dict.items() if k[7:] in model_dict}
+            assert len(overlap_dict) == 312
+        elif not num_groups and not weight_std:
+            print("2")
+            pretrained_dict = model_zoo.load_url(model_urls['resnet101'])
+            overlap_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}
+        else:
+            print("3")
+            raise ValueError('Currently only support BN or GN+WS')
+        model_dict.update(overlap_dict)
+        model.load_state_dict(model_dict)
+    return model
+
+
+def resnet152(pretrained=False, **kwargs):
+    """Constructs a ResNet-152 model.
+
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+    """
+    model = ResNet(Bottleneck, [3, 8, 36, 3], **kwargs)
+    if pretrained:
+        model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
+    return model

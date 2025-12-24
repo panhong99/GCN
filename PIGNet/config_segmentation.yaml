@@ -15,9 +15,9 @@ infer: True
 n_layer: 12
 n_skip_l: 3
 embedding_size: 21
-batch_size: 16
-epochs: 50
-crop_size: 513
+batch_size: 8
+epochs: 100
+crop_size: 512
 groups: null
 base_lr: 0.007
 last_mult: 1.0

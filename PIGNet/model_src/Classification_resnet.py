@@ -314,6 +314,7 @@ class ResNet(nn.Module):
         #print("x output ", x.size())
         x = self.linear(x)
 
+        layers_output = [t.detach().cpu() for t in layer_outputs]
         # for idx,model in enumerate(layer_outputs):
         #     print(f"{idx} model {model.size()}")
 
