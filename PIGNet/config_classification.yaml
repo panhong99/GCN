@@ -6,7 +6,7 @@ model: ""
 exp: "bn_lr7e-3"
 gpu: 0 
 backbone: "resnet101"
-dataset: "imagenet"
+dataset: "CIFAR-10"
 model_type: "scratch"
 model_number: 1
 workers: 4
