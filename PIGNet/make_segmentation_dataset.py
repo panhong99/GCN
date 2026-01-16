@@ -50,13 +50,15 @@ def get_dataset(config):
                                                 train=config.train, crop_size=config.crop_size,
                                                 process=config.infer_params.process_type, process_value=config.factor,
                                                 overlap_percentage=config.factor,
-                                                pattern_repeat_count=config.factor)
+                                                pattern_repeat_count=config.factor,
+                                                MI = config.MI)
             else:
                 dataset = VOCSegmentation('/home/hail/pan/GCN/PIGNet/data/VOCdevkit',
                                                 train=config.train, crop_size=config.crop_size,
                                                 process=None, process_value=config.factor,
                                                 overlap_percentage=config.factor,
-                                                pattern_repeat_count=config.factor)
+                                                pattern_repeat_count=config.factor,
+                                                MI=config.MI)
 
     elif config.dataset == 'cityscape':
 
@@ -76,7 +78,8 @@ def get_dataset(config):
                                           train=config.train, crop_size=config.crop_size,
                                           process=config.infer_params.process_type, process_value=config.factor,
                                           overlap_percentage=config.factor,
-                                          pattern_repeat_count=config.factor)
+                                          pattern_repeat_count=config.factor,
+                                          MI = config.MI)
             else:
                 dataset = Cityscapes('/home/hail/pan/GCN/PIGNet/data/cityscape',
                                           train=config.train, crop_size=config.crop_size,

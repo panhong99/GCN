@@ -124,11 +124,6 @@ def get_model(config, dataset):
                         resized_posemb = utils_classification.resize_pos_embed(model.pos_embed , 14 , 2)
                         model.pos_embed = torch.nn.Parameter(resized_posemb)
 
-            # elif config.model == 'swin':
-            #     model = torchvision.models.swin_t(weights=torchvision.models.Swin_T_Weights.DEFAULT)
-            # elif config.model == 'mobile':
-            #     model = mobilevit_v3()
-
     else:
 
             raise ValueError('Unknown backbone: {}'.format(config.backbone))

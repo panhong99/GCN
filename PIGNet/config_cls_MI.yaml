@@ -1,4 +1,5 @@
 mode: "infer"
+MI : True
 
 # shared setting
 factor: ""
@@ -6,7 +7,7 @@ model: ""
 exp: "bn_lr7e-3"
 gpu: 0 
 backbone: "resnet101"
-dataset: "CIFAR-10"
+dataset: "imagenet"
 model_type: "pretrained"
 model_number: 1
 workers: 4
@@ -14,8 +15,8 @@ resume: null
 infer: True
 n_layer: 12
 n_skip_l: 3
-embedding_size: 256
-batch_size: 16
+embedding_size: 256 
+batch_size: 50
 epochs: 50
 crop_size: 513
 groups: null

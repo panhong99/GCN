@@ -117,8 +117,7 @@ class blockSAGEsq(nn.Module):
         x = F.gelu(x)
 
         return x, edge_index
-
-
+    
 class SPP(nn.Module):
 
     def __init__(self, C, embedding_size, conv=nn.Conv2d, norm=nn.BatchNorm2d, momentum=0.0003, mult=1):
@@ -154,7 +153,7 @@ class SPP(nn.Module):
         x2 = self.aspp2(x)
         x2 = self.aspp2_bn(x2)
         x2 = self.gelu(x2)
-        #
+    
         x3 = self.aspp3(x)
         x3 = self.aspp3_bn(x3)
         x3 = self.gelu(x3)
@@ -432,7 +431,6 @@ class ResNet(nn.Module):
         size = (x.shape[2], x.shape[3])
         backbone_layers_output = []
 
-
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -458,7 +456,7 @@ class ResNet(nn.Module):
 
         return x, gsp_layers_outputs, backbone_layers_output #return_gsp_output
         # return x
-    
+
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.
 

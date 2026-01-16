@@ -87,8 +87,15 @@ def model_size(model):
     return total_size
 
 def make_batch(samples, batch_size, feature_shape):
-    inputs = [sample[0] for sample in samples]
-    labels = [sample[1] for sample in samples]
+    # None 샘플 필터링: inputs와 labels가 모두 None이 아닌 샘플만 사용
+    valid_samples = [s for s in samples if s[0] is not None and s[1] is not None]
+    
+    # 모든 샘플이 None이면 None 반환 (DataLoader에서 처리)
+    if len(valid_samples) == 0:
+        return None, None
+    
+    inputs = [sample[0] for sample in valid_samples]
+    labels = [sample[1] for sample in valid_samples]
 
     """
     print(inputs[0].shape)
@@ -101,9 +108,9 @@ def make_batch(samples, batch_size, feature_shape):
     print(padded_labels.shape)
     """
 
-    if len(samples) < batch_size:
+    if len(valid_samples) < batch_size:
 
-        num_padding = batch_size - len(samples)
+        num_padding = batch_size - len(valid_samples)
         padding_tensor = torch.zeros(((num_padding,)+tuple(inputs[0].shape[:])))
         padded_inputs = torch.cat([torch.stack(inputs), padding_tensor], dim=0)
 
@@ -112,3 +119,6 @@ def make_batch(samples, batch_size, feature_shape):
     else:
 
         return [torch.stack(inputs), torch.stack(labels)]
+
+
+    

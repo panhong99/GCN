@@ -42,6 +42,9 @@ def inter_and_union(pred, mask, num_class):
   mask = np.asarray(mask, dtype=np.uint8).copy()
 
   # 255 -> 0
+  
+  # 이게 아마 range가 0-255니까 +1을 하면 padding값이 0이 됨
+  # 1이 배경, 2가 비행기 뭐 이런식으로 변경
   pred += 1
   mask += 1
   pred = pred * (mask > 0)
@@ -54,7 +57,7 @@ def inter_and_union(pred, mask, num_class):
 
   return (area_inter, area_union)
 
-def preprocess(image, mask, color_mask, flip=False , crop=None, train = False):
+def preprocess(image, mask, color_mask, flip=False , crop=None, train = False, MI = False):
 # def preprocess(image, mask , process_value, process, flip=False , crop=None):
 
   if flip:
@@ -95,6 +98,9 @@ def preprocess(image, mask, color_mask, flip=False , crop=None, train = False):
   mask = torch.LongTensor(mask.astype(np.int64))
 
   if train:
+    return image, mask
+
+  elif train == False and MI == True:
     return image, mask
 
   else:

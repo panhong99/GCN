@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import torch.nn.functional as F
 from scipy.io import loadmat
+import pickle
 from torch.autograd import Variable
 from tqdm.auto import tqdm
 from torchvision import transforms
@@ -94,8 +95,11 @@ def main(config):
     # 디버깅 모드 감지
     is_debug = (hasattr(sys, 'gettrace') and sys.gettrace()) or os.getenv('DEBUG', '') == '1'
     
-    if is_debug or config.mode == "infer":
-        print("Debug mode or infer mode detected -> skipping distributed setup, using single GPU")
+    # 분산 학습 환경변수 확인
+    has_world_size = 'WORLD_SIZE' in os.environ
+    
+    if is_debug or config.mode == "infer" or not has_world_size:
+        print("Single GPU mode detected -> skipping distributed setup")
         local_rank = 0
         world_size = 1
         device = f"cuda:{config.gpu}" if torch.cuda.is_available() else "cpu"
@@ -141,7 +145,12 @@ def main(config):
     # assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
 
-    model_fname = f'model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
+    if config.backbone == "resnet50":
+        num=50
+    elif config.backbone == "resnet101":
+        num=101
+
+    model_fname = f'model_{num}/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
 
     if config.mode == "train":
         dataset, valid_dataset = get_dataset(config)
@@ -328,10 +337,13 @@ def main(config):
                 best_loss = loss_avg
                 patience = 0
 
+                # DDP일 때와 단일 GPU일 때 다르게 처리
+                state_dict = model.module.state_dict() if is_distributed else model.state_dict()
+                
+                os.makedirs(os.path.dirname(model_fname), exist_ok=True)
                 torch.save({
                     'epoch': epoch + 1,
-                    # 'state_dict': model.state_dict(),
-                    'state_dict': model.module.state_dict(),
+                    'state_dict': state_dict,
                     'optimizer': optimizer.state_dict(),
                 }, model_fname)
                 print("model save complete!!!")
@@ -473,10 +485,10 @@ def main(config):
         model = model.to(device)
         model.eval()
 
-        checkpoint = torch.load(f'/home/hail/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
+        checkpoint = torch.load(f'/home/hail/pan/GCN/PIGNet/model_{num}/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
                                 , map_location = device)
 
-        state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+        state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         print(model_fname)
         model.load_state_dict(state_dict)
         
@@ -496,9 +508,14 @@ def main(config):
             pin_memory=True, num_workers=config.workers,
             collate_fn=lambda samples: utils_segmentation.make_batch(samples, config.batch_size, feature_shape))
 
+        # 이미지 데이터를 메모리에 저장할 리스트
+        pred_img = []
+        iou_list = []
+        img_name = []
+
         for i in tqdm(range(len(dataset))):
 
-            inputs, target, gt_image, color_target, H, W = dataset[i]
+            inputs, target, _, color_target, _, _ = dataset[i]
             if inputs==None:
                 continue
 
@@ -508,131 +525,79 @@ def main(config):
                 outputs = model(inputs.unsqueeze(0))
 
             else:
-                outputs, layers_output, backbone_layers_output = model(inputs.unsqueeze(0))
+                outputs, _, _ = model(inputs.unsqueeze(0))
 
             _, pred = torch.max(outputs, 1)
             pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
             mask = target.numpy().astype(np.uint8)
             
             # search padding location
-            pred = pred[: pred.shape[0] - H, : pred.shape[1] - W]
-            mask = mask[: mask.shape[0] - H, : mask.shape[1] - W]
+            # pred = pred[: pred.shape[0] - H, : pred.shape[1] - W]
+            # mask = mask[: mask.shape[0] - H, : mask.shape[1] - W]
 
             if config.dataset == "cityscape":
                 pad_location = (mask == 255)
                 pred[pad_location] = 255
-                        
-            imname = dataset.masks[i].split('/')[-1]
-            mask_pred = Image.fromarray(pred)
-            mask_pred.putpalette(cmap)
 
             inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
+            iou_score = inter.sum() / union.sum()
             
-            if (inter.sum() / union.sum()) > 0.1:
+            if config.dataset == "pascal":
+                thredhold = 0.1
+            elif config.dataset == "cityscape":
+                thredhold = 0.1
             
-                if config.dataset == 'pascal':
-                    path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
-                    path_GT = f"/home/hail/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
-                    path_color_mask = f"/home/hail/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
-
-                    if os.path.exists(path):
-                        mask_pred.save(os.path.join(path, imname))
-                    else: 
-                        os.makedirs(path)
-                        mask_pred.save(os.path.join(path, imname))
-
-                    if os.path.exists(path_GT):    
-                        # gt_image = utils_segmentation.tensor_to_image(gt_image)
-                        gt_image.save(os.path.join(path_GT, imname))
-                    else:
-                        os.makedirs(path_GT)
-                        # gt_image = utils_segmentation.tensor_to_image(gt_image)
-                        gt_image.save(os.path.join(path_GT, imname))
-
-                    if os.path.exists(path_color_mask):    
-                        # color_target = utils_segmentation.tensor_to_image(color_target)
-                        color_target.save(os.path.join(path_color_mask, imname))
-                    else:
-                        os.makedirs(path_color_mask)
-                        # color_target = utils_segmentation.tensor_to_image(color_target)
-                        color_target.save(os.path.join(path_color_mask, imname))
-                        
-                elif config.dataset == 'cityscape':
-                    path = f'/home/hail/pan/GCN/PIGNet/pred_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
-                    path_GT = f"/home/hail/pan/GCN/PIGNet/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
-                    path_color_mask = f"/home/hail/pan/GCN/PIGNet/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}"
-
-                    if os.path.exists(path):
-                        mask_pred.save(os.path.join(path, imname))
-                    else: 
-                        os.makedirs(path)
-                        mask_pred.save(os.path.join(path, imname))
-                    
-                    if os.path.exists(path_GT):
-                        # gt_image = utils_segmentation.tensor_to_image(gt_image)
-                        gt_image.save(os.path.join(path_GT, imname))
-                    else: 
-                        os.makedirs(path_GT)
-                        # gt_image = utils_segmentation.tensor_to_image(gt_image)
-                        gt_image.save(os.path.join(path_GT, imname))
-                        
-                    if os.path.exists(path_color_mask):    
-                        # color_target = utils_segmentation.tensor_to_image(color_target)
-                        color_target.save(os.path.join(path_color_mask, imname))
-                    else:
-                        os.makedirs(path_color_mask)
-                        # color_target = utils_segmentation.tensor_to_image(color_target)
-                        color_target.save(os.path.join(path_color_mask, imname))
+            if iou_score > thredhold:
+                # 각각 별도의 리스트에 저장
+                pred_img.append(pred)
+                iou_list.append(iou_score)
+                img_name.append(dataset.images[i].split('/')[-1])
                         
             inter_meter.update(inter)
             union_meter.update(union)
                                     
-        backbone_path = f"/home/hail/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/backbone_activity"
-        layers_path = f"/home/hail/pan/GCN/PIGNet/layers_activity/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}/layers_activity"
-        
-        if (config.infer_params.process_type == "zoom") and (config.factor == 1):
-
-            if config.model != "Mask2Former":
-
-                if os.path.exists(backbone_path):
-                    torch.save(backbone_layers_output, os.path.join(backbone_path, "backbone.pth"))                
-
-                else: # not exists(path)
-                    os.makedirs(backbone_path, exist_ok=True)
-                    torch.save(backbone_layers_output, os.path.join(backbone_path, "backbone.pth"))                
-                
-                if os.path.exists(layers_path):
-                    torch.save(backbone_layers_output, os.path.join(backbone_path, "backbone.pth"))                
-
-                else: # not exists(path)
-                    os.makedirs(layers_path, exist_ok=True)
-                    torch.save(layers_output, os.path.join(layers_path, "model_layers.pth"))                
-
-            else: # Mask2Former
-                pass
-
         print('eval: {0}/{1}'.format(i + 1, len(dataset)))
 
+        # 데이터를 하나의 딕셔너리로 통합 (모든 값을 CPU로 이동 및 stack)
+        output_data = {
+            'pred_img': np.stack([np.asarray(x, dtype=np.uint8) for x in pred_img]),
+            'iou': np.array([float(x.cpu()) if isinstance(x, torch.Tensor) else float(x) for x in iou_list]),
+            'img_name': np.array(img_name, dtype=object)
+        }
+        
+        # Pickle 파일로 저장 (단일 파일)
+        base_path = f'/home/hail/pan/GCN/PIGNet/infer_output'
+        os.makedirs(base_path, exist_ok=True)
+        
+        if config.factor == np.sqrt(0.1):
+            config.factor = 0.3
+        elif config.factor == np.sqrt(0.5):
+            config.factor = 0.7
+        elif config.factor == np.sqrt(2.75):
+            config.factor = 1.75
+        
+        pkl_path = f'{base_path}/{config.dataset}_{config.model}_{config.infer_params.process_type}_{config.factor}_number_{config.model_number}.pkl'
+        
+        with open(pkl_path, 'wb') as f:
+            pickle.dump(output_data, f)
+
         iou = inter_meter.sum / (union_meter.sum + 1e-10)
+
         for i, val in enumerate(iou):
             print('IoU {0}: {1:.2f}'.format(dataset.CLASSES[i], val * 100))
         print('Mean IoU: {0:.2f}'.format(iou.mean() * 100))
         return iou.mean() * 100
 
-if __name__ == "__main__":
-
-    # set_seed(42)
-    
+if __name__ == "__main__":    
     parser = argparse.ArgumentParser(description="Load configuration from config.yaml")
     parser.add_argument("--config", type = str, default = "/home/hail/pan/GCN/PIGNet/config_segmentation.yaml", help = "path to config.yaml")
-    cli_args = parser.parse_args()
-
+    args = parser.parse_args()
 
     try:
-        with open(cli_args.config, "r") as f:
+        with open(args.config, "r") as f:
             config_dict = yaml.safe_load(f)
     except FileNotFoundError:
-        print(f"Error config.yaml not found at {cli_args.config}")
+        print(f"Error config.yaml not found at {args.config}")
         exit()
     except Exception as e:
         print(f"Error parsing YAML file: {e}")
@@ -658,7 +623,12 @@ if __name__ == "__main__":
     elif config.mode == "infer":
         print("-- Starting Infer Mode --")
         
-        path = f"/home/hail/pan/GCN/PIGNet/model/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
+        if config.backbone == "resnet50":
+            num=50
+        elif config.backbone == "resnet101":
+            num=101
+                    
+        path = f"/home/hail/pan/GCN/PIGNet/model_{num}/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
                 
         try:
             model_list = sorted(os.listdir(path))
@@ -668,32 +638,20 @@ if __name__ == "__main__":
             print(f"[ERROR] Model directory not found at '{path}'")
             exit()
     
-        # zoom_factor = [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2] # zoom in, out value 양수면 줌 음수면 줌아웃
+        zoom_factor = [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2] # zoom in, out value 양수면 줌 음수면 줌아웃
 
-        # overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
+        overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
 
-        # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+        pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
 
-        # output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
-
-        # process_dict = {
-        #     "zoom" : zoom_factor , 
-        #     "overlap" : overlap_percentage ,
-        #     "repeat" : pattern_repeat_count
-        # }
-        
-        zoom_factor = [0.1] # zoom in, out value 양수면 줌 음수면 줌아웃
-
-        # overlap_percentage = [0.3] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-
-        # pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
-
-        output_dict = {model_name : {"zoom" : []} for model_name in model_list}
+        output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
         process_dict = {
             "zoom" : zoom_factor , 
+            "overlap" : overlap_percentage ,
+            "repeat" : pattern_repeat_count
         }
-        
+                
         for name in model_list:
             for process_key , factor_list in process_dict.items():
                 for factor_value in factor_list:
@@ -735,11 +693,11 @@ if __name__ == "__main__":
         
         df_wide.rename_axis(columns=None, inplace=True)
 
-        output_filename = f"output_wide_{config.model_number}_{config.model_type}_{config.dataset}.csv"
+        output_filename = f"output_{num}_{config.model_number}_{config.model_type}_{config.dataset}.csv"
         df_wide.to_csv(output_filename, index=False)
         
         print(f"\n[SUCCESS] Reshaped results saved to '{output_filename}'")
         print(df_wide)
 
     else:
-        print(f"[ERROR] Unknown mode: '{config.mode}'. Please set mode to 'train' or 'infer' in '{cli_args.config}'")
+        print(f"[ERROR] Unknown mode: '{config.mode}'. Please set mode to 'train' or 'infer' in '{args.config}'")

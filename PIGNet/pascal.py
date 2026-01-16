@@ -23,7 +23,7 @@ class VOCSegmentation(data.Dataset):
       'tv/monitor'
   ]
 
-  def __init__(self, root, train=True, transform=None, target_transform=None, download=False, crop_size=None , process=None ,process_value=None,overlap_percentage=None,pattern_repeat_count=None):
+  def __init__(self, root, train=True, transform=None, target_transform=None, download=False, crop_size=None , process=None ,process_value=None,overlap_percentage=None,pattern_repeat_count=None, MI=False):
     self.root = root
     _voc_root = os.path.join(self.root, 'VOC2012')
     _list_dir = os.path.join(_voc_root, 'ImageSets/Segmentation')
@@ -36,6 +36,7 @@ class VOCSegmentation(data.Dataset):
     self.overlap_percentage = overlap_percentage
     self.pattern_repeat_count = pattern_repeat_count
     self.dataset_name = "pascal"
+    self.MI = MI
     if download:
       self.download()
 
@@ -98,25 +99,39 @@ class VOCSegmentation(data.Dataset):
       _img, _target, _color_target = self.overlap(_img, _target,_color_target, next_img, next_target, next_color_target, self.overlap_percentage)
       
       if _img==None:
-        return None,None,None,None,None,None
+        if self.train == False and self.MI == True:
+          return None, None
+        else:
+          return None,None,None,None,None,None
 
     elif self.process == 'repeat':
       _img, _target, _color_target = self.repeat(_img, _target, _color_target, self.pattern_repeat_count)
       if _img==None:
-
-        return None,None,None,None,None,None
+        if self.train == False and self.MI == True:
+          return None, None
+        else:
+          return None,None,None,None,None,None
       
     else: # train
       _img, _target, _color_target = self.image_resizing(_img, _target, _color_target)
 
       if _img == None:
-        return None,None,None,None,None,None
+        if self.train == False and self.MI == True:
+          return None, None
+        else:
+          return None,None,None,None,None,None
     
     if self.train:  
       _img, _target = preprocess(_img, _target, _color_target,
                                 flip=True if self.train else False,
                                 crop=(self.crop_size, self.crop_size), 
                                 train=self.train)
+      
+    elif self.train == False and self.MI == True:
+      _img, _target = preprocess(_img, _target, _color_target,
+                                flip=False,
+                                crop=(self.crop_size, self.crop_size), 
+                                MI=self.MI)
     else:
       _img, _target, unnorm_image, _color_target, H, W = preprocess(_img, _target, _color_target,
                                 flip=True if self.train else False,
@@ -130,6 +145,9 @@ class VOCSegmentation(data.Dataset):
       _target = self.target_transform(_target)
     
     if self.train:
+      return _img, _target
+      
+    elif self.train == False and self.MI == True:
       return _img, _target
   
     else:

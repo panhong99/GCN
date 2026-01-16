@@ -57,7 +57,6 @@ def get_dataset(config):
                     transforms.ToTensor(),  # Convert image to tensor
                 ])
             else:
-
                 if config.infer_params.process_type == 'zoom':
                     # Define transformations
                     transform = transforms.Compose([
@@ -232,16 +231,46 @@ def get_dataset(config):
             raise ValueError('Unknown dataset: {}'.format(config.dataset))
     
     
-    
     dataset_loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=config.batch_size,
-        shuffle= True if config.mode == "train" else False            )
+        shuffle= True if config.mode == "train" else False)
 
     valid_dataset = torch.utils.data.DataLoader(
-            valid_dataset,
-            batch_size=1,
-            shuffle=False
+        valid_dataset,
+        batch_size=1,
+        shuffle=False
+        )
+
+    # 고정된 seed로 동일한 셔플 순서 보장 (MI가 True일 때만)
+    generator = None
+    worker_init_fn = None
+    if config.MI == True:
+        generator = torch.Generator()
+        generator.manual_seed(42)  # 고정된 seed
+        
+        # worker 초기화 함수 정의
+        def seed_worker(worker_id):
+            worker_seed = torch.initial_seed() % 2**32
+            np.random.seed(worker_seed)
+            import random
+            random.seed(worker_seed)
+        
+        worker_init_fn = seed_worker
+    
+    MI_dataset_loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=config.batch_size,
+        shuffle= True if config.MI == True else False,
+        generator=generator,
+        worker_init_fn=worker_init_fn
         )
     
-    return dataset , dataset_loader, valid_dataset
+    if config.MI and config.mode != "train":
+        return dataset , dataset_loader, MI_dataset_loader
+
+    elif not config.MI and config.mode != "train":
+        return dataset , dataset_loader, MI_dataset_loader
+
+    elif config.MI == None and config.mode == "train":
+        return dataset , dataset_loader, valid_dataset

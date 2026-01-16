@@ -275,6 +275,8 @@ def main(config):
                 correct = 0
                 total = 0
 
+                assert not valid_dataset.shuffle, "❌ ERROR: Validation dataset must not be shuffled! check make_classification_dataset line 237"
+                
                 for i, (inputs, labels) in enumerate(tqdm(valid_dataset)):
                     inputs = inputs.to(device)
                     labels = torch.tensor(labels).to(device)
