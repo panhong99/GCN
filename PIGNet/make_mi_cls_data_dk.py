@@ -170,7 +170,7 @@ if __name__ == "__main__":
         m_name = re.search(fr"classification_(.*?)_{config.backbone}", model_file)
         model_key = m_name.group(1) if m_name else ("vit" if "vit" in model_file else "unknown")
 
-        if model_key in ["vit", "PIGNet_classification"]:
+        if model_key in ["vit", "PIGNet_classification", "Resnet"]:
             continue
 
         print(f"Processing Model: {model_key}")

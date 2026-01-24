@@ -67,6 +67,8 @@ def main(config, model_file, model_path):
 
     checkpoint = torch.load(os.path.join(model_path, model_file), map_location=device)
     state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+    # state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
 
@@ -172,10 +174,9 @@ if __name__ == "__main__":
 
     # 가공 조건 및 이름 매핑
     process_dict = {
-        # "zoom": [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2],
-        # "overlap": [0, 0.1, 0.2, 0.3, 0.5],
-        # "repeat": [1, 3, 6, 9, 12]
-        "repeat": [1]
+        "zoom": [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2],
+        "overlap": [0, 0.1, 0.2, 0.3, 0.5],
+        "repeat": [1, 3, 6, 9, 12]
     }
 
     zoom_name_map = {0.1: "0.1", np.sqrt(0.1): "0.3", 0.5: "0.5", np.sqrt(0.5): "0.7", 

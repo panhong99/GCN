@@ -7,90 +7,6 @@ from PIL import Image
 import torch
 import numpy as np
 
-def cal_mi_same_diff(x_in, t_feat, y_gt):
-    '''
-    Information Plane을 위한 Same/Diff 주머니 기반 MI 계산
-    
-    Args:
-        x_in: (N, H, W) - 입력 이미지 (Discrete/VQ)
-        t_feat: (N, H, W) - 레이어 특징값 (Discrete/VQ)
-        y_gt: (N, H, W) - 정답 레이블 (Ground Truth)
-        
-    Returns:
-        results: Same/Diff 각각의 I(X;T)와 I(T;Y) 값
-    '''
-    N, H, W = y_gt.shape
-    eps = 1e-12
-
-    # 데이터를 모을 주머니 (Pair 수집)
-    # (기준점의 값, 비교대상점의 값) 형태로 저장
-    pair_xt_same, pair_ty_same = [], []
-    pair_xt_diff, pair_ty_diff = [], []
-
-    # 1. 모든 이미지와 모든 픽셀을 순회 (기준점 설정)
-    for n in range(N):
-        for r in range(H):
-            for c in range(W):
-                # 기준점의 정보
-                ref_y = y_gt[n, r, c]   # 기준점의 정답 클래스
-                ref_t = t_feat[n, r, c] # 기준점의 특징값
-                ref_x = x_in[n, r, c]   # 기준점의 입력값
-
-                # 이미지 내의 모든 다른 픽셀들과 비교
-                # (비효율적일 경우 랜덤 샘플링 가능)
-                for hr in range(H):
-                    for wc in range(W):
-                        comp_y = y_gt[n, hr, wc]
-                        comp_t = t_feat[n, hr, wc]
-                        comp_x = x_in[n, hr, wc]
-
-                        # --- 핵심: Same vs Diff 판정 ---
-                        if ref_y == comp_y: # 같은 클래스라면 (Same 주머니)
-                            # I(X;T)용 페어: 기준점X와 비교점T
-                            pair_xt_same.append([ref_x, comp_t])
-                            # I(T;Y)용 페어: 기준점T와 비교점Y
-                            pair_ty_same.append([ref_t, comp_y])
-                        else: # 다른 클래스라면 (Diff 주머니)
-                            pair_xt_diff.append([ref_x, comp_t])
-                            pair_ty_diff.append([ref_t, comp_y])
-
-    # 2. 모인 주머니 데이터를 기반으로 MI 계산 (함수화 추천)
-    def compute_mi_from_pairs(pairs):
-        pairs = np.array(pairs)
-        if len(pairs) == 0: return 0
-        
-        # H(A), H(B), H(A,B) 계산 로직
-        # 1D 변수 확률
-        _, counts_a = np.unique(pairs[:, 0], return_counts=True)
-        _, counts_b = np.unique(pairs[:, 1], return_counts=True)
-
-        # Joint 확률
-        _, counts_ab = np.unique(pairs, axis=0, return_counts=True)
-        
-        pa = counts_a / len(pairs)
-        pb = counts_b / len(pairs)
-        pab = counts_ab / len(pairs)
-        
-        h_a = -np.sum(pa * np.log2(pa + eps))
-        h_b = -np.sum(pb * np.log2(pb + eps))
-        h_ab = -np.sum(pab * np.log2(pab + eps))
-        
-        return h_a + h_b - h_ab
-
-    # 최종 MI 점수 도출
-    results = {
-        "same": {
-            "I_XT": compute_mi_from_pairs(pair_xt_same),
-            "I_TY": compute_mi_from_pairs(pair_ty_same)
-        },
-        "diff": {
-            "I_XT": compute_mi_from_pairs(pair_xt_diff),
-            "I_TY": compute_mi_from_pairs(pair_ty_diff)
-        }
-    }
-
-    return results
-
 def cal_mi_x_t(x, t):
     '''
     Calculate Pairwise Mutual Information and Spatial Distances.
@@ -193,6 +109,121 @@ def cal_mi_x_t(x, t):
 
     return mi_map, euc_map, man_map
 
+def cal_seg_mi_t_y(t, y):
+    N, H, W = t.shape
+    mi_map = np.full((H, W, H, W), np.nan)
+    euc_map = np.zeros((H, W, H, W))
+    man_map = np.zeros((H, W, H, W))
+    
+    eps = 1e-12
+    t_flat = t.reshape(N, -1)
+    y_flat = y.reshape(N, -1)
+    num_pixels = H * W
+    
+    h_y_all = np.zeros(num_pixels)
+    for i in range(num_pixels):
+        y_vec = y_flat[:, i]
+       
+        valid_mask = (y_vec > 0)
+        y_valid = y_vec[valid_mask]
+        n_v = len(y_valid)
+        
+        _, counts = np.unique(y_valid, return_counts=True)
+        p = counts / n_v
+        h_y_all[i] = -np.sum(p * np.log2(p + eps))
+
+    for i_x in range(num_pixels): # 기준점 (Y)
+        hx, wx = divmod(i_x, W)
+        y_vec = y_flat[:, i_x]
+        
+        # 기준점 i_x가 객체인 샘플들의 마스크 생성
+        valid_mask = (y_vec > 0)
+        n_valid = np.sum(valid_mask)
+                    
+        h_y_val = h_y_all[i_x]
+        y_valid = y_vec[valid_mask]
+
+        for i_t in range(num_pixels): # 비교점 (T)
+            ht, wt = divmod(i_t, W)
+            t_vec = t_flat[:, i_t]
+            t_valid = t_vec[valid_mask] # Y가 객체인 동일 샘플만 추출
+            
+            # --- [H(T_valid) 직접 계산] ---
+            _, counts_t = np.unique(t_valid, return_counts=True)
+            p_t = counts_t / n_valid
+            h_t_v = -np.sum(p_t * np.log2(p_t + eps))
+
+            # --- [H(T_valid, Y_valid) 직접 계산] ---
+            stack_ty = np.vstack((t_valid, y_valid))
+            _, counts_ty = np.unique(stack_ty, axis=1, return_counts=True)
+            p_ty = counts_ty / n_valid
+            h_ty = -np.sum(p_ty * np.log2(p_ty + eps))
+            
+            # --- [MI Calculation] ---
+            mi_val = h_t_v + h_y_val - h_ty
+            mi_map[ht, wt, hx, wx] = max(0, mi_val)
+            
+            # --- [Spatial Distance] ---
+            diff_h, diff_w = ht - hx, wt - wx
+            euc_map[ht, wt, hx, wx] = np.sqrt(diff_h**2 + diff_w**2)
+            man_map[ht, wt, hx, wx] = np.abs(diff_h) + np.abs(diff_w)
+
+    return mi_map, euc_map, man_map
+
+def check_seg(y):
+    '''
+    각 픽셀 쌍에 대해 모든 샘플에서 클래스 값이 같은지 체크.
+    픽셀 위치 간 클래스 매칭 여부를 불리언 타입으로 저장.
+    
+    Args:
+        y_gt: (N, H, W) - Discrete Ground Truth 클래스 맵
+        
+    Returns:
+        match_map: (num_pixels, num_pixels, N) - 각 픽셀 쌍(i, j)에 대해 
+                   모든 샘플에서 클래스 값이 같은지 여부 (bool)
+    '''
+    N, H, W = y.shape
+    num_pixels = H * W
+    
+    # 1. Flatten spatial dims for easier iteration
+    y_flat = y.reshape(N, -1)  # (N, H*W)
+    
+    # 2. 미리 거대한 '불리언 지도'를 0(False)으로 채워둠
+    # (num_pixels, num_pixels, N) 순서가 나중에 연산하기 더 빠를 수 있음
+    match_map = np.zeros((num_pixels, num_pixels, N), dtype=bool)
+    
+    # 3. 메모리 사용량 체크
+    memory_size_gb = match_map.nbytes / (1024 ** 3)
+    print(f"match_map 메모리 사용량: {memory_size_gb:.4f} GB")
+    print(f"match_map shape: {match_map.shape}")
+    
+    # 4. 2중 루프로 최적화
+    for i in range(num_pixels):
+        a = y_flat[:, i]  # 기준 픽셀 (N,)
+        
+        # j는 i부터 시작 (자기 자신 포함 + 중복 계산 방지)
+        for j in range(i, num_pixels):
+            b = y_flat[:, j]  # 비교 픽셀 (N,)
+            
+            # 한 번의 연산으로 N개 샘플 결과 도출
+            res = (a == b)
+            
+            # 양쪽 방향에 모두 기록 (대칭성 유지)
+            match_map[i, j, :] = res
+            match_map[j, i, :] = res
+    
+    # 5. 최종 메모리 사용량 체크
+    total_memory_gb = match_map.nbytes / (1024 ** 3)
+    print(f"최종 match_map 메모리 사용량: {total_memory_gb:.4f} GB")
+    
+    # # 6. pkl 파일로 저장 (주석 처리)
+    # output_path = "match_map.pkl"
+    # with open(output_path, 'wb') as f:
+    #     pickle.dump(match_map, f)
+    # print(f"match_map saved to {output_path}")
+    
+    return match_map
+
 def cal_mi_t_y(t, y):
     '''
     Calculate Mutual Information I(T; Y) per pixel.
@@ -246,7 +277,7 @@ def cal_mi_t_y(t, y):
             
     return mi_map
 
-def resize_gt(gt_masks, target_size=33, num_classes=21, ignore_index=255):
+def resize_gt(gt_masks, target_size=33, num_classes=21):
 
     B, H, W = gt_masks.shape    
     gt_resized = np.zeros((B, target_size, target_size), dtype=np.uint8)
@@ -256,28 +287,17 @@ def resize_gt(gt_masks, target_size=33, num_classes=21, ignore_index=255):
         for i in range(target_size):
             for j in range(target_size):
 
-                # 1. 15x15(혹은 해당 스케일) 영역 추출
+                # 1. 지정된 범위 내 영역 추출
                 r_s, r_e = int(i * scale_h), int((i + 1) * scale_h)
                 c_s, c_e = int(j * scale_w), int((j + 1) * scale_w)
                 region = gt_masks[b, r_s:r_e, c_s:c_e].flatten()
                 
-                # 2. 패딩(255) 제거
-                valid = region[region != ignore_index]
-                if len(valid) == 0:
-                    gt_resized[b, i, j] = ignore_index
-                    continue
-
-                # 3. 객체 픽셀(1~20)만 필터링
-                obj_pixels = valid[valid > 0]
+                # 2. 255를 0으로 변경
+                region = np.where(region == 255, 0, region).astype(int)
                 
-                if len(obj_pixels) > 0:
-                    # [핵심] 영역 내에 객체가 하나라도 있다면 배경(0)은 무시하고 
-                    # 객체들 중에서 가장 많이 나타난 클래스를 선택
-                    counts = np.bincount(obj_pixels.astype(int), minlength=num_classes)
-                    gt_resized[b, i, j] = np.argmax(counts)
-                else:
-                    # 객체가 하나도 없을 때만 배경(0)으로 지정
-                    gt_resized[b, i, j] = 0
+                # 3. 영역 내에서 가장 많이 나타나는 클래스 선택 (최빈값)
+                unique, counts = np.unique(region, return_counts=True)
+                gt_resized[b, i, j] = unique[np.argmax(counts)]
                     
     return gt_resized
 
@@ -287,7 +307,7 @@ if __name__ == "__main__":  # segmentation
     folder_name = ["PIGNet_GSPonly", "ASPP"]
     
     # seg
-    seg_file_path = f"/home/hail/pan/HDD/MI_dataset/pascal/resnet101/pretrained/ASPP/zoom/0.1"
+    seg_file_path = f"/home/hail/pan/HDD/MI_dataset/pascal/resnet101/pretrained/PIGNet_GSPonly/zoom/1"
     seg_datas = os.listdir(seg_file_path)
     
     with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
@@ -297,125 +317,100 @@ if __name__ == "__main__":  # segmentation
         x_in = pickle.load(f)
 
     # Pascal: 20 classes + 1 background = 21, ignore_index=255
-    y_in = resize_gt(y_in, target_size=x_in.shape[1], num_classes=21, ignore_index=255)
-
+    y_in = resize_gt(y_in, target_size=x_in.shape[1], num_classes=21)
+    # y_cls = check_cls(y_in)
+ 
     t_in = []
     for i in range(1, 5):
         with open(os.path.join(seg_file_path, f'layer_{i}.pkl'), 'rb') as f:
             t_in.append(pickle.load(f))        
-
-    # 이거 y는 원래 사이즈에 맞게 label 되어있을텐데 그걸 같은 클래스에 있는거랑 다른 클래스에 있는거랑 구분해서 
-    # MI가 얼마나 크게 되고 얼마나 자근지 확인해야함
-    # 또한 distance도 같이 한번 비교해봐야할 수 있음
-    # 그래야 같은 클래스에 있을때 전반적으로 MI가 높은지 확인하고 
-    # 그 중에서도 CNN계열은 distance가 가까울수록 MI가 더 높은지 확인 가능 (locality)
-    # 반면에 GSP?를 쓰는 경우에는 둘다 가깝든 멀든 좋게 나타나는지 확인해볼 수 있음
     
     H_dim, W_dim = x_in.shape[1], x_in.shape[2]
     
     # I(X;T)
-    distance_l = []
-    mi_l = []
+    distance_xt = []
+    mi_xt = []
 
     # I(T;Y)
-    distance_m = []
-    mi_m = []
+    distance_ty = []
+    mi_ty = []
 
     for layer_idx, t_layer in enumerate(t_in):
 
         # I(X;T)
-        mi_result, euc_result, man_result = cal_mi_x_t(x_in, t_layer)
+        mi_result_xt, euc_result_xt, man_result_xt = cal_mi_x_t(x_in, t_layer)
         
         # I(T;Y)
-        mi_t_y_result = cal_mi_same_diff(x_in, t_layer, y_in)
-    
-        # I(X;T) 관련 데이터
-        distance_x_t = []
-        mi_x_t = []
+        # segmentation에서는 y가 (N, H, W) 형태로 공간정보를 가지므로
+        # cal_mi_x_t를 사용하여 T와 Y 간의 모든 픽셀 쌍에 대한 MI 계산 가능
+        mi_result_ty, euc_result_ty, man_result_ty = cal_seg_mi_t_y(t_layer, y_in)
         
-        # 동일한 cls
-        distance_t_y_same = []
-        mi_t_y_same = []
+        # I(X;T) 관련 데이터 (현재 사용하지 않음)
+        distance_xt = []
+        mi_xt = []
         
-        # 다른 cls
-        distance_t_y_diff = []
-        mi_t_y_diff = []
+        distance_ty = []
+        mi_ty = []
         
         for hx in range(H_dim):
             for wx in range(W_dim):
-                mi_flat_x_t = mi_result[:,:,hx,wx].flatten()
-                euc_flat_x_t = euc_result[:,:,hx,wx].flatten()
-                distance_x_t.extend(euc_flat_x_t.tolist())
-                mi_x_t.extend(mi_flat_x_t.tolist())
+                # 기준 픽셀 (hx, wx)와 모든 다른 픽셀 (ht, wt) 간의 I(X;T)와 거리
+                mi_flat_xt = mi_result_xt[:,:,hx,wx].flatten()  # (H*W,) - 각 원소는 (ht,wt)와 (hx,wx) 간의 I(X;T)
+                euc_flat_xt = euc_result_xt[:,:,hx,wx].flatten()  # (H*W,) - 거리
 
-        y_class = y_in[0]  # (H_dim, W_dim)
-        
-        # 4D boolean mask: ht,wt 위치 클래스 == hx,wx 위치 클래스
-        same_class_mask = (y_class[:, :, np.newaxis, np.newaxis] == 
-                          y_class[np.newaxis, np.newaxis, :, :])  # (H_dim, W_dim, H_dim, W_dim)
-        
-        # 4D 배열을 1D로 flatten
-        mi_flat = mi_result_ty.reshape(-1)
-        dist_flat = euc_result_ty.reshape(-1)
-        same_mask_flat = same_class_mask.reshape(-1)
-        
-        # boolean indexing으로 같은/다른 클래스 분리
-        distance_t_y_same = dist_flat[same_mask_flat].tolist()
-        mi_t_y_same = mi_flat[same_mask_flat].tolist()
-
-        distance_t_y_diff = dist_flat[~same_mask_flat].tolist()
-        mi_t_y_diff = mi_flat[~same_mask_flat].tolist()
+                mi_flat_ty = mi_result_ty[:,:,hx,wx].flatten()  # (H*W,) - 각 원소는 (ht,wt)와 (hx,wx) 간의 I(X;T)
+                euc_flat_ty = euc_result_ty[:,:,hx,wx].flatten()  # (H*W,) - 거리
                 
-        # I(X;T) 데이터 저장
-        distance_l.append(distance_x_t)
-        mi_l.append(mi_x_t)
-
-        # 같은/다른 클래스 데이터 저장
-        distance_m.append([distance_t_y_same, distance_t_y_diff])
-        mi_m.append([mi_t_y_same, mi_t_y_diff])
-
-    distance_l = np.array(distance_l)
-    mi_l = np.array(mi_l)
+                distance_xt.extend(euc_flat_xt.tolist())
+                distance_ty.extend(euc_flat_ty.tolist())
+                mi_xt.extend(mi_flat_xt.tolist())
+                mi_ty.extend(mi_flat_ty.tolist())
+                
+        distance_xt.append(distance_xt)
+        distance_ty.append(distance_ty)
+        mi_xt.append(mi_xt)
+        mi_ty.append(mi_ty)
+        
+    distance_xt = np.array(distance_xt)
+    distance_ty = np.array(distance_ty)
+    mi_xt = np.array(mi_xt)
+    mi_ty = np.array(mi_ty)    
     
     # I(X;T) vs Distance 그래프
-    for layer_idx in range(distance_l.shape[0]):
-        plt.figure(figsize=(10, 6))
-        plt.scatter(distance_l[layer_idx], mi_l[layer_idx], alpha=0.1, s=5)
-        plt.title(f"Seg Layer {layer_idx+1}: I(X; T) vs Distance")
-        plt.xlabel("Euclidean Distance")
-        plt.ylabel("Mutual Information I(X; T)")
-        plt.grid(True)
+    # for layer_idx in range(distance_xt.shape[0]):
+    #     plt.figure(figsize=(10, 6))
+    #     plt.scatter(distance_xt[layer_idx], mi_xt   [layer_idx], alpha=0.1, s=5)
+    #     plt.title(f"Seg Layer {layer_idx+1}: I(X; T) vs Distance")
+    #     plt.xlabel("Euclidean Distance")
+    #     plt.ylabel("Mutual Information I(X; T)")
+    #     plt.grid(True)
+    #     plt.tight_layout()
+    #     plt.savefig(f"seg_layer_{layer_idx+1}_x_t_vs_distance.png", dpi=100, bbox_inches='tight')
+    #     plt.close()
+        
+    for layer_idx in range(distance_ty.shape[0]):
+        plt.figure(figsize=(12, 7))
+        
+        scatter = plt.scatter(mi_xt[layer_idx], mi_ty[layer_idx], 
+                            c=distance_ty[layer_idx], cmap='coolwarm', 
+                            alpha=0.5, s=20, edgecolors='none')
+        
+        cbar = plt.colorbar(scatter)
+        cbar.set_label('Euclidean Distance', fontsize=10)
+        
+        plt.xlabel("I(X; T)", fontsize=11, fontweight='bold')
+        plt.ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+        plt.title(f"Layer {layer_idx+1} - Information Plane", fontsize=12, fontweight='bold')
+        plt.grid(True, alpha=0.3)        
         plt.tight_layout()
-        plt.savefig(f"seg_layer_{layer_idx+1}_x_t_vs_distance.png", dpi=100, bbox_inches='tight')
+        plt.savefig(f"information_plane_layer_{layer_idx+1}.png", dpi=150, bbox_inches='tight')
         plt.close()
-    
-    # I(T;Y) vs Distance 그래프 (같은/다른 클래스 구분)
-    for layer_idx in range(len(distance_m)):
-        distance_t_y_same, distance_t_y_diff = distance_m[layer_idx]
-        mi_t_y_same, mi_t_y_diff = mi_m[layer_idx]
-        
-        plt.figure(figsize=(12, 6))
-        
-        # Different Class (파란색 계열 colormap)
-        if distance_t_y_diff:
-            plt.scatter(distance_t_y_diff, mi_t_y_diff, c='blue', alpha=0.3, s=5, label='Different Class', zorder=1)
-        if distance_t_y_same:
-            plt.scatter(distance_t_y_same, mi_t_y_same, c='red', alpha=0.5, s=5, label='Same Class', zorder=2)
-        
-        plt.title(f"Seg Layer {layer_idx+1}: I(T; Y) vs Distance (Class Distinction)")
-        plt.xlabel("Euclidean Distance")
-        plt.ylabel("Mutual Information I(T; Y)")
-        plt.legend()
-        plt.grid(True)
-        plt.tight_layout()
-        plt.savefig(f"seg_layer_{layer_idx+1}_t_y_vs_distance.png", dpi=100, bbox_inches='tight')
-        plt.close()
-    
+
 # if __name__ == "__main__": # clssification
 
 if False:
     # cls
-    cls_file_path = f"/home/hail/pan/HDD/MI_dataset/CIFAR-10/resnet101/pretrained/PIGNet_GSPonly_classification/zoom/1"
+    cls_file_path = f"/home/hail/pan/HDD/MI_dataset/imagenet/resnet101/pretrained/PIGNet_GSPonly_classification/zoom/1"
     
     with open(os.path.join(cls_file_path, 'gt_labels.pkl'), 'rb') as f:
         y_in = pickle.load(f)
@@ -443,9 +438,14 @@ if False:
 
         for hx in range(H_dim):
             for wx in range(W_dim):
-                mi_flat = mi_result[:,:,hx,wx].flatten()
-                euc_flat = euc_result[:,:,hx,wx].flatten()
-                mi_t_y_flat = mi_t_y.flatten()
+                # 기준 픽셀 (hx, wx)와 모든 다른 픽셀 (ht, wt) 간의 I(X;T)와 거리
+                mi_flat = mi_result[:,:,hx,wx].flatten()  # (H*W,) - 각 원소는 (ht,wt)와 (hx,wx) 간의 I(X;T)
+                euc_flat = euc_result[:,:,hx,wx].flatten()  # (H*W,) - 거리
+                
+                # 각 타겟 픽셀 (ht, wt)의 I(T;Y) 값들
+                # mi_t_y는 (H, W) 형태이므로, 모든 (ht, wt) 위치의 I(T;Y)를 가져옴
+                mi_t_y_flat = mi_t_y.flatten()  # (H*W,) - 각 원소는 (ht,wt) 위치의 I(T;Y)
+                
                 distance_.extend(euc_flat.tolist())
                 mi_.extend(mi_flat.tolist())
                 mi_ty.extend(mi_t_y_flat.tolist())
@@ -460,26 +460,143 @@ if False:
     
     # graph distance, I(X;T)
     for layer_idx in range(distance_s.shape[0]):
-        plt.figure()
-        plt.scatter(distance_s[layer_idx], mi_s[layer_idx], alpha=0.1)
-        plt.title(f"Layer {layer_idx+1} MI vs Euclidean Distance")
-        plt.xlabel("Euclidean Distance")
-        plt.ylabel("Mutual Information I(X; T_layer)")
-        plt.grid(True)
-        plt.savefig(f"layer_{layer_idx+1}_mi_vs_distance.png")
+        distance_data = distance_s[layer_idx]
+        mi_data = mi_s[layer_idx]    
+        plt.figure(figsize=(12, 7))
+        plt.scatter(distance_data, mi_data, alpha=0.5, s=10)
+        plt.title(f"Layer {layer_idx+1} MI vs Euclidean Distance", fontsize=14, fontweight='bold')
+        plt.xlabel("Euclidean Distance", fontsize=12)
+        plt.ylabel("Mutual Information I(X; T_layer)", fontsize=12)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(f"layer_{layer_idx+1}_mi_vs_distance.png", dpi=150, bbox_inches='tight')
         plt.close()
     
-    # Plot: x축 I(X;T), y축 I(T;Y), 색상 거리
     for layer_idx in range(distance_s.shape[0]):
-        plt.figure()
+        plt.figure(figsize=(12, 7))
+        
         scatter = plt.scatter(mi_s[layer_idx], mi_y[layer_idx], 
-                             c=distance_s[layer_idx], cmap='viridis', alpha=0.3)
-        plt.colorbar(scatter, label='Euclidean Distance')
-        plt.title(f"Layer {layer_idx+1} I(X;T) vs I(T;Y)")
+                            c=distance_s[layer_idx], cmap='coolwarm', 
+                            alpha=0.5, s=20, edgecolors='none')
+        
+        cbar = plt.colorbar(scatter)
+        cbar.set_label('Euclidean Distance', fontsize=10)
+        
+        plt.xlabel("I(X; T)", fontsize=11, fontweight='bold')
+        plt.ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+        plt.title(f"Layer {layer_idx+1} - Information Plane", fontsize=12, fontweight='bold')
+        plt.grid(True, alpha=0.3)
+        
+        # 통계 정보 추가
+        plt.text(0.02, 0.98, 
+               f"I(X;T): [{mi_s[layer_idx].min():.3f}, {mi_s[layer_idx].max():.3f}]\n"
+               f"I(T;Y): {mi_y[layer_idx][0]:.3f} (constant)\n"
+               f"Distance: [{distance_s[layer_idx].min():.2f}, {distance_s[layer_idx].max():.2f}]",
+               transform=plt.gca().transAxes, fontsize=9,
+               verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+        
+        plt.tight_layout()
+        plt.savefig(f"information_plane_layer_{layer_idx+1}.png", dpi=150, bbox_inches='tight')
+        plt.close()
+    
+    # 각 레이어별 개별 고해상도 그림
+    for layer_idx in range(distance_s.shape[0]):
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        scatter = ax.scatter(mi_s[layer_idx], mi_y[layer_idx], 
+                            c=distance_s[layer_idx], cmap='coolwarm', 
+                            alpha=0.6, s=30, edgecolors='none')
+        
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label('Euclidean Distance', fontsize=12)
+        
+        ax.set_xlabel("I(X; T)", fontsize=13, fontweight='bold')
+        ax.set_ylabel("I(T; Y)", fontsize=13, fontweight='bold')
+        ax.set_title(f"Layer {layer_idx+1} - Information Plane (Classification)", 
+                    fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3, linestyle='--')
+        
+        # 범례 추가
+        plt.text(0.02, 0.98, 
+               f"Data Points: {len(mi_s[layer_idx])}\n"
+               f"I(X;T) range: [{mi_s[layer_idx].min():.4f}, {mi_s[layer_idx].max():.4f}]\n"
+               f"I(T;Y): {mi_y[layer_idx][0]:.4f} (constant for all pixels)\n"
+               f"Distance range: [{distance_s[layer_idx].min():.2f}, {distance_s[layer_idx].max():.2f}]",
+               transform=plt.gca().transAxes, fontsize=11,
+               verticalalignment='top', 
+               bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.7))
+        
+        plt.tight_layout()
+        plt.savefig(f"layer_{layer_idx+1}_information_plane.png", dpi=150, bbox_inches='tight')
+        plt.close()
+    
+    # Plot: x축 I(X;T), y축 I(T;Y), z축 거리 - Contour plot
+    for layer_idx in range(distance_s.shape[0]):
+        # 데이터 준비
+        mi_xt_data = mi_s[layer_idx]
+        mi_ty_data = mi_y[layer_idx]
+        dist_data = distance_s[layer_idx]
+        
+        # I(X;T) vs I(T;Y) 그리드 생성
+        bins = 50
+        xt_edges = np.linspace(mi_xt_data.min(), mi_xt_data.max(), bins + 1)
+        ty_edges = np.linspace(mi_ty_data.min(), mi_ty_data.max(), bins + 1)
+        
+        # 각 그리드 셀의 평균 거리 계산
+        xt_indices = np.digitize(mi_xt_data, xt_edges) - 1
+        ty_indices = np.digitize(mi_ty_data, ty_edges) - 1
+        
+        # 인덱스 범위 체크
+        xt_indices = np.clip(xt_indices, 0, bins - 1)
+        ty_indices = np.clip(ty_indices, 0, bins - 1)
+        
+        # 각 셀의 평균 거리 계산
+        dist_grid = np.zeros((bins, bins))
+        count_grid = np.zeros((bins, bins))
+        
+        for i in range(len(mi_xt_data)):
+            x_idx = xt_indices[i]
+            y_idx = ty_indices[i]
+            dist_grid[y_idx, x_idx] += dist_data[i]
+            count_grid[y_idx, x_idx] += 1
+        
+        # 0으로 나누기 방지
+        with np.errstate(divide='ignore', invalid='ignore'):
+            dist_grid = np.divide(dist_grid, count_grid, out=np.zeros_like(dist_grid), where=count_grid!=0)
+        
+        # 그리드 중심 좌표
+        xt_centers = (xt_edges[:-1] + xt_edges[1:]) / 2
+        ty_centers = (ty_edges[:-1] + ty_edges[1:]) / 2
+        X, Y = np.meshgrid(xt_centers, ty_centers)
+        
+        # Contour plot 옵션 1: 데이터 밀도 (어떤 조합이 많이 나타나는지)
+        # 2D 히스토그램으로 데이터 밀도 계산
+        H_density, _, _ = np.histogram2d(mi_xt_data, mi_ty_data, bins=[xt_edges, ty_edges])
+        H_density = H_density.T  # transpose for correct orientation
+        
+        plt.figure(figsize=(10, 6))
+        contour = plt.contourf(X, Y, H_density, levels=20, cmap='viridis')
+        plt.colorbar(contour, label='Data Point Density')
+        plt.contour(X, Y, H_density, levels=20, colors='black', alpha=0.3, linewidths=0.5)
+        plt.title(f"Layer {layer_idx+1}: I(X;T) vs I(T;Y) (Contour: Data Density)")
         plt.xlabel("I(X; T)")
         plt.ylabel("I(T; Y)")
-        plt.grid(True)
-        plt.savefig(f"layer_{layer_idx+1}_ixt_vs_ity.png")
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(f"layer_{layer_idx+1}_ixt_vs_ity_contour_density.png", dpi=100, bbox_inches='tight')
+        plt.close()
+        
+        # Contour plot 옵션 2: 평균 거리 (거리가 어떻게 분포하는지)
+        plt.figure(figsize=(10, 6))
+        contour = plt.contourf(X, Y, dist_grid, levels=20, cmap='viridis')
+        plt.colorbar(contour, label='Average Euclidean Distance')
+        plt.contour(X, Y, dist_grid, levels=20, colors='black', alpha=0.3, linewidths=0.5)
+        plt.title(f"Layer {layer_idx+1}: I(X;T) vs I(T;Y) (Contour: Average Distance)")
+        plt.xlabel("I(X; T)")
+        plt.ylabel("I(T; Y)")
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(f"layer_{layer_idx+1}_ixt_vs_ity_contour_distance.png", dpi=100, bbox_inches='tight')
         plt.close()
 
 

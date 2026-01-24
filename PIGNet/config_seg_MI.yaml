@@ -5,9 +5,9 @@ MI: True
 factor: ""
 model: "" # PIGNet_GSPonly ASPP Mask2Former
 exp: "bn_lr7e-3"
-backbone: "resnet101"
-dataset: "pascal"
-model_type: "scratch"
+backbone: "resnet50"
+dataset: "cityscape"
+model_type: "pretrained"
 model_number: 1
 gpu: 0
 workers: 4

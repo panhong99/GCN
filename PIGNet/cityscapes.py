@@ -324,7 +324,7 @@ class Cityscapes(data.Dataset):
 
       # Create a new black image and paste the resized image and mask in the center
       new_image = Image.new('RGB', (width, height), (0, 0, 0))
-      new_mask = Image.new('L', (width, height), 255)
+      new_mask = Image.new('L', (width, height), 0)
       new_color_mask = Image.new('RGB', (width, height), (0, 0, 0))
 
       new_image.paste(resized_image, ((width - new_width) // 2, (height - new_height) // 2))

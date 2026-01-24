@@ -169,7 +169,7 @@ def main(config):
             wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"_embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
                 config=config.__dict__)
 
-        criterion = nn.CrossEntropyLoss(ignore_index=255)
+        criterion = nn.CrossEntropyLoss()
         # model = nn.DataParallel(model).to(device)
         model.to(local_rank)
         
@@ -534,10 +534,6 @@ def main(config):
             # search padding location
             # pred = pred[: pred.shape[0] - H, : pred.shape[1] - W]
             # mask = mask[: mask.shape[0] - H, : mask.shape[1] - W]
-
-            if config.dataset == "cityscape":
-                pad_location = (mask == 255)
-                pred[pad_location] = 255
 
             inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
             iou_score = inter.sum() / union.sum()

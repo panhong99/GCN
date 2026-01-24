@@ -6,8 +6,8 @@ factor: ""
 model: ""
 exp: "bn_lr7e-3"
 gpu: 0 
-backbone: "resnet101"
-dataset: "imagenet"
+backbone: "resnet50"
+dataset: "CIFAR-100"
 model_type: "pretrained"
 model_number: 1
 workers: 4
