@@ -150,9 +150,9 @@ def main(config):
     elif config.backbone == "resnet101":
         num=101
 
-    model_fname = f'model_{num}/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
+    model_fname = f'model_{num}/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3_aggregate_mean_{config.n_layer}.pth'
 
-    if config.mode == "train":
+    if config.mode == "train":  
         dataset, valid_dataset = get_dataset(config)
     
     elif config.mode == "infer":
@@ -169,7 +169,7 @@ def main(config):
             wandb.init(project = "gcn_segmentation", name=config.model+"_"+config.backbone+"_"+str(config.model_type)+"_embed"+str(config.embedding_size)+"_nlayer"+str(config.n_layer)+"_"+config.exp+"_"+str(config.dataset),
                 config=config.__dict__)
 
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(ignore_index=255)
         # model = nn.DataParallel(model).to(device)
         model.to(local_rank)
         

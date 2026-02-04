@@ -5,8 +5,8 @@ MI: True
 factor: ""
 model: "" # PIGNet_GSPonly ASPP Mask2Former
 exp: "bn_lr7e-3"
-backbone: "resnet50"
-dataset: "cityscape"
+backbone: "resnet101"
+dataset: "pascal"
 model_type: "pretrained"
 model_number: 1
 gpu: 0
@@ -25,6 +25,7 @@ last_mult: 1.0
 freeze_bn: False
 weight_std: False
 beta: False
+MI: False
 
 # params for infer
 infer_params:

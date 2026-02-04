@@ -100,23 +100,24 @@ class blockSAGEsq(nn.Module):
         super(blockSAGEsq, self).__init__()
         self.hidden = int(hidden)
         self.inner = int(inner)
-        self.sage1 = SAGEConv(self.hidden, self.hidden, 'max')
-        self.sage2 = SAGEConv(self.hidden, self.hidden, 'max')
-
-        # self.sage1 = SAGEConv(self.hidden, self.hidden, aggregator='gcn')
-        # self.sage2 = SAGEConv(self.hidden, self.hidden, aggregator='gcn')
-
+        self.sage1 = SAGEConv(self.hidden, self.hidden)
+        self.sage2 = SAGEConv(self.hidden, self.hidden)
         self.linear = nn.Linear(self.hidden, self.inner)
 
     def forward(self, x, edge_index):
-        x = self.sage1(x, edge_index)
-        x = F.gelu(x)
-        x = self.sage2(x, edge_index)
-        x = F.gelu(x)
-        x = self.linear(x)
-        x = F.gelu(x)
-
-        return x, edge_index
+        x1 = self.sage1(x, edge_index)
+        x1 = F.gelu(x1)           # ← 활성화까지 포함
+        
+        x2 = self.sage2(x1, edge_index)
+        x2 = F.gelu(x2)           # ← 활성화까지 포함
+        
+        x3 = self.linear(x2)
+        x3 = F.gelu(x3)           # ← 활성화까지 포함
+        
+        # layer 내부 outputs (활성화 후)
+        block_outputs = [x1, x2, x3]
+        
+        return x3, edge_index, block_outputs
     
 class SPP(nn.Module):
 
@@ -290,14 +291,17 @@ class GSP(nn.Module):
         x = self.gelu(x)
         x_s_f = [x]
 
+        # x_s_f_ = [x]
+
         edge_idx = self.edge(self.grid_size)
         x = self.feature2graph(x_s_f[0], edge_idx)
 
         x = x.x
 
         for ii in range(len(self.gn_layers)):
-            x, edge = self.gn_layers[ii](x, edge_idx)
+            x, edge, block_outputs = self.gn_layers[ii](x, edge_idx)
             # x_s[ii] = x
+
             if (ii + 1) % self.n_skip_l == 0:
                 x_s_f.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),
                                                 feature_shape=(self.embedding_size, 33, 33)))
@@ -350,8 +354,7 @@ class Bottleneck(nn.Module):
         out = self.relu(out)
 
         return out
-
-
+    
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, num_classes, num_groups=None, weight_std=False, beta=False, **kwargs):
@@ -429,7 +432,6 @@ class ResNet(nn.Module):
 
     def forward(self, x):
         size = (x.shape[2], x.shape[3])
-        backbone_layers_output = []
 
         x = self.conv1(x)
         x = self.bn1(x)
@@ -437,16 +439,16 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x)  # block1
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
 
         x = self.layer2(x)  # block2
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
     
         x = self.layer3(x)  # block3
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
     
         x = self.layer4(x)  # block4
-        backbone_layers_output.append(x)
+        # backbone_layers_output.append(x)
 
         x, gsp_layers_outputs = self.pyramid_gnn(x)
 
@@ -454,8 +456,8 @@ class ResNet(nn.Module):
 
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
-        return x, gsp_layers_outputs, backbone_layers_output #return_gsp_output
-        # return x
+        return x, gsp_layers_outputs #return_gsp_output
+        # return x,x
 
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.

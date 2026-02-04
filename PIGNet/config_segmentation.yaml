@@ -1,19 +1,20 @@
-mode: "infer"
+mode: "train"
+MI: False
 
 # shared setting
 factor: ""
-model: "" # PIGNet_GSPonly ASPP Mask2Former
+model: "PIGNet_GSPonly" # PIGNet_GSPonly ASPP Mask2Former
 exp: "bn_lr7e-3"
-backbone: "resnet50"
-dataset: "cityscape"
-model_type: "scratch"
-model_number: 3
+backbone: "resnet101"
+dataset: "pascal"
+model_type: "pretrained"
+model_number: 1
 gpu: 0
 workers: 4
 resume: null
 infer: True
-n_layer: 12
-n_skip_l: 3
+n_layer: 8 # 12
+n_skip_l: 2 # 3
 embedding_size: 21
 batch_size: 16
 epochs: 50

@@ -151,7 +151,7 @@ def main(config):
 
             ], lr=0.001, momentum=0.9, weight_decay=0.0001)
 
-        feature_shape = (2048,33,33)
+        # feature_shape = (2048,33,33)
 
         collate_fn = partial(utils_classification.make_batch_fn, batch_size=config.batch_size, feature_shape=feature_shape)
 
@@ -220,7 +220,6 @@ def main(config):
                 log['train/batch/loss'] = loss.to('cpu')
                 #log['train/temp'] = get_cpu_temperature()
                 wandb.log(log)
-
 
                 cnt+=1
                 train_step += 1

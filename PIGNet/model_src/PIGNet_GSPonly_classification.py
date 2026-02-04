@@ -106,8 +106,8 @@ class blockSAGEsq(nn.Module):
         # self.sage1 = SAGEConv(self.hidden, self.hidden, aggregator='gcn')
         # self.sage2 = SAGEConv(self.hidden, self.hidden, aggregator='gcn')
 
-
         self.linear = nn.Linear(self.hidden, self.inner)
+
     def forward(self, x, edge_index):
         x = self.sage1(x, edge_index)
         x = F.gelu(x)
@@ -220,17 +220,22 @@ class GSP(nn.Module):
         for i in range(grid_size):
             for j in range(grid_size):
                 current = i * grid_size + j
+
                 # Connect with right neighbor
                 if j < grid_size - 1:
                     edge_index.append([current, current + 1])
+
                 # Connect with bottom neighbor
                 if i < grid_size - 1:
                     edge_index.append([current, current + grid_size])
+
                 if j < grid_size - 1 and i < grid_size - 1:
                     edge_index.append([current, current + grid_size + 1])
+
                 # Connect with bottom-left neighbor (diagonal)
                 if j > 0 and i < grid_size - 1:
                     edge_index.append([current, current + grid_size - 1])
+
         edge_idx = torch.tensor(edge_index, dtype=torch.long).t().contiguous().cuda()
         return edge_idx
 
@@ -294,7 +299,6 @@ class GSP(nn.Module):
         x = self.gelu(x)
         gsp_layer_input = x
         x_s_f = [x]
-
 
         edge_idx = self.edge(self.grid_size)
         x = self.feature2graph(x_s_f[0],edge_idx)

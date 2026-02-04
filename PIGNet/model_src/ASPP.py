@@ -331,10 +331,8 @@ class ResNet(nn.Module):
 
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
-        return x, aspp_layers_output, backbone_layers_output
+        return x, aspp_layers_output
         # return x
-
-
 
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.
@@ -430,8 +428,6 @@ class ASPPPooling(nn.Sequential):
         size = x.shape[-2:]
         x = super(ASPPPooling, self).forward(x)
         return F.interpolate(x, size=size, mode='bilinear', align_corners=False)
-
-
 
 class ASPP(nn.Module):
     def __init__(self, in_channels, atrous_rates):

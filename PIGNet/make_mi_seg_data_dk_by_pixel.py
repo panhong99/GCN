@@ -66,11 +66,21 @@ def main(config, model_file, model_path):
     model = get_model(config, dataset)
 
     checkpoint = torch.load(os.path.join(model_path, model_file), map_location=device)
-    state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
-    # state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+
+    if config.model == "PIGNet_GSPonly":
+        layer_num = 5
+        state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+
+    else: # ASPP
+        layer_num = 5
+        state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
 
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
+
+    # ===== 고정된 클러스터 수 (mask 없으므로 충분한 데이터) =====
+    n_clusters = 50
+    print(f"KMeans clusters: {n_clusters} (fixed)")
 
     for layer_idx in range(5):
 
@@ -79,7 +89,8 @@ def main(config, model_file, model_path):
 
         # 학습용 DataLoader 생성 (shuffle=True, 동일한 순서 보장)
         MI_dataset_loader = mi_seg_data_loader(config, dataset, shuffle=True)
-        pixel_by_kmeans = [MiniBatchKMeans(n_clusters=50, random_state=42, batch_size = config.batch_size ,n_init=1) for _ in range(33**2)]
+        # 동적으로 계산된 클러스터 수 사용
+        pixel_by_kmeans = [MiniBatchKMeans(n_clusters=n_clusters, random_state=42, batch_size=config.batch_size, n_init=1) for _ in range(33**2)]
 
         for inputs, _ in tqdm(MI_dataset_loader , desc=f" {config.factor_name}", leave=False):
                 
@@ -88,16 +99,21 @@ def main(config, model_file, model_path):
 
                 with torch.no_grad():
                     inputs = Variable(inputs.to(device))
-                    outputs, layers_output, _ = model(inputs)
+                    outputs, layers_output = model(inputs)
 
                 _, _, H, W = layers_output[0].shape
+                
+                # Binary 처리 (배경 포함 모든 데이터)
+                layer_data = layers_output[layer_idx].cpu().numpy()  # (batch, C, H, W)
+                # binary_data = (layer_data > 0).astype(np.float32)  # (batch, C, H, W)
 
                 for h in range(H):
                     for w in range(W):
-                        pixel_activities = layers_output[layer_idx][:,:,h,w].cpu().numpy()  # (batch, channels)
+                        # pixel_activities = binary_data[:, :, h, w]  # (batch, channels) - binary values
+                        pixel_activities = layer_data[:, :, h, w]  # (batch, channels) - binary values
                         pixel_model = pixel_by_kmeans[h*W+w]
                         pixel_model.partial_fit(pixel_activities)
-
+    
         del layers_output, outputs, inputs, MI_dataset_loader
         collect()
 
@@ -118,9 +134,13 @@ def main(config, model_file, model_path):
 
             with torch.no_grad():        
                 inputs = Variable(inputs.to(device))
-                outputs, layers_output, _ = model(inputs)
+                outputs, layers_output = model(inputs)
                         
             _, _, H, W = layers_output[0].shape
+            
+            # Binary 처리 (배경 포함 모든 데이터)
+            layer_data = layers_output[layer_idx].cpu().numpy()  # (batch, C, H, W)
+            # binary_data = (layer_data > 0).astype(np.float32)  # (batch, C, H, W)
             
             if layer_idx == 0:
                 _, pred = torch.max(outputs, 1)
@@ -131,7 +151,8 @@ def main(config, model_file, model_path):
 
             for h in range(H):
                 for w in range(W):
-                    pixel_activities = layers_output[layer_idx][:,:,h,w].cpu().numpy()  # (batch, channels)
+                    # pixel_activities = binary_data[:, :, h, w]  # (batch, channels) - binary values
+                    pixel_activities = layer_data[:, :, h, w]  # (batch, channels) - binary values
                     pixel_model = pixel_by_kmeans[h*W+w]
                     vq_label = pixel_model.predict(pixel_activities)
                     vq_labels[h*W+w].append(vq_label)
@@ -154,7 +175,6 @@ def main(config, model_file, model_path):
         del vq_labels, pixel_activities, layers_output, outputs, inputs
         collect()
     
-            
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="/home/hail/pan/GCN/PIGNet/config_seg_MI.yaml")
@@ -173,10 +193,14 @@ if __name__ == "__main__":
     config = dict_to_namespace(config_dict)
 
     # 가공 조건 및 이름 매핑
+    # process_dict = {
+    #     "zoom": [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2],
+    #     "overlap": [0, 0.1, 0.2, 0.3, 0.5],
+    #     "repeat": [1, 3, 6, 9, 12]
+    # }
+
     process_dict = {
-        "zoom": [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2],
-        "overlap": [0, 0.1, 0.2, 0.3, 0.5],
-        "repeat": [1, 3, 6, 9, 12]
+        "zoom": [1],
     }
 
     zoom_name_map = {0.1: "0.1", np.sqrt(0.1): "0.3", 0.5: "0.5", np.sqrt(0.5): "0.7", 
@@ -207,11 +231,12 @@ if __name__ == "__main__":
                 output_folder = os.path.join(
                     "/home/hail/pan/HDD/MI_dataset", 
                     config.dataset, 
+                    "pixel_dataset",
                     config.backbone, 
                     config.model_type, 
                     model_key, 
                     p_key,
-                    f_name
+                    f_name,
                 )
 
                 os.makedirs(output_folder, exist_ok=True)
