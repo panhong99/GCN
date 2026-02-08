@@ -26,6 +26,7 @@ freeze_bn: False
 weight_std: False
 beta: False
 MI: False
+binary: False
 
 # params for infer
 infer_params:

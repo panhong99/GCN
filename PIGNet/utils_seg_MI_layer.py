@@ -7,6 +7,7 @@ from PIL import Image
 import torch
 import numpy as np
 from tqdm.auto import trange
+import argparse
 
 def cal_mi_x_t(x, t):
     N, H, W = t.shape
@@ -17,42 +18,55 @@ def cal_mi_x_t(x, t):
     x_flat = x.reshape(N, -1).astype(np.int32) # (N, num_pixels)
     t_flat = t.reshape(N, -1).astype(np.int32) # (N, num_pixels)
     
-    # 2. 값의 범위를 파악 (K-Means bin 수인 50 내외 가정)
-    max_x = x_flat.max() + 1
-    max_t = t_flat.max() + 1
+    # 2. 값의 범위를 파악 (K-Means bin 수인 50, valid 값만)
+    max_x = 50  # x는 0-49 범위
+    max_t = 50  # t는 0-49 범위
     
-    # 3. 개별 엔트로피 계산 (벡터화)
-    def get_entropy(data, num_bins):
-        # bincount를 사용하여 각 픽셀 위치의 확률 분포를 한 번에 계산
-        # data: (N, num_pixels)
-        counts = np.array([np.bincount(data[:, i], minlength=num_bins) for i in range(num_pixels)])
-        p = counts / N
-        return -np.sum(p * np.log2(p + eps), axis=1)
+    # 3. 개별 엔트로피 계산 (벡터화) - -1 제외
+    def get_entropy_valid(data, num_bins):
+        """valid한 값(>=0)만 사용하여 엔트로피 계산"""
+        h = np.zeros(num_pixels)
+        for i in range(num_pixels):
+            valid_mask = data[:, i] >= 0
+            valid_data = data[valid_mask, i]
+            if len(valid_data) > 0:
+                counts = np.bincount(valid_data, minlength=num_bins)
+                p = counts / len(valid_data)
+                h[i] = -np.sum(p * np.log2(p + eps))
+        return h
 
-    h_x_all = get_entropy(x_flat, max_x) # (num_pixels,)
-    h_t_all = get_entropy(t_flat, max_t) # (num_pixels,)
+    h_x_all = get_entropy_valid(x_flat, max_x)
+    h_t_all = get_entropy_valid(t_flat, max_t)
 
-    # 4. MI 계산 (핵심 최적화 부분)
+    # 4. MI 계산 (벡터화된 접근) - -1만 필터링
     mi_map_flat = np.zeros((num_pixels, num_pixels))
     
-    # Joint Entropy를 위한 정수 인코딩: (t, x) 쌍을 하나의 숫자로 변환
-    # pair_val = t * max_x + x
     for i_t in trange(num_pixels, desc="Optimized MI", leave=False):
         t_vec = t_flat[:, i_t]
+        valid_t = t_vec >= 0  # (N,)
         
-        # 모든 i_x에 대해 한 번에 Joint 계산 시도
-        # (N, 1) * max_x + (N, num_pixels) -> (N, num_pixels)
+        # 모든 i_x에 대해 한 번에 처리
+        # x_flat: (N, num_pixels)
+        valid_x = x_flat >= 0  # (N, num_pixels)
+        valid_both = valid_t[:, np.newaxis] & valid_x  # (N, num_pixels)
+        
+        # joint encoding (invalid는 큰 범위 밖으로)
         joint_encoded = t_vec[:, np.newaxis] * max_x + x_flat
         
         for i_x in range(num_pixels):
-            # bincount가 unique보다 훨씬 빠름
-            counts_tx = np.bincount(joint_encoded[:, i_x], minlength=max_t * max_x)
-            p_tx = counts_tx / N
-            h_tx = -np.sum(p_tx * np.log2(p_tx + eps))
+            valid_mask = valid_both[:, i_x]
+            n_valid = np.sum(valid_mask)
             
-            mi_map_flat[i_t, i_x] = h_t_all[i_t] + h_x_all[i_x] - h_tx
+            if n_valid > 0:
+                # valid한 값들만으로 joint 엔트로피 계산
+                joint_valid = joint_encoded[valid_mask, i_x]
+                counts_tx = np.bincount(joint_valid, minlength=max_t * max_x)
+                p_tx = counts_tx / n_valid
+                h_tx = -np.sum(p_tx * np.log2(p_tx + eps))
+                
+                mi_map_flat[i_t, i_x] = h_t_all[i_t] + h_x_all[i_x] - h_tx
 
-    # 5. 거리 맵 계산 (기존과 동일하되 최적화)
+    # 5. 거리 맵 계산
     grid = np.indices((H, W)).reshape(2, -1).T
     h_diff = grid[:, 0:1] - grid[:, 0:1].T
     w_diff = grid[:, 1:2] - grid[:, 1:2].T
@@ -72,45 +86,54 @@ def cal_seg_mi_t_y(t, y, h_t_all):
     t_flat = t.reshape(N, -1).astype(np.int32)
     y_flat = y.reshape(N, -1).astype(np.int32)
     
-    # 값의 최대 범위 파악 (인코딩을 위함)
-    max_t = t_flat.max() + 1
-    max_y = y_flat.max() + 1
+    # 값의 최대 범위 파악 (valid 값 기준: t는 0-49, y는 1-20)
+    max_t = 50  # t는 0-49 범위
+    max_y = 21  # y는 1-20 범위 (+1 for offset)
     
-    # 2. H(Y) 사전 계산 (bincount 활용)
+    # 2. H(Y) 사전 계산 (valid 값만) - y > 0 조건 유지
     h_y_all = np.zeros(num_pixels)
     for i in range(num_pixels):
         y_vec = y_flat[:, i]
-        # 원본 코드의 조건(y > 0) 유지 (valid한 부분만)
+        # valid한 부분만 (y > 0, 즉 -1 제외)
         y_valid = y_vec[y_vec > 0]
         if len(y_valid) > 0:
-            counts = np.bincount(y_valid)
-            p = counts[counts > 0] / len(y_valid)
+            counts = np.bincount(y_valid, minlength=max_y)
+            p = counts / len(y_valid)
             h_y_all[i] = -np.sum(p * np.log2(p + eps))
 
-    # 3. MI(T; Y) 계산 (핵심 최적화)
+    # 3. MI(T; Y) 계산 (벡터화) - -1과 invalid 필터링
     mi_map_flat = np.zeros((num_pixels, num_pixels))
     
-    # i_ref(Y의 위치)를 기준으로 고정하고 i_comp(T의 위치)를 순회
     for i_ref in trange(num_pixels, desc="Optimized MI(T;Y)", leave=False):
         y_vec = y_flat[:, i_ref]
         h_y_ref = h_y_all[i_ref]
         
-        # Joint 계산을 위한 인코딩: (T, Y) 쌍을 하나의 정수로
-        # (N, num_pixels) 구조로 한 번에 인코딩 가능
-        # t_flat: (N, num_pixels), y_vec: (N,)
-        joint_encoded = t_flat * max_y + y_vec[:, np.newaxis]
+        # valid mask (y > 0, 즉 -1 제외)
+        valid_y = y_vec > 0
         
         for i_comp in range(num_pixels):
-            # i_comp 위치의 T와 i_ref 위치의 Y 사이의 Joint Entropy
-            counts_joint = np.bincount(joint_encoded[:, i_comp], minlength=max_t * max_y)
-            p_joint = counts_joint / N
-            h_joint = -np.sum(p_joint * np.log2(p_joint + eps))
+            t_vec = t_flat[:, i_comp]
             
-            # MI(T_comp; Y_ref)
-            mi_val = h_t_all[i_comp] + h_y_ref - h_joint
-            mi_map_flat[i_comp, i_ref] = max(0, mi_val)
+            # 두 위치 모두 valid한 샘플만 사용
+            # t >= 0 (cluster ID 0-49) & y > 0 (class 1-20)
+            valid_both = (t_vec >= 0) & valid_y
+            n_valid = np.sum(valid_both)
+            
+            if n_valid > 0:
+                # valid한 값들만으로 joint 엔트로피 계산
+                t_valid = t_vec[valid_both]
+                y_valid = y_vec[valid_both]
+                
+                joint_encoded = t_valid * max_y + y_valid
+                counts_joint = np.bincount(joint_encoded, minlength=max_t * max_y)
+                p_joint = counts_joint / n_valid
+                h_joint = -np.sum(p_joint * np.log2(p_joint + eps))
+                
+                # MI(T_comp; Y_ref)
+                mi_val = h_t_all[i_comp] + h_y_ref - h_joint
+                mi_map_flat[i_comp, i_ref] = max(0, mi_val)
 
-    # 4. 거리 맵 계산 (동일)
+    # 4. 거리 맵 계산
     grid = np.indices((H, W)).reshape(2, -1).T
     h_diff = grid[:, 0:1] - grid[:, 0:1].T
     w_diff = grid[:, 1:2] - grid[:, 1:2].T
@@ -218,10 +241,15 @@ def resize_gt(gt_masks, target_size=33, num_classes=21):
 # Segmentation 코드 실행하려면 아래 주석 해제하고 classification 코드 주석 처리
 if __name__ == "__main__":  # segmentation
 # if False:  # segmentation (set to True to run segmentation code)
-    folder_name = ["PIGNet_GSPonly", "ASPP"]
+    
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('--dataset', type=str, default='pascal', help='pascal or cityscape')
+    argparser.add_argument('--preprocess_type', type=str, default='layer', help='layer or pixel')
+    argparser.add_argument('--model', type=str, default='ASPP', help='ASPP or PIGNet_GSPonly')
+    args = argparser.parse_args()
     
     # seg
-    seg_file_path = f"/home/hail/pan/HDD/MI_dataset/pascal/total_mask_dataset/resnet101/pretrained/PIGNet_GSPonly/zoom/1"
+    seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1"
     seg_datas = os.listdir(seg_file_path)
     
     with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
@@ -229,27 +257,6 @@ if __name__ == "__main__":  # segmentation
 
     with open(os.path.join(seg_file_path, 'layer_0.pkl'), 'rb') as f:
         x_in = pickle.load(f)
-
-    # ===== Load valid masks for each layer and apply to y_in =====
-    # Create masked versions of y_in for each layer
-    # y_in_masked = {}
-    # for layer_idx in range(5):
-    #     try:
-    #         with open(os.path.join(seg_file_path, f'layer_{layer_idx}_valid_mask.pkl'), 'rb') as f:
-    #             valid_mask = pickle.load(f)
-            
-    #         # Apply mask: set invalid pixels to 0
-    #         y_masked = y_in.copy()
-    #         y_masked[~valid_mask] = 0
-    #         y_in_masked[layer_idx] = y_masked
-            
-    #         print(f"Layer {layer_idx}: Valid mask loaded and applied")
-    #     except FileNotFoundError:
-    #         print(f"Layer {layer_idx}: Valid mask not found, using original y_in")
-    #         y_in_masked[layer_idx] = y_in.copy()
-
-    # Pascal: 20 classes + 1 background = 21, ignore_index=255
-    # y_in = resize_gt(y_in, target_size=x_in.shape[1], num_classes=21)
     
     # Debug: GT 유효 포인트 분포 확인
     valid_per_sample = np.sum(y_in > 0, axis=(1, 2))
@@ -271,22 +278,9 @@ if __name__ == "__main__":  # segmentation
     all_mi_t_y = []
 
     for layer_idx, t_layer in enumerate(t_in):
-        # 1. 최적화된 MI 함수 호출
-        # 이미 최적화된 cal_mi_x_t_optimized 함수를 사용한다고 가정합니다.
-        mi_result_xt, euc_result_xt, _, h_t_all = cal_mi_x_t(x_in, t_layer)
-        
-        # 2. 레이어별 마스킹된 Y 가져오기 및 MI(T;Y) 계산
-        # y_for_mi = y_in_masked.get(layer_idx, y_in)
-        mi_result_ty, euc_result_ty, _ = cal_seg_mi_t_y(t_layer, y_in, h_t_all)
-        
-        # 3. 유효 포인트 확인 (디버깅용)
-        valid_count_ty = np.sum(~np.isnan(mi_result_ty))
-        total_pixels = H_dim * W_dim * H_dim * W_dim
-        print(f"Layer {layer_idx}: Valid MI(T;Y) points: {valid_count_ty}/{total_pixels} ({100*valid_count_ty/total_pixels:.1f}%)")
 
-        # ===== 핵심 최적화 구간: 이중 For 루프 제거 =====
-        # (H, W, H, W) 형태의 4차원 배열을 flatten() 한 번으로 (H*W*H*W,) 1차원 배열로 펼칩니다.
-        # Python 루프 대신 C-level의 메모리 복사를 사용하므로 속도가 압도적입니다.
+        mi_result_xt, euc_result_xt, _, h_t_all = cal_mi_x_t(x_in, t_layer)
+        mi_result_ty, euc_result_ty, _ = cal_seg_mi_t_y(t_layer, y_in, h_t_all)
         
         # I(X;T) 데이터 추출
         mi_x_t_flat = mi_result_xt.flatten()
@@ -302,9 +296,6 @@ if __name__ == "__main__":  # segmentation
         all_mi_x_t.append(mi_x_t_flat)
         all_mi_t_y.append(mi_t_y_flat)
 
-    # 6. 최종 NumPy 배열로 변환
-    # 리스트에 담긴 각 레이어별 1차원 배열들을 쌓아서 최종 배열을 만듭니다.
-    # 각 레이어의 크기가 같다면 (num_layers, total_pixels) 형태의 2D 배열이 됩니다.
     distance_x_t = np.array(all_distance_x_t)
     distance_t_y = np.array(all_distance_t_y)
     mi_x_t = np.array(all_mi_x_t)
@@ -339,17 +330,6 @@ if __name__ == "__main__":  # segmentation
         my = mi_t_y[layer_idx]
         dist = distance_t_y[layer_idx]
         
-        # mask = ~np.isnan(my)
-        # mx, my, dist = mx[mask], my[mask], dist[mask]
-
-        # 2. 데이터 샘플링 (10만 개 초과 시 무작위 추출)
-        # 100만 개를 다 그리는 것보다 10만 개만 그려도 경향성은 완벽히 유지됩니다.
-        # if len(mx) > 100000:
-        #     idx = np.random.choice(len(mx), 100000, replace=False)
-        #     mx, my, dist = mx[idx], my[idx], dist[idx]
-
-        # 3. Scatter 최적화
-        # rasterized=True: 수많은 점을 벡터가 아닌 비트맵으로 렌더링하여 저장 속도 향상
         scatter = plt.scatter(mx, my, 
                             c=dist, cmap='coolwarm', 
                             alpha=0.4, s=15, # 점 크기를 살짝 줄여 겹침 방지
@@ -364,8 +344,8 @@ if __name__ == "__main__":  # segmentation
         plt.title(f"Layer {layer_idx+1} - Information Plane", fontsize=12, fontweight='bold')
         
         # 축 범위 고정 (레이어 간 비교를 위해)
-        plt.xlim(0, 3)
-        plt.ylim(0, 3)
+        plt.xlim(-10, 10)
+        plt.ylim(-10, 10)
         
         plt.grid(True, alpha=0.3)        
         plt.tight_layout()

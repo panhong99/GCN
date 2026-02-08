@@ -170,14 +170,7 @@ class VOCSegmentation(data.Dataset):
     new_h = int(scale * h)
     new_w = int(scale * w)
 
-    rand_log_scale = math.log(aug_scale[0], 2) + random.random() * (math.log(aug_scale[1], 2) - math.log(aug_scale[0], 2))
-    random_scale = math.pow(2, rand_log_scale)
-    new_size = (int(round(w * random_scale)), int(round(h * random_scale)))
-    image = img.resize(new_size, Image.Resampling.LANCZOS)
-    mask = mask.resize(new_size, Image.Resampling.NEAREST)
-    color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
-
-    new_image = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    new_image = img.resize((new_w, new_h), Image.Resampling.LANCZOS)
     new_mask = mask.resize((new_w, new_h), Image.Resampling.NEAREST)
     new_color_mask = color_mask.resize((new_w, new_h), Image.Resampling.NEAREST)
     

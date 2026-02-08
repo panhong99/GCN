@@ -71,6 +71,7 @@ def resize_gt_fast(gt_masks, target_size=33):
     for b in range(B):
         # cv2.resize는 (W, H) 순서로 받음
         resized = cv2.resize(gt_masks[b].astype(np.uint8), (target_size, target_size), interpolation=cv2.INTER_NEAREST)
+
         # 255는 invalid로 처리 (0으로 변경)
         resized = np.where(resized == 255, 0, resized)
         gt_resized[b] = resized
@@ -100,13 +101,10 @@ def main(config, model_file, model_path):
 
     checkpoint = torch.load(os.path.join(model_path, model_file), map_location=device)
 
-    if config.model == "PIGNet_GSPonly":
-        layer_num = 5
-        state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
-
-    else: # ASPP
-        layer_num = 5
+    if config.model == "ASPP":
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+    else:
+        state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
 
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
@@ -114,22 +112,82 @@ def main(config, model_file, model_path):
     set_seed(42)
     dataset = get_dataset(config)
     
-    print(f"\nCollecting all layer data & calculating variance...")
-    all_layers_for_variance = [[] for _ in range(layer_num)]
+    # all_layers_for_variance = [[] for _ in range(5)]
+    # all_layers_valid_masks_for_variance = [[] for _ in range(5)]
     
-    loader = mi_seg_data_loader(config, dataset, shuffle=False)
-    loader_list = list(loader)
-
+    # loader = mi_seg_data_loader(config, dataset, shuffle=False)
+    # loader_list = list(loader)
+    
+    # for idx in trange(len(loader_list), desc="Collecting data", leave=False):
+    #     inputs, targets = loader_list[idx]
+    #     if inputs is None:
+    #         continue
+        
+    #     with torch.no_grad():
+    #         inputs = Variable(inputs.to(device))
+    #         outputs, layers_output, _ = model(inputs)
+        
+    #     targets_np = targets.numpy().astype(np.uint8)
+        
+    #     for layer_idx in range(len(layers_output)):
+            
+    #         layer_data = layers_output[layer_idx].cpu().numpy()
+    #         all_layers_for_variance[layer_idx].append(layer_data)
+        
+    #         _, _, layer_h, layer_w = layer_data.shape
+    #         valid_mask_resized = resize_gt_fast(targets_np, target_size=layer_h)
+        
+    #         valid_mask = (valid_mask_resized != 0)
+    #         all_layers_valid_masks_for_variance[layer_idx].append(valid_mask)
+        
+    #     del outputs, layers_output, inputs
+    #     collect()
+    
+    # # Concatenate for variance calculation
+    # for layer_idx in range(5):
+    #     all_layers_for_variance[layer_idx] = np.concatenate(all_layers_for_variance[layer_idx], axis=0)
+    #     all_layers_valid_masks_for_variance[layer_idx] = np.concatenate(all_layers_valid_masks_for_variance[layer_idx], axis=0)
+    
+    # # ===== Step 2: Variance 계산 및 최적 bin 결정 =====
+    # print(f"\n{'='*60}")
+    # print(f"Variance Analysis")
+    # print(f"{'='*60}")
+    
+    # optimal_bins_dict = {}
+    # for layer_idx in range(5):
+    #     mean_var, std_var, channel_var = calculate_variance(
+    #         all_layers_for_variance[layer_idx], 
+    #         all_layers_valid_masks_for_variance[layer_idx]
+    #     )
+        
+    #     print(f"\nLayer {layer_idx}:")
+    #     print(f"  Mean Variance: {mean_var:.6f}")
+    #     print(f"  Std Variance: {std_var:.6f}")
+    #     print(f"  Min Channel Variance: {np.min(channel_var):.6f}")
+    #     print(f"  Max Channel Variance: {np.max(channel_var):.6f}")
+    #     print(f"  Valid Pixel Ratio: {np.sum(all_layers_valid_masks_for_variance[layer_idx]) / all_layers_valid_masks_for_variance[layer_idx].size:.4f}")
+    
+    # del all_layers_for_variance, all_layers_valid_masks_for_variance
+    # collect()
+    
+    print(f"\n{'='*60}")
+    print(f"Training KMeans models for all layers (batch-wise)")
+    print(f"{'='*60}")
+    
     vq_models = {layer_idx: MiniBatchKMeans(
         n_clusters=50, 
         random_state=42, 
         n_init=1,
         batch_size=50,
         verbose=0
-    ) for layer_idx in range(layer_num)}
-        
-    # 첫 pass: 전체 데이터 수집 (variance 계산용만)
-    for idx in trange(len(loader_list), desc="Collecting data for variance", leave=False):
+    ) for layer_idx in range(5)}
+    
+    # 두 번째 pass: 배치별로 바로 fit
+    print(f"\nFitting KMeans models with batch data...")
+    loader = mi_seg_data_loader(config, dataset, shuffle=False)
+    loader_list = list(loader)
+    
+    for idx in trange(len(loader_list), desc="Training KMeans", leave=False):
         inputs, targets = loader_list[idx]
         if inputs is None:
             continue
@@ -139,49 +197,39 @@ def main(config, model_file, model_path):
             outputs, layers_output = model(inputs)
         
         targets_np = targets.numpy().astype(np.uint8)
-                
+        
         for layer_idx in range(len(layers_output)):
-            layer_data = layers_output[layer_idx].numpy()
-            all_layers_for_variance[layer_idx].append(layer_data)            
+            layer_data = layers_output[layer_idx].cpu().numpy()
             B, C, H, W = layer_data.shape
             
             # Binary 처리: 각 채널값이 0보다 크면 1, 아니면 0
-            binary_data = (layer_data > 0).astype(np.float32)  # (B, C, H, W)
-            
+            if config.binary == True:
+                layer_data = (layer_data > 0).astype(np.float32)  # (B, C, H, W)
+
             # GT 유효성 마스크 (segmentation 기반)
             valid_mask_resized = resize_gt_fast(targets_np, target_size=H)
             gt_mask = (valid_mask_resized != 0)  # (B, H, W)
             gt_mask_flat = gt_mask.flatten()
             
             # 이진화된 데이터에서 GT 유효 위치만 선택
-            layer_flat = binary_data.transpose(0, 2, 3, 1).reshape(-1, C)
+            layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
             valid_data = layer_flat[gt_mask_flat]
             
             if len(valid_data) > 0:
                 vq_models[layer_idx].partial_fit(valid_data)
-
-    for layer_idx in range(layer_num):
-        all_layers_for_variance[layer_idx] = np.concatenate(all_layers_for_variance[layer_idx], axis=0)    
-
-    optimal_bins_dict = {}
-    for layer_idx in range(layer_num):
-        mean_var, std_var, channel_var = calculate_variance(
-            all_layers_for_variance[layer_idx], 
-        )
-
-        print(f"\nLayer {layer_idx}:")
-        print(f"  Mean Variance: {mean_var:.6f}")
-        print(f"  Std Variance: {std_var:.6f}")
-        print(f"  Min Channel Variance: {np.min(channel_var):.6f}")
-        print(f"  Max Channel Variance: {np.max(channel_var):.6f}")
+        
+        del outputs, layers_output, inputs
+        collect()
     
-    del all_layers_for_variance
-    collect()
-
+    # ===== Step 4: 예측 (한번의 loader로 모든 layer 처리) =====
+    print(f"\n{'='*60}")
+    print(f"Predicting VQ labels for all layers")
+    print(f"{'='*60}")
+    
     gt_masks = []
     pred_masks = []
-    all_vq_preds = {layer_idx: [] for layer_idx in range(layer_num)}
-    all_vq_valid_masks = {layer_idx: [] for layer_idx in range(layer_num)}
+    all_vq_preds = {layer_idx: [] for layer_idx in range(5)}
+    all_vq_valid_masks = {layer_idx: [] for layer_idx in range(5)}
     
     config.MI = False
     dataset = get_dataset(config)
@@ -199,45 +247,39 @@ def main(config, model_file, model_path):
         
         targets_np = targets.numpy().astype(np.uint8)
         
+        # GT 유효성 마스크 (segmentation 기반) - layer 루프 밖에서 한 번만 계산
+        valid_mask_resized = resize_gt_fast(targets_np, target_size=33)
+        gt_mask = (valid_mask_resized != 0)  # (B, H, W)
+        gt_mask_flat = gt_mask.flatten()
+        
         # 모든 layer에 대해 예측 수행
         for layer_idx in range(len(layers_output)):
-            layer_data = layers_output[layer_idx].numpy()  # (batch, C, H, W)
+            layer_data = layers_output[layer_idx].cpu().numpy()  # (batch, C, H, W)
             B, C, H, W = layer_data.shape
             
             # Binary 처리: 각 채널값이 0보다 크면 1, 아니면 0
-            binary_data = (layer_data > 0).astype(np.float32)  # (B, C, H, W)
+            if config.binary == True:
+                layer_data = (layer_data > 0).astype(np.float32)  # (B, C, H, W)
             
-            # GT 유효성 마스크 (segmentation 기반)
-            valid_mask_resized = resize_gt_fast(targets_np, target_size=H)
-            gt_mask = (valid_mask_resized != 0)  # (B, H, W)
-            gt_mask_flat = gt_mask.flatten()
-            
-            # 이진화된 데이터로 예측
-
-            layer_flat = binary_data.transpose(0, 2, 3, 1).reshape(-1, C)
+            # 이진화된 데이터로 예측 (유효한 부분만)
+            layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
             valid_data = layer_flat[gt_mask_flat]
-            vq_pred = vq_models[layer_idx].predict(valid_data)
+            vq_pred_valid = vq_models[layer_idx].predict(valid_data)
             
-            # 예측 결과를 reshape (0~49 범위)
-            vq_pred_mask = np.zeros((B * H * W), dtype=vq_pred.dtype)
-            vq_pred_mask[gt_mask_flat] = vq_pred
-            vq_pred_mask = vq_pred_mask.reshape(B, H, W)
+            # 전체 데이터 크기의 배열 생성 후 유효한 부분만 채우기
+            # 무효 영역은 -1로 둬서 클러스터 id(0~49)와 구분
+            vq_pred_full = np.full(len(layer_flat), -1, dtype=np.int32)
+            vq_pred_full[gt_mask_flat] = vq_pred_valid
             
-            # 유효성 마스크도 저장 (나중에 MI 계산 시 사용)
-            valid_mask_reshaped = gt_mask.reshape(B, H, W)
-            
+            # 예측 결과를 reshape (0~49 범위, 무효 부분은 -1)
+            vq_pred_mask = vq_pred_full.reshape(B, H, W)                        
             all_vq_preds[layer_idx].append(vq_pred_mask)
-            all_vq_valid_masks[layer_idx].append(valid_mask_reshaped)
         
-        # GT & Pred 저장
-        _, pred = torch.max(outputs, 1)
-        preds = pred.cpu().numpy().astype(np.uint8)
-        mask = targets.numpy().astype(np.uint8)
-
-        # GT mask를 layer 크기로 resize (33, 33)
-        mask_resized = resize_gt_fast(mask, target_size=33)
-        pred_masks.append(preds)
-        gt_masks.append(mask_resized)
+        # GT & Pred 저장 (이미 위에서 valid_mask_resized, gt_mask_flat 계산함)
+        mask_flat = valid_mask_resized.reshape(-1)
+        mask_filtered_flat = np.full(len(mask_flat), -1, dtype=np.int32)
+        mask_filtered_flat[gt_mask_flat] = mask_flat[gt_mask_flat]
+        gt_masks.append(mask_filtered_flat.reshape(valid_mask_resized.shape))
         
         del outputs, layers_output, inputs
         collect()
@@ -245,21 +287,14 @@ def main(config, model_file, model_path):
     # ===== Step 5: 결과 저장 =====
     print(f"\nSaving results...")
     
-    for layer_idx in range(layer_num):
+    for layer_idx in range(5):
         vq_labels = np.concatenate(all_vq_preds[layer_idx], axis=0)
-        valid_masks = np.concatenate(all_vq_valid_masks[layer_idx], axis=0)
         
         with open(config.output_folder + f'/layer_{layer_idx}.pkl', 'wb') as f:
             pickle.dump(vq_labels, f)
-        
-        with open(config.output_folder + f'/layer_{layer_idx}_valid_mask.pkl', 'wb') as f:
-            pickle.dump(valid_masks, f)
-    
+            
     with open(config.output_folder + f'/gt_labels.pkl', 'wb') as f:
         pickle.dump(np.concatenate(gt_masks, axis=0), f)
-
-    with open(config.output_folder + f'/pred_labels.pkl', 'wb') as f:
-        pickle.dump(np.concatenate(pred_masks, axis=0), f)
     
     print(f"Results saved to {config.output_folder}")
     
@@ -321,8 +356,8 @@ if __name__ == "__main__":
                 
                 output_folder = os.path.join(
                     "/home/hail/pan/HDD/MI_dataset", 
+                    "layer_dataset",
                     config.dataset, 
-                    "total_mask_dataset",
                     config.backbone, 
                     config.model_type, 
                     model_key, 

@@ -7,7 +7,7 @@ import yaml
 import warnings
 import pickle
 import copy
-from tqdm.auto import trange
+from tqdm.auto import tqdm
 from sklearn.cluster import MiniBatchKMeans
 from make_segmentation_dataset import get_dataset
 from make_segmentation_model import get_model
@@ -15,10 +15,10 @@ from torch.autograd import Variable
 from sklearn.cluster import KMeans
 import random
 import pickle
-import cv2
 import utils_segmentation as utils_segmentation
 from gc import collect
 from functools import partial
+import cv2
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -77,24 +77,11 @@ def resize_gt_fast(gt_masks, target_size=33):
     
     return gt_resized
 
-def calculate_variance(layer_outputs, valid_mask=None):
-    """각 layer의 벡터값들의 분산 계산"""
-    # layer_outputs: (num_samples, channels, H, W)
-    layer_flat = layer_outputs.reshape(-1, layer_outputs.shape[1])  # (num_samples*H*W, channels)
-    
-    if valid_mask is not None:
-        layer_flat = layer_flat[valid_mask.flatten()]
-    
-    variance = np.var(layer_flat, axis=0)  # 각 채널별 분산
-    mean_variance = np.mean(variance)
-    std_variance = np.std(variance)
-    
-    return mean_variance, std_variance, variance
-
 def main(config, model_file, model_path):
 
     device = f"cuda:{config.gpu}" if torch.cuda.is_available() else "cpu"
 
+    config.batch_size = 128
     dataset = get_dataset(config)
     model = get_model(config, dataset)
 
@@ -111,136 +98,98 @@ def main(config, model_file, model_path):
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
 
-    set_seed(42)
-    dataset = get_dataset(config)
-    
-    print(f"\nCollecting all layer data & calculating variance...")
-    all_layers_for_variance = [[] for _ in range(layer_num)]
-    
-    loader = mi_seg_data_loader(config, dataset, shuffle=False)
-    loader_list = list(loader)
+    n_clusters = 50
+    print(f"KMeans clusters: {n_clusters} (fixed)")
 
-    vq_models = {layer_idx: MiniBatchKMeans(
-        n_clusters=50, 
-        random_state=42, 
-        n_init=1,
-        batch_size=50,
-        verbose=0
-    ) for layer_idx in range(layer_num)}
-        
-    # 첫 pass: 전체 데이터 수집 (variance 계산용만)
-    for idx in trange(len(loader_list), desc="Collecting data for variance", leave=False):
-        inputs, targets = loader_list[idx]
-        if inputs is None:
-            continue
-        
-        with torch.no_grad():
-            inputs = Variable(inputs.to(device))
-            outputs, layers_output = model(inputs)
-        
-        targets_np = targets.numpy().astype(np.uint8)
-                
-        for layer_idx in range(len(layers_output)):
-            layer_data = layers_output[layer_idx].numpy()
-            all_layers_for_variance[layer_idx].append(layer_data)            
-            B, C, H, W = layer_data.shape
-            
-            # Binary 처리 (배경 포함 모든 데이터)
-            binary_data = (layer_data > 0).astype(np.float32)
-            
-            # 데이터 flatten 및 예측
-            layer_flat = binary_data.transpose(0, 2, 3, 1).reshape(-1, C)
-            
-            if len(layer_flat) > 0:
-                vq_models[layer_idx].partial_fit(layer_flat)
+    for layer_idx in range(5):
+        print(f"\n{'='*60}")
+        print(f"Processing Layer {layer_idx}")
+        print(f"{'='*60}")
 
-    for layer_idx in range(layer_num):
-        all_layers_for_variance[layer_idx] = np.concatenate(all_layers_for_variance[layer_idx], axis=0)    
+        set_seed(42)
+        dataset = get_dataset(config)
 
-    optimal_bins_dict = {}
-    for layer_idx in range(layer_num):
-        mean_var, std_var, channel_var = calculate_variance(
-            all_layers_for_variance[layer_idx], 
-        )
+        # ===== PASS 1: 모든 배치에서 valid 데이터 수집 =====
+        print(f"[PASS 1] Collecting valid data for layer {layer_idx}...")
+        all_pixel_data = [[] for _ in range(33*33)]
+        gt_masks = []
+        
+        MI_dataset_loader = mi_seg_data_loader(config, dataset, shuffle=True)
 
-        print(f"\nLayer {layer_idx}:")
-        print(f"  Mean Variance: {mean_var:.6f}")
-        print(f"  Std Variance: {std_var:.6f}")
-        print(f"  Min Channel Variance: {np.min(channel_var):.6f}")
-        print(f"  Max Channel Variance: {np.max(channel_var):.6f}")
-    
-    del all_layers_for_variance
-    collect()
+        for inputs, targets in tqdm(MI_dataset_loader, desc=f"Pass 1: {config.factor_name}", leave=False):
+            if inputs is None:
+                continue
 
-    gt_masks = []
-    pred_masks = []
-    all_vq_preds = {layer_idx: [] for layer_idx in range(layer_num)}
-    
-    config.MI = False
-    dataset = get_dataset(config)
-    infer_loader = mi_seg_data_loader(config, dataset, shuffle=False)
-    infer_loader_list = list(infer_loader)
-    
-    for idx in trange(len(infer_loader_list), desc="Predicting", leave=False):
-        inputs, targets = infer_loader_list[idx]
-        if inputs is None:
-            continue
-        
-        with torch.no_grad():
-            inputs = Variable(inputs.to(device))
-            outputs, layers_output = model(inputs)
-        
-        targets_np = targets.numpy().astype(np.uint8)
-        
-        # 모든 layer에 대해 예측 수행
-        for layer_idx in range(len(layers_output)):
-            layer_data = layers_output[layer_idx].numpy()  # (batch, C, H, W)
-            B, C, H, W = layer_data.shape
-            
-            # Binary 처리 (배경 포함 모든 데이터)
-            binary_data = (layer_data > 0).astype(np.float32)
-            
-            # 데이터 flatten 및 예측
-            layer_flat = binary_data.transpose(0, 2, 3, 1).reshape(-1, C)
-            vq_pred = vq_models[layer_idx].predict(layer_flat)
-            
-            # 예측 결과를 reshape (0~49 범위)
-            vq_pred_mask = vq_pred.reshape(B, H, W)
-            
-            all_vq_preds[layer_idx].append(vq_pred_mask)
-        
-        # GT & Pred 저장
-        _, pred = torch.max(outputs, 1)
-        preds = pred.cpu().numpy().astype(np.uint8)
-        mask = targets.numpy().astype(np.uint8)
+            with torch.no_grad():
+                inputs = Variable(inputs.to(device))
+                outputs, layers_output = model(inputs)
 
-        # GT mask를 layer 크기로 resize (33, 33)
-        mask_resized = resize_gt_fast(mask, target_size=33)
-        pred_masks.append(preds)
-        gt_masks.append(mask_resized)
-        
-        del outputs, layers_output, inputs
+            _, _, H, W = layers_output[0].shape
+            targets_np = targets.numpy().astype(np.uint8)
+
+            # GT mask 수집 (layer 0에서만)
+            if layer_idx == 0:
+                gt_masks.append(targets_np)
+
+            # Binary 처리
+            layer_data = layers_output[layer_idx].cpu().numpy()
+            if config.binary == True:
+                layer_data = (layer_data > 0).astype(np.float32)
+
+            # GT 유효성 마스크
+            valid_mask_resized = resize_gt_fast(targets_np, target_size=H)
+            gt_mask = (valid_mask_resized != 0)
+
+            # 각 픽셀별로 valid 데이터 수집
+            for h in range(H):
+                for w in range(W):
+                    pixel_mask = gt_mask[:, h, w]
+                    pixel_activities = layer_data[pixel_mask, :, h, w]
+                    
+                    if pixel_activities.shape[0] > 50:
+                        all_pixel_data[h*W+w].append(pixel_activities)
+
+        del layers_output, outputs, inputs, MI_dataset_loader
         collect()
-    
-    # ===== Step 5: 결과 저장 =====
-    print(f"\nSaving results...")
-    
-    for layer_idx in range(layer_num):
-        vq_labels = np.concatenate(all_vq_preds[layer_idx], axis=0)
+
+        # numpy 배열로 변환
+        print(f"[PASS 1] Converting to numpy arrays...")
+        for idx in range(33*33):
+            if len(all_pixel_data[idx]) > 0:
+                all_pixel_data[idx] = np.vstack(all_pixel_data[idx])
+            else:
+                all_pixel_data[idx] = None
+
+        # ===== PASS 2: 각 픽셀별 KMeans fit_predict =====
+        print(f"[PASS 2] Fitting KMeans models for layer {layer_idx}...")
+        pixel_by_kmeans = [None] * (33*33)
+        vq_labels = [[] for _ in range(33*33)]
         
+        for idx in range(33*33):
+            if all_pixel_data[idx] is not None and len(all_pixel_data[idx]) >= n_clusters:
+                model_km = KMeans(n_clusters=n_clusters, random_state=42, n_init=1)
+                labels = model_km.fit_predict(all_pixel_data[idx])
+                vq_labels[idx] = labels
+                pixel_by_kmeans[idx] = model_km
+
+        del all_pixel_data
+        collect()
+
+        # 결과 저장
+        vq_labels = np.array([np.array(vq_labels[i]) if len(vq_labels[i]) > 0 else np.array([]) for i in range(33*33)])
+        vq_labels = vq_labels.T
+        vq_labels = vq_labels.reshape(-1, H, W)
+
         with open(config.output_folder + f'/layer_{layer_idx}.pkl', 'wb') as f:
             pickle.dump(vq_labels, f)
-    
-    with open(config.output_folder + f'/gt_labels.pkl', 'wb') as f:
-        pickle.dump(np.concatenate(gt_masks, axis=0), f)
+            print(f"save layer_{layer_idx} complete")
 
-    with open(config.output_folder + f'/pred_labels.pkl', 'wb') as f:
-        pickle.dump(np.concatenate(pred_masks, axis=0), f)
-    
-    print(f"Results saved to {config.output_folder}")
-    
-    del vq_models, all_vq_preds, gt_masks, pred_masks
-    collect()
+        if layer_idx == 0:
+            with open(config.output_folder + f'/gt_labels.pkl', 'wb') as f:
+                pickle.dump(np.concatenate(gt_masks, axis=0), f)
+
+        del vq_labels, pixel_by_kmeans, MI_dataset_loader
+        collect()
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -298,12 +247,12 @@ if __name__ == "__main__":
                 output_folder = os.path.join(
                     "/home/hail/pan/HDD/MI_dataset", 
                     config.dataset, 
-                    "total_dataset",
+                    "pixel_dataset",
                     config.backbone, 
                     config.model_type, 
                     model_key, 
                     p_key,
-                    f_name
+                    f_name,
                 )
 
                 os.makedirs(output_folder, exist_ok=True)
