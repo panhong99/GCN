@@ -81,7 +81,7 @@ def main(config, model_file, model_path):
 
     device = f"cuda:{config.gpu}" if torch.cuda.is_available() else "cpu"
 
-    config.batch_size = 128
+    config.batch_size = 16
     dataset = get_dataset(config)
     model = get_model(config, dataset)
 
@@ -100,96 +100,132 @@ def main(config, model_file, model_path):
 
     n_clusters = 50
     print(f"KMeans clusters: {n_clusters} (fixed)")
-
-    for layer_idx in range(5):
-        print(f"\n{'='*60}")
-        print(f"Processing Layer {layer_idx}")
-        print(f"{'='*60}")
-
-        set_seed(42)
-        dataset = get_dataset(config)
-
-        # ===== PASS 1: 모든 배치에서 valid 데이터 수집 =====
-        print(f"[PASS 1] Collecting valid data for layer {layer_idx}...")
-        all_pixel_data = [[] for _ in range(33*33)]
-        gt_masks = []
+    
+    # ===== 레이어 전 공통 데이터셋 로더 생성 =====
+    print(f"[INFO] Creating dataset loader...")
+    set_seed(42)
+    dataset = get_dataset(config)
+    MI_dataset_loader = mi_seg_data_loader(config, dataset, shuffle=True)
+    
+    # 전체 배치에서 모든 layer의 output 수집
+    print(f"[PASS 1] Collecting all layer outputs from entire dataset...")
+    # all_layer_outputs[layer_idx][(h, w)] = [(feature, sample_idx), ...]
+    all_layer_outputs = {i: {} for i in range(5)}
+    all_gt_masks = []
+    gt_masks_resized = {i: [] for i in range(5)}
+    sample_count_per_batch = []
+    sample_offset = 0  # 누적 샘플 인덱스
+    
+    for batch_idx, (inputs, targets) in enumerate(tqdm(MI_dataset_loader, desc="Collecting outputs", leave=False)):
+        if inputs is None:
+            continue
         
-        MI_dataset_loader = mi_seg_data_loader(config, dataset, shuffle=True)
-
-        for inputs, targets in tqdm(MI_dataset_loader, desc=f"Pass 1: {config.factor_name}", leave=False):
-            if inputs is None:
-                continue
-
-            with torch.no_grad():
-                inputs = Variable(inputs.to(device))
-                outputs, layers_output = model(inputs)
-
-            _, _, H, W = layers_output[0].shape
-            targets_np = targets.numpy().astype(np.uint8)
-
-            # GT mask 수집 (layer 0에서만)
-            if layer_idx == 0:
-                gt_masks.append(targets_np)
-
-            # Binary 처리
-            layer_data = layers_output[layer_idx].cpu().numpy()
+        with torch.no_grad():
+            inputs = Variable(inputs.to(device))
+            outputs, layers_output = model(inputs)
+        
+        _, _, H, W = layers_output[0].shape
+        targets_np = targets.numpy().astype(np.uint8)
+        batch_size = inputs.shape[0]
+        
+        # GT mask 수집
+        all_gt_masks.append(targets_np)
+        batch_size = inputs.shape[0]
+        sample_count_per_batch.append(batch_size)
+        
+        # 각 레이어의 output 수집
+        for layer_idx in range(5):
+            layer_data = layers_output[layer_idx].cpu().numpy()  # (B, C, H, W)
+            
             if config.binary == True:
                 layer_data = (layer_data > 0).astype(np.float32)
-
-            # GT 유효성 마스크
+            
+            # GT 유효성 마스크 생성
             valid_mask_resized = resize_gt_fast(targets_np, target_size=H)
-            gt_mask = (valid_mask_resized != 0)
-
-            # 각 픽셀별로 valid 데이터 수집
+            gt_mask = (valid_mask_resized != 0)  # (B, H, W)
+            
+            B, C = layer_data.shape[0], layer_data.shape[1]
+            
+            # 픽셀 위치별로 feature 수집
             for h in range(H):
                 for w in range(W):
-                    pixel_mask = gt_mask[:, h, w]
-                    pixel_activities = layer_data[pixel_mask, :, h, w]
+                    pixel_key = (h, w)
+                    if pixel_key not in all_layer_outputs[layer_idx]:
+                        all_layer_outputs[layer_idx][pixel_key] = []
                     
-                    if pixel_activities.shape[0] > 50:
-                        all_pixel_data[h*W+w].append(pixel_activities)
-
-        del layers_output, outputs, inputs, MI_dataset_loader
-        collect()
-
-        # numpy 배열로 변환
-        print(f"[PASS 1] Converting to numpy arrays...")
-        for idx in range(33*33):
-            if len(all_pixel_data[idx]) > 0:
-                all_pixel_data[idx] = np.vstack(all_pixel_data[idx])
-            else:
-                all_pixel_data[idx] = None
-
-        # ===== PASS 2: 각 픽셀별 KMeans fit_predict =====
-        print(f"[PASS 2] Fitting KMeans models for layer {layer_idx}...")
-        pixel_by_kmeans = [None] * (33*33)
-        vq_labels = [[] for _ in range(33*33)]
+                    # 이 픽셀에 대해 모든 샘플의 feature 수집
+                    for b in range(B):
+                        if gt_mask[b, h, w]:  # valid한 경우만
+                            feature = layer_data[b, :, h, w]  # (C,)
+                            sample_idx = sample_offset + b
+                            all_layer_outputs[layer_idx][pixel_key].append((feature, sample_idx))
+            
+            gt_masks_resized[layer_idx].append(gt_mask)
         
-        for idx in range(33*33):
-            if all_pixel_data[idx] is not None and len(all_pixel_data[idx]) >= n_clusters:
-                model_km = KMeans(n_clusters=n_clusters, random_state=42, n_init=1)
-                labels = model_km.fit_predict(all_pixel_data[idx])
-                vq_labels[idx] = labels
-                pixel_by_kmeans[idx] = model_km
-
-        del all_pixel_data
+        sample_offset += batch_size
+        del layers_output, outputs, inputs
         collect()
-
-        # 결과 저장
-        vq_labels = np.array([np.array(vq_labels[i]) if len(vq_labels[i]) > 0 else np.array([]) for i in range(33*33)])
-        vq_labels = vq_labels.T
-        vq_labels = vq_labels.reshape(-1, H, W)
-
+    
+    del MI_dataset_loader
+    collect()
+    
+    print(f"[INFO] Total samples processed: {sum(sample_count_per_batch)}")
+    print(f"[INFO] Number of batches: {len(sample_count_per_batch)}")
+    
+    # ===== PASS 2: 각 레이어별 픽셀별 MiniBatchKMeans 학습 =====
+    print(f"\n[PASS 2] Training MiniBatchKMeans for each layer and pixel position...")
+    
+    total_samples = sum(sample_count_per_batch)
+    
+    for layer_idx in range(5):
+        print(f"\n--- Layer {layer_idx} ---")
+        
+        # 결과 저장용
+        vq_labels_full = -np.ones((total_samples, 33, 33), dtype=np.int32)
+        
+        num_pixels = len(all_layer_outputs[layer_idx])
+        print(f"Training KMeans for {num_pixels} pixel positions...")
+        
+        for pixel_idx, (pixel_key, features_and_samples) in enumerate(all_layer_outputs[layer_idx].items()):
+            if (pixel_idx + 1) % 100 == 0:
+                print(f"  Processed {pixel_idx + 1}/{num_pixels} pixels")
+            
+            h, w = pixel_key
+            
+            # 이 픽셀의 모든 feature와 샘플 인덱스 추출
+            if len(features_and_samples) < n_clusters:
+                # feature 개수가 클러스터 수보다 적으면 건너뛰기
+                continue
+            
+            features_list = [item[0] for item in features_and_samples]  # feature만 추출
+            sample_indices = [item[1] for item in features_and_samples]  # sample_idx만 추출
+            features_array = np.array(features_list)  # (num_samples, C)
+            
+            # MiniBatchKMeans 학습
+            mbkm = MiniBatchKMeans(n_clusters=n_clusters, random_state=42, batch_size=256, n_init=3)
+            labels = mbkm.fit_predict(features_array)
+            
+            # 라벨을 샘플 위치에 매핑
+            for label_idx, sample_idx in enumerate(sample_indices):
+                vq_labels_full[sample_idx, h, w] = labels[label_idx]
+        
+        # 저장
         with open(config.output_folder + f'/layer_{layer_idx}.pkl', 'wb') as f:
-            pickle.dump(vq_labels, f)
-            print(f"save layer_{layer_idx} complete")
-
-        if layer_idx == 0:
-            with open(config.output_folder + f'/gt_labels.pkl', 'wb') as f:
-                pickle.dump(np.concatenate(gt_masks, axis=0), f)
-
-        del vq_labels, pixel_by_kmeans, MI_dataset_loader
+            pickle.dump(vq_labels_full, f)
+            print(f"Saved layer_{layer_idx} with shape {vq_labels_full.shape}")
+        
+        del all_layer_outputs[layer_idx], gt_masks_resized[layer_idx], vq_labels_full
         collect()
+    
+    # GT labels 저장
+    if all_gt_masks:
+        gt_concatenated = np.concatenate(all_gt_masks, axis=0)
+        with open(config.output_folder + f'/gt_labels.pkl', 'wb') as f:
+            pickle.dump(gt_concatenated, f)
+            print(f"\nSaved gt_labels with shape {gt_concatenated.shape}")
+    
+    del all_gt_masks
+    collect()
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -72,4 +72,9 @@ __pycache__/
 /PIGNet/latest_models(251210).tar.gz
 /PIGNet/make_mi_cls_data.py
 /PIGNet/make_mi_seg_data.py
-/PIGNet/model_GCN(251222).tar.gz
+/PIGNet/model_GCN(251222).tar.gz/
+/PIGNet/mi_figure
+/PIGNet/infer_output
+/PIGNet/mi_imgs
+/PIGNet/junk_imgs
+/PIGNet/imgs
