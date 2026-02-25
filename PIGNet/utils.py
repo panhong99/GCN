@@ -92,7 +92,7 @@ def preprocess(image, mask, color_mask, flip=False , crop=None, train = False, M
     mask = np.pad(mask,
                   pad_width=((0, H), (0, W)),
                   mode='constant',
-                  constant_values=0)    
+                  constant_values=255)    
       
   image = data_transforms(image)
   mask = torch.LongTensor(mask.astype(np.int64))

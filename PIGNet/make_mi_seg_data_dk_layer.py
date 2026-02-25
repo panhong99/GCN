@@ -208,7 +208,7 @@ def main(config, model_file, model_path):
 
             # GT 유효성 마스크 (segmentation 기반)
             valid_mask_resized = resize_gt_fast(targets_np, target_size=H)
-            gt_mask = (valid_mask_resized != 0)  # (B, H, W)
+            gt_mask = (valid_mask_resized != 255)  # (B, H, W)
             gt_mask_flat = gt_mask.flatten()
             
             # 이진화된 데이터에서 GT 유효 위치만 선택
@@ -249,7 +249,7 @@ def main(config, model_file, model_path):
         
         # GT 유효성 마스크 (segmentation 기반) - layer 루프 밖에서 한 번만 계산
         valid_mask_resized = resize_gt_fast(targets_np, target_size=33)
-        gt_mask = (valid_mask_resized != 0)  # (B, H, W)
+        gt_mask = (valid_mask_resized != 255)  # (B, H, W)
         gt_mask_flat = gt_mask.flatten()
         
         # 모든 layer에 대해 예측 수행

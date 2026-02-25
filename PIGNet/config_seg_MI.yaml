@@ -6,7 +6,7 @@ factor: ""
 model: "" # PIGNet_GSPonly ASPP Mask2Former
 exp: "bn_lr7e-3"
 backbone: "resnet101"
-dataset: "pascal"
+dataset: "cityscape"
 model_type: "pretrained"
 model_number: 2
 gpu: 0
