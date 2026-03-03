@@ -163,22 +163,15 @@ def cal_mi_x_t_conditional(x: np.ndarray,
                            t: np.ndarray,
                            y: np.ndarray,
                            h_bins: int = 51,
-                           ignore_label: int = 255,
-                           mode: str = "same"):
+                           ignore_label: int = 255):
     """
-    Compute MI map I(X_i; T_j) for all (j,i) pairs, but estimate probabilities
-    using ONLY samples n where (Y_i == Y_j) [mode='same'] or (Y_i != Y_j) [mode='diff'].
-
-    Notes:
-    - x, t are expected to contain cluster ids in [-1..49] (invalid=-1). We +1 shift internally.
-    - y is expected to contain dataset labels; ignore pixels are removed using ignore_label.
-    - MI is computed with Laplace smoothing to avoid negative/unstable estimates.
+    Compute MI map I(X_i; T_j) for all (j,i) pairs for both SAME and DIFF modes.
+    Returns mi_same, mi_diff, euc_map
     """
-    assert mode in ("same", "diff")
     N, H, W = t.shape
     P = H * W
     eps = 1e-12
-    alpha = 1e-3  # mild smoothing
+    alpha = 1e-3
 
     x_flat = x.reshape(N, -1).astype(np.int32) + 1   # 0..50
     t_flat = t.reshape(N, -1).astype(np.int32) + 1   # 0..50
@@ -187,68 +180,76 @@ def cal_mi_x_t_conditional(x: np.ndarray,
     max_x = h_bins
     max_t = h_bins
 
-    mi_map_flat = np.zeros((P, P), dtype=np.float32)
+    mi_map_same_flat = np.zeros((P, P), dtype=np.float32)
+    mi_map_diff_flat = np.zeros((P, P), dtype=np.float32)
 
-    # Precompute grid distances once (same as original)
+    # Precompute grid distances once
     grid = np.indices((H, W)).reshape(2, -1).T
     h_diff = grid[:, 0:1] - grid[:, 0:1].T
     w_diff = grid[:, 1:2] - grid[:, 1:2].T
     euc_map = np.sqrt(h_diff**2 + w_diff**2).reshape(H, W, H, W)
     man_map = (np.abs(h_diff) + np.abs(w_diff)).reshape(H, W, H, W)
 
-    for j_t in trange(P, desc=f"MI(X;T) conditional={mode}", leave=False):
+    for j_t in trange(P, desc="MI(X;T) conditional=same/diff", leave=False):
         t_vec_all = t_flat[:, j_t]
         y_j = y_flat[:, j_t]
 
-        # For each i_x, build subset mask based on y_i relation to y_j (depends on i_x)
         for i_x in range(P):
             y_i = y_flat[:, i_x]
-            # valid labels for both positions
-            valid = (y_i != ignore_label) & (y_j != ignore_label)
+            valid_base = (y_i != ignore_label) & (y_j != ignore_label)
 
-            if mode == "same":
-                valid = valid & (y_i == y_j)
-            else:
-                valid = valid & (y_i != y_j)
+            # SAME mode
+            valid_same = valid_base & (y_i == y_j)
+            if np.any(valid_same):
+                x_vec = x_flat[valid_same, i_x]
+                t_vec = t_vec_all[valid_same]
 
-            if not np.any(valid):
-                mi_map_flat[j_t, i_x] = 0.0
-                continue
+                counts_x = np.bincount(x_vec, minlength=max_x).astype(np.float64) + alpha
+                counts_t = np.bincount(t_vec, minlength=max_t).astype(np.float64) + alpha
 
-            x_vec = x_flat[valid, i_x]
-            t_vec = t_vec_all[valid]
+                joint = t_vec.astype(np.int64) * max_x + x_vec.astype(np.int64)
+                counts_joint = np.bincount(joint, minlength=max_t * max_x).astype(np.float64) + alpha
 
-            # Histograms with Laplace smoothing
-            counts_x = np.bincount(x_vec, minlength=max_x).astype(np.float64) + alpha
-            counts_t = np.bincount(t_vec, minlength=max_t).astype(np.float64) + alpha
+                h_x = _entropy_from_counts(counts_x, eps)
+                h_t = _entropy_from_counts(counts_t, eps)
+                h_joint = _entropy_from_counts(counts_joint, eps)
 
-            # Joint
-            joint = t_vec.astype(np.int64) * max_x + x_vec.astype(np.int64)
-            counts_joint = np.bincount(joint, minlength=max_t * max_x).astype(np.float64) + alpha
+                mi = h_t + h_x - h_joint
+                mi_map_same_flat[j_t, i_x] = max(0.0, float(mi))
 
-            h_x = _entropy_from_counts(counts_x, eps)
-            h_t = _entropy_from_counts(counts_t, eps)
-            h_joint = _entropy_from_counts(counts_joint, eps)
+            # DIFF mode
+            valid_diff = valid_base & (y_i != y_j)
+            if np.any(valid_diff):
+                x_vec = x_flat[valid_diff, i_x]
+                t_vec = t_vec_all[valid_diff]
 
-            mi = h_t + h_x - h_joint
-            mi_map_flat[j_t, i_x] = max(0.0, float(mi))
+                counts_x = np.bincount(x_vec, minlength=max_x).astype(np.float64) + alpha
+                counts_t = np.bincount(t_vec, minlength=max_t).astype(np.float64) + alpha
 
-    mi_map = mi_map_flat.reshape(H, W, H, W)
-    return mi_map, euc_map, man_map
+                joint = t_vec.astype(np.int64) * max_x + x_vec.astype(np.int64)
+                counts_joint = np.bincount(joint, minlength=max_t * max_x).astype(np.float64) + alpha
+
+                h_x = _entropy_from_counts(counts_x, eps)
+                h_t = _entropy_from_counts(counts_t, eps)
+                h_joint = _entropy_from_counts(counts_joint, eps)
+
+                mi = h_t + h_x - h_joint
+                mi_map_diff_flat[j_t, i_x] = max(0.0, float(mi))
+
+    mi_map_same = mi_map_same_flat.reshape(H, W, H, W)
+    mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
+    return mi_map_same, mi_map_diff, euc_map
 
 
 def cal_seg_mi_t_y_conditional(t: np.ndarray,
                                y: np.ndarray,
                                h_bins_t: int = 51,
                                num_classes_y: int = 21,
-                               ignore_label: int = 255,
-                               mode: str = "same"):
+                               ignore_label: int = 255):
     """
-    Compute MI map I(T_i; Y_j) for all (i,j) pairs, but estimate probabilities using ONLY samples n where:
-      - Y_i and Y_j are both valid (!= ignore_label)
-      - and (Y_i == Y_j) if mode='same' else (Y_i != Y_j)
+    Compute MI map I(T_i; Y_j) for all (i,j) pairs for both SAME and DIFF modes.
+    Returns mi_same, mi_diff, euc_map
     """
-    assert mode in ("same", "diff")
     N, H, W = t.shape
     P = H * W
     eps = 1e-12
@@ -260,7 +261,8 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
     max_t = h_bins_t
     max_y = num_classes_y
 
-    mi_map_flat = np.zeros((P, P), dtype=np.float32)
+    mi_map_same_flat = np.zeros((P, P), dtype=np.float32)
+    mi_map_diff_flat = np.zeros((P, P), dtype=np.float32)
 
     grid = np.indices((H, W)).reshape(2, -1).T
     h_diff = grid[:, 0:1] - grid[:, 0:1].T
@@ -268,43 +270,165 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
     euc_map = np.sqrt(h_diff**2 + w_diff**2).reshape(H, W, H, W)
     man_map = (np.abs(h_diff) + np.abs(w_diff)).reshape(H, W, H, W)
 
-    for j_y in trange(P, desc=f"MI(T;Y) conditional={mode}", leave=False):
+    for j_y in trange(P, desc="MI(T;Y) conditional=same/diff", leave=False):
         y_j_all = y_flat[:, j_y]
 
         for i_t in range(P):
             y_i_all = y_flat[:, i_t]
 
-            valid = (y_i_all != ignore_label) & (y_j_all != ignore_label)
-            if mode == "same":
-                valid = valid & (y_i_all == y_j_all)
-            else:
-                valid = valid & (y_i_all != y_j_all)
+            valid_base = (y_i_all != ignore_label) & (y_j_all != ignore_label)
 
-            if not np.any(valid):
-                mi_map_flat[i_t, j_y] = 0.0
-                continue
+            # SAME mode
+            valid_same = valid_base & (y_i_all == y_j_all)
+            if np.any(valid_same):
+                t_vec = t_flat[valid_same, i_t]
+                y_vec = y_j_all[valid_same]
+                y_vec = np.clip(y_vec, 0, max_y - 1).astype(np.int32)
 
-            t_vec = t_flat[valid, i_t]
-            y_vec = y_j_all[valid]
+                counts_t = np.bincount(t_vec, minlength=max_t).astype(np.float64) + alpha
+                counts_y = np.bincount(y_vec, minlength=max_y).astype(np.float64) + alpha
 
-            # Clip y into [0..max_y-1] just in case (ignore already removed)
-            y_vec = np.clip(y_vec, 0, max_y - 1).astype(np.int32)
+                joint = t_vec.astype(np.int64) * max_y + y_vec.astype(np.int64)
+                counts_joint = np.bincount(joint, minlength=max_t * max_y).astype(np.float64) + alpha
 
-            counts_t = np.bincount(t_vec, minlength=max_t).astype(np.float64) + alpha
-            counts_y = np.bincount(y_vec, minlength=max_y).astype(np.float64) + alpha
+                h_t = _entropy_from_counts(counts_t, eps)
+                h_y = _entropy_from_counts(counts_y, eps)
+                h_joint = _entropy_from_counts(counts_joint, eps)
 
-            joint = t_vec.astype(np.int64) * max_y + y_vec.astype(np.int64)
-            counts_joint = np.bincount(joint, minlength=max_t * max_y).astype(np.float64) + alpha
+                mi = h_t + h_y - h_joint
+                mi_map_same_flat[i_t, j_y] = max(0.0, float(mi))
 
-            h_t = _entropy_from_counts(counts_t, eps)
-            h_y = _entropy_from_counts(counts_y, eps)
-            h_joint = _entropy_from_counts(counts_joint, eps)
+            # DIFF mode
+            valid_diff = valid_base & (y_i_all != y_j_all)
+            if np.any(valid_diff):
+                t_vec = t_flat[valid_diff, i_t]
+                y_vec = y_j_all[valid_diff]
+                y_vec = np.clip(y_vec, 0, max_y - 1).astype(np.int32)
 
-            mi = h_t + h_y - h_joint
-            mi_map_flat[i_t, j_y] = max(0.0, float(mi))
+                counts_t = np.bincount(t_vec, minlength=max_t).astype(np.float64) + alpha
+                counts_y = np.bincount(y_vec, minlength=max_y).astype(np.float64) + alpha
 
-    mi_map = mi_map_flat.reshape(H, W, H, W)
-    return mi_map, euc_map, man_map
+                joint = t_vec.astype(np.int64) * max_y + y_vec.astype(np.int64)
+                counts_joint = np.bincount(joint, minlength=max_t * max_y).astype(np.float64) + alpha
+
+                h_t = _entropy_from_counts(counts_t, eps)
+                h_y = _entropy_from_counts(counts_y, eps)
+                h_joint = _entropy_from_counts(counts_joint, eps)
+
+                mi = h_t + h_y - h_joint
+                mi_map_diff_flat[i_t, j_y] = max(0.0, float(mi))
+
+    mi_map_same = mi_map_same_flat.reshape(H, W, H, W)
+    mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
+    return mi_map_same, mi_map_diff, euc_map
+
+
+def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
+                           distance, layer_idx, model_name, dataset_name):
+    """
+    Plot scatter maps for SAME and DIFF separately in Information Plane.
+    Color intensity is based on distance.
+    """
+    
+    # Plot SAME
+    fig, ax = plt.subplots(figsize=(10, 8))
+    scatter_same = ax.scatter(mi_xt_same, mi_ty_same, c=distance, cmap='Reds', 
+                              s=50, alpha=0.7, edgecolors='darkred', linewidth=0.5)
+    
+    cbar_same = plt.colorbar(scatter_same, ax=ax)
+    cbar_same.set_label('Euclidean Distance', fontsize=11)
+    
+    ax.set_xlim(0, 4)
+    ax.set_ylim(0, 4)
+    ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
+    ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
+    ax.set_title(f"Layer {layer_idx+1} - SAME Class Conditional Information Plane", fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Layer {layer_idx+1} SAME scatter plot saved.")
+    
+    # Plot DIFF
+    fig, ax = plt.subplots(figsize=(10, 8))
+    scatter_diff = ax.scatter(mi_xt_diff, mi_ty_diff, c=distance, cmap='Blues', 
+                              s=50, alpha=0.7, edgecolors='darkblue', linewidth=0.5)
+    
+    cbar_diff = plt.colorbar(scatter_diff, ax=ax)
+    cbar_diff.set_label('Euclidean Distance', fontsize=11)
+    
+    ax.set_xlim(0, 4)
+    ax.set_ylim(0, 4)
+    ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
+    ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
+    ax.set_title(f"Layer {layer_idx+1} - DIFF Class Conditional Information Plane", fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Layer {layer_idx+1} DIFF scatter plot saved.")
+
+
+def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
+                                     distance, layer_idx, model_name, dataset_name):
+    """
+    Plot scatter maps with distance binning (10-unit intervals).
+    """
+    
+    max_distance = np.max(distance) + 1
+    distance_bins = np.arange(0, max_distance + 10, 10)
+    
+    for bin_idx in range(len(distance_bins) - 1):
+        bin_min = distance_bins[bin_idx]
+        bin_max = distance_bins[bin_idx + 1]
+        
+        mask = (distance >= bin_min) & (distance < bin_max)
+        
+        if not np.any(mask):
+            continue
+        
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        
+        # Plot SAME
+        dist_bin = distance[mask]
+        scatter_same = axes[0].scatter(mi_xt_same[mask], mi_ty_same[mask], 
+                                       c=dist_bin, cmap='Reds', 
+                                       s=50, alpha=0.7, edgecolors='darkred', linewidth=0.5)
+        
+        cbar_same = plt.colorbar(scatter_same, ax=axes[0])
+        cbar_same.set_label('Euclidean Distance', fontsize=10)
+        
+        axes[0].set_xlim(0, 4)
+        axes[0].set_ylim(0, 4)
+        axes[0].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
+        axes[0].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+        axes[0].set_title(f"SAME Class - Distance [{bin_min}-{bin_max})", fontsize=12, fontweight='bold')
+        axes[0].grid(True, alpha=0.3)
+        
+        # Plot DIFF
+        scatter_diff = axes[1].scatter(mi_xt_diff[mask], mi_ty_diff[mask], 
+                                       c=dist_bin, cmap='Blues', 
+                                       s=50, alpha=0.7, edgecolors='darkblue', linewidth=0.5)
+        
+        cbar_diff = plt.colorbar(scatter_diff, ax=axes[1])
+        cbar_diff.set_label('Euclidean Distance', fontsize=10)
+        
+        axes[1].set_xlim(0, 4)
+        axes[1].set_ylim(0, 4)
+        axes[1].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
+        axes[1].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+        axes[1].set_title(f"DIFF Class - Distance [{bin_min}-{bin_max})", fontsize=12, fontweight='bold')
+        axes[1].grid(True, alpha=0.3)
+        
+        plt.suptitle(f"Layer {layer_idx+1} - Scatter Plot Comparison (Distance Bin: {bin_min}-{bin_max})", 
+                     fontsize=13, fontweight='bold', y=1.00)
+        plt.tight_layout()
+        plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}_dist{int(bin_min)}-{int(bin_max)}.png",
+                   dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"Layer {layer_idx+1} distance [{bin_min}-{bin_max}) scatter plot saved.")
 
 # Segmentation 코드 실행하려면 아래 주석 해제하고 classification 코드 주석 처리
 
@@ -365,15 +489,9 @@ if __name__ == "__main__":  # segmentation
     all_mi_xt_diff, all_mi_ty_diff = [], []
 
     for layer_idx, t_layer in enumerate(t_in):
-        # SAME
-        mi_xt_same, euc_map, _ = cal_mi_x_t_conditional(x_in, t_layer, y_in, ignore_label=ignore_label, mode="same")
-        mi_ty_same, _, _ = cal_seg_mi_t_y_conditional(t_layer, y_in, ignore_label=ignore_label, mode="same")
+        mi_xt_same, mi_xt_diff, euc_map = cal_mi_x_t_conditional(x_in, t_layer, y_in, ignore_label=ignore_label)
+        mi_ty_same, mi_ty_diff, _ = cal_seg_mi_t_y_conditional(t_layer, y_in, ignore_label=ignore_label)
 
-        # DIFF
-        mi_xt_diff, _, _ = cal_mi_x_t_conditional(x_in, t_layer, y_in, ignore_label=ignore_label, mode="diff")
-        mi_ty_diff, _, _ = cal_seg_mi_t_y_conditional(t_layer, y_in, ignore_label=ignore_label, mode="diff")
-
-        # Flatten
         all_distance.append(euc_map.flatten())
         all_mi_xt_same.append(mi_xt_same.flatten())
         all_mi_ty_same.append(mi_ty_same.flatten())
@@ -410,6 +528,7 @@ if __name__ == "__main__":  # segmentation
     plt.rcParams['ytick.labelsize'] = 12
 
     # Plot per layer: SAME vs DIFF in one figure (distance as colormap intensity, alpha different)
+    print("\n=== Generating Conditional SAME/DIFF Plots (Combined) ===")
     for layer_idx in range(distance.shape[0]):
         plt.figure(figsize=(12, 7))
 
@@ -445,10 +564,23 @@ if __name__ == "__main__":  # segmentation
         plt.close()
         print(f"Layer {layer_idx+1} plot saved (conditional SAME/DIFF).")
 
+    # Plot per layer: SAME and DIFF separately
+    print("\n=== Generating Separate SAME/DIFF Scatter Plots ===")
+    for layer_idx in range(distance.shape[0]):
+        plot_scatter_same_diff(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
+                              mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
+                              distance[layer_idx], layer_idx, args.model, args.dataset)
+
     # Plot per layer with distance bins (10-unit intervals)
+    print("\n=== Generating Distance-Binned Scatter Plots ===")
     max_distance = np.max(distance) + 1
     distance_bins = np.arange(0, max_distance + 10, 10)
     bin_labels = [f"{int(distance_bins[i])}-{int(distance_bins[i+1])}" for i in range(len(distance_bins)-1)]
+
+    for layer_idx in range(distance.shape[0]):
+        plot_scatter_with_distance_bins(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
+                                       mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
+                                       distance[layer_idx], layer_idx, args.model, args.dataset)
 
     for layer_idx in range(distance.shape[0]):
         for bin_idx in range(len(distance_bins) - 1):
@@ -492,3 +624,5 @@ if __name__ == "__main__":  # segmentation
                        dpi=150, bbox_inches='tight')
             plt.close()
             print(f"Layer {layer_idx+1} distance [{bin_min}-{bin_max}) plot saved.")
+
+    print("\n=== All plots generated successfully! ===")

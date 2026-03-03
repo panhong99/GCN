@@ -59,7 +59,7 @@ def mi_seg_data_loader(config, dataset, shuffle=True):
     
     return MI_dataset_loader
 
-def resize_gt_fast(gt_masks, target_size=33):
+def resize_gt(gt_masks, target_size=33, config_dataset=None):
     """
     빠른 버전 - cv2.resize 사용
     gt_masks: (B, H, W)
@@ -73,7 +73,10 @@ def resize_gt_fast(gt_masks, target_size=33):
         resized = cv2.resize(gt_masks[b].astype(np.uint8), (target_size, target_size), interpolation=cv2.INTER_NEAREST)
 
         # 255는 invalid로 처리 (0으로 변경)
-        resized = np.where(resized == 255, 0, resized)
+        if config_dataset == "pascal":
+            resized = np.where(resized == 255, 0, resized)
+        else:
+            resized = np.where(resized == 255, 255, resized)
         gt_resized[b] = resized
     
     return gt_resized
@@ -96,79 +99,28 @@ def main(config, model_file, model_path):
 
     device = f"cuda:{config.gpu}" if torch.cuda.is_available() else "cpu"
 
+    if config.dataset == "cityscapes":
+        invalid_cls = 255
+    else: # pascal
+        invalid_cls = 0
+
     dataset = get_dataset(config)
     model = get_model(config, dataset)
 
     checkpoint = torch.load(os.path.join(model_path, model_file), map_location=device)
 
-    if config.model == "ASPP":
-        state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
-    else:
-        state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+    # if config.model == "ASPP":
+    #     state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+    # else:
+    #     state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+
+    state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
 
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
 
     set_seed(42)
     dataset = get_dataset(config)
-    
-    # all_layers_for_variance = [[] for _ in range(5)]
-    # all_layers_valid_masks_for_variance = [[] for _ in range(5)]
-    
-    # loader = mi_seg_data_loader(config, dataset, shuffle=False)
-    # loader_list = list(loader)
-    
-    # for idx in trange(len(loader_list), desc="Collecting data", leave=False):
-    #     inputs, targets = loader_list[idx]
-    #     if inputs is None:
-    #         continue
-        
-    #     with torch.no_grad():
-    #         inputs = Variable(inputs.to(device))
-    #         outputs, layers_output, _ = model(inputs)
-        
-    #     targets_np = targets.numpy().astype(np.uint8)
-        
-    #     for layer_idx in range(len(layers_output)):
-            
-    #         layer_data = layers_output[layer_idx].cpu().numpy()
-    #         all_layers_for_variance[layer_idx].append(layer_data)
-        
-    #         _, _, layer_h, layer_w = layer_data.shape
-    #         valid_mask_resized = resize_gt_fast(targets_np, target_size=layer_h)
-        
-    #         valid_mask = (valid_mask_resized != 0)
-    #         all_layers_valid_masks_for_variance[layer_idx].append(valid_mask)
-        
-    #     del outputs, layers_output, inputs
-    #     collect()
-    
-    # # Concatenate for variance calculation
-    # for layer_idx in range(5):
-    #     all_layers_for_variance[layer_idx] = np.concatenate(all_layers_for_variance[layer_idx], axis=0)
-    #     all_layers_valid_masks_for_variance[layer_idx] = np.concatenate(all_layers_valid_masks_for_variance[layer_idx], axis=0)
-    
-    # # ===== Step 2: Variance 계산 및 최적 bin 결정 =====
-    # print(f"\n{'='*60}")
-    # print(f"Variance Analysis")
-    # print(f"{'='*60}")
-    
-    # optimal_bins_dict = {}
-    # for layer_idx in range(5):
-    #     mean_var, std_var, channel_var = calculate_variance(
-    #         all_layers_for_variance[layer_idx], 
-    #         all_layers_valid_masks_for_variance[layer_idx]
-    #     )
-        
-    #     print(f"\nLayer {layer_idx}:")
-    #     print(f"  Mean Variance: {mean_var:.6f}")
-    #     print(f"  Std Variance: {std_var:.6f}")
-    #     print(f"  Min Channel Variance: {np.min(channel_var):.6f}")
-    #     print(f"  Max Channel Variance: {np.max(channel_var):.6f}")
-    #     print(f"  Valid Pixel Ratio: {np.sum(all_layers_valid_masks_for_variance[layer_idx]) / all_layers_valid_masks_for_variance[layer_idx].size:.4f}")
-    
-    # del all_layers_for_variance, all_layers_valid_masks_for_variance
-    # collect()
     
     print(f"\n{'='*60}")
     print(f"Training KMeans models for all layers (batch-wise)")
@@ -207,8 +159,8 @@ def main(config, model_file, model_path):
                 layer_data = (layer_data > 0).astype(np.float32)  # (B, C, H, W)
 
             # GT 유효성 마스크 (segmentation 기반)
-            valid_mask_resized = resize_gt_fast(targets_np, target_size=H)
-            gt_mask = (valid_mask_resized != 255)  # (B, H, W)
+            valid_mask_resized = resize_gt(targets_np, target_size=H, config_dataset=config.dataset)
+            gt_mask = (valid_mask_resized != invalid_cls)  # (B, H, W)
             gt_mask_flat = gt_mask.flatten()
             
             # 이진화된 데이터에서 GT 유효 위치만 선택
@@ -248,8 +200,8 @@ def main(config, model_file, model_path):
         targets_np = targets.numpy().astype(np.uint8)
         
         # GT 유효성 마스크 (segmentation 기반) - layer 루프 밖에서 한 번만 계산
-        valid_mask_resized = resize_gt_fast(targets_np, target_size=33)
-        gt_mask = (valid_mask_resized != 255)  # (B, H, W)
+        valid_mask_resized = resize_gt(targets_np, target_size=33, config_dataset=config.dataset)
+        gt_mask = (valid_mask_resized != invalid_cls)  # (B, H, W)
         gt_mask_flat = gt_mask.flatten()
         
         # 모든 layer에 대해 예측 수행

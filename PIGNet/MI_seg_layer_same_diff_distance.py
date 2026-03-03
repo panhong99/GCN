@@ -177,36 +177,11 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
     return mi_map, euc_map, man_map
 
 
-def _interpolate_with_smoothing(points, values, grid_resolution=150):
+def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
+                           distance, layer_idx, model_name, dataset_name):
     """
-    Interpolate scattered points to a regular grid with smoothing.
-    Uses cubic interpolation and applies Gaussian smoothing for better contours.
-    """
-    from scipy.ndimage import gaussian_filter
-    
-    xi = np.linspace(0, 4, grid_resolution)
-    yi = np.linspace(0, 4, grid_resolution)
-    Xi, Yi = np.meshgrid(xi, yi)
-    
-    # Use cubic interpolation for smoother results
-    Zi = griddata(points, values, (Xi, Yi), method='cubic', fill_value=np.nanmean(values))
-    
-    # Apply Gaussian smoothing to fill NaN and smooth the field
-    mask = ~np.isnan(Zi)
-    if np.sum(mask) > 0:
-        Zi_smooth = gaussian_filter(np.nan_to_num(Zi, nan=np.nanmean(values)), sigma=1.5)
-    else:
-        Zi_smooth = Zi
-    
-    return Xi, Yi, Zi_smooth
-
-
-def plot_contour_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
-                           distance, layer_idx, model_name, dataset_name,
-                           grid_resolution=150, min_points=5):
-    """
-    Plot filled contour map for SAME and DIFF separately in Information Plane.
-    Uses cubic interpolation and Gaussian smoothing for smooth, beautiful contours.
+    Plot scatter maps for SAME and DIFF separately in Information Plane.
+    Color intensity is based on distance.
     
     Args:
         mi_xt_same, mi_ty_same: SAME mode MI values (flattened)
@@ -215,44 +190,18 @@ def plot_contour_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
         layer_idx: Layer index
         model_name: Model name for file saving
         dataset_name: Dataset name for file saving
-        grid_resolution: Resolution of interpolation grid (default 150 for smooth contours)
-        min_points: Minimum number of points required for interpolation
     """
+    
+    # Normalize distance for color mapping [0, 1]
+    dist_norm = (distance - distance.min()) / (distance.max() - distance.min() + 1e-8)
     
     # Plot SAME
     fig, ax = plt.subplots(figsize=(10, 8))
+    scatter_same = ax.scatter(mi_xt_same, mi_ty_same, c=distance, cmap='Reds', 
+                              s=50, alpha=0.7, edgecolors='darkred', linewidth=0.5)
     
-    # Prepare points for SAME
-    points_same = np.column_stack([mi_xt_same, mi_ty_same])
-    values_same = distance
-    
-    # Check if we have enough points for interpolation
-    if len(points_same) >= min_points:
-        try:
-            # Interpolate with smoothing
-            Xi, Yi, Zi_same = _interpolate_with_smoothing(points_same, values_same, grid_resolution)
-            
-            # Create filled contour plot for SAME
-            contour_levels = np.linspace(np.min(values_same), np.max(values_same), 20)
-            cf_same = ax.contourf(Xi, Yi, Zi_same, levels=contour_levels, cmap='Reds', alpha=0.85)
-            cs_same = ax.contour(Xi, Yi, Zi_same, levels=contour_levels[::2], colors='darkred', linewidths=0.7, alpha=0.5)
-            
-            cbar_same = plt.colorbar(cf_same, ax=ax)
-            cbar_same.set_label('Euclidean Distance', fontsize=11)
-            
-            # Overlay actual data points
-            scatter_same = ax.scatter(mi_xt_same, mi_ty_same, c=distance, cmap='Reds', 
-                                     s=30, alpha=0.5, edgecolors='darkred', linewidth=0.5)
-        except Exception as e:
-            print(f"Warning: Interpolation failed for SAME at layer {layer_idx+1}: {str(e)[:50]}")
-            sc_same = ax.scatter(mi_xt_same, mi_ty_same, c=distance, cmap='Reds', s=30, alpha=0.6, edgecolors='darkred', linewidth=0.5)
-            cbar_same = plt.colorbar(sc_same, ax=ax)
-            cbar_same.set_label('Euclidean Distance', fontsize=11)
-    else:
-        # Not enough points
-        sc_same = ax.scatter(mi_xt_same, mi_ty_same, c=distance, cmap='Reds', s=30, alpha=0.6, edgecolors='darkred', linewidth=0.5)
-        cbar_same = plt.colorbar(sc_same, ax=ax)
-        cbar_same.set_label('Euclidean Distance', fontsize=11)
+    cbar_same = plt.colorbar(scatter_same, ax=ax)
+    cbar_same.set_label('Euclidean Distance', fontsize=11)
     
     ax.set_xlim(0, 4)
     ax.set_ylim(0, 4)
@@ -262,44 +211,17 @@ def plot_contour_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_contour_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"Layer {layer_idx+1} SAME contour plot saved.")
+    print(f"Layer {layer_idx+1} SAME scatter plot saved.")
     
     # Plot DIFF
     fig, ax = plt.subplots(figsize=(10, 8))
+    scatter_diff = ax.scatter(mi_xt_diff, mi_ty_diff, c=distance, cmap='Blues', 
+                              s=50, alpha=0.7, edgecolors='darkblue', linewidth=0.5)
     
-    # Prepare points for DIFF
-    points_diff = np.column_stack([mi_xt_diff, mi_ty_diff])
-    values_diff = distance
-    
-    # Check if we have enough points for interpolation
-    if len(points_diff) >= min_points:
-        try:
-            # Interpolate with smoothing
-            Xi, Yi, Zi_diff = _interpolate_with_smoothing(points_diff, values_diff, grid_resolution)
-            
-            # Create filled contour plot for DIFF
-            contour_levels_diff = np.linspace(np.min(values_diff), np.max(values_diff), 20)
-            cf_diff = ax.contourf(Xi, Yi, Zi_diff, levels=contour_levels_diff, cmap='Blues', alpha=0.85)
-            cs_diff = ax.contour(Xi, Yi, Zi_diff, levels=contour_levels_diff[::2], colors='darkblue', linewidths=0.7, alpha=0.5)
-            
-            cbar_diff = plt.colorbar(cf_diff, ax=ax)
-            cbar_diff.set_label('Euclidean Distance', fontsize=11)
-            
-            # Overlay actual data points
-            scatter_diff = ax.scatter(mi_xt_diff, mi_ty_diff, c=distance, cmap='Blues', 
-                                     s=30, alpha=0.5, edgecolors='darkblue', linewidth=0.5)
-        except Exception as e:
-            print(f"Warning: Interpolation failed for DIFF at layer {layer_idx+1}: {str(e)[:50]}")
-            sc_diff = ax.scatter(mi_xt_diff, mi_ty_diff, c=distance, cmap='Blues', s=30, alpha=0.6, edgecolors='darkblue', linewidth=0.5)
-            cbar_diff = plt.colorbar(sc_diff, ax=ax)
-            cbar_diff.set_label('Euclidean Distance', fontsize=11)
-    else:
-        # Not enough points
-        sc_diff = ax.scatter(mi_xt_diff, mi_ty_diff, c=distance, cmap='Blues', s=30, alpha=0.6, edgecolors='darkblue', linewidth=0.5)
-        cbar_diff = plt.colorbar(sc_diff, ax=ax)
-        cbar_diff.set_label('Euclidean Distance', fontsize=11)
+    cbar_diff = plt.colorbar(scatter_diff, ax=ax)
+    cbar_diff.set_label('Euclidean Distance', fontsize=11)
     
     ax.set_xlim(0, 4)
     ax.set_ylim(0, 4)
@@ -309,19 +231,16 @@ def plot_contour_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_contour_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"Layer {layer_idx+1} DIFF contour plot saved.")
+    print(f"Layer {layer_idx+1} DIFF scatter plot saved.")
 
 
-def plot_contour_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
-                                     distance, layer_idx, model_name, dataset_name,
-                                     grid_resolution=150, min_points=5):
+def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
+                                     distance, layer_idx, model_name, dataset_name):
     """
-    Plot contour maps with distance binning (10-unit intervals).
-    Uses cubic interpolation and Gaussian smoothing for smooth contours.
+    Plot scatter maps with distance binning (10-unit intervals).
     """
-    from scipy.ndimage import gaussian_filter
     
     max_distance = np.max(distance) + 1
     distance_bins = np.arange(0, max_distance + 10, 10)
@@ -330,47 +249,21 @@ def plot_contour_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         bin_min = distance_bins[bin_idx]
         bin_max = distance_bins[bin_idx + 1]
         
-        mask_same = (distance >= bin_min) & (distance < bin_max)
-        mask_diff = (distance >= bin_min) & (distance < bin_max)
+        mask = (distance >= bin_min) & (distance < bin_max)
         
-        if not np.any(mask_same) and not np.any(mask_diff):
+        if not np.any(mask):
             continue
         
         fig, axes = plt.subplots(1, 2, figsize=(16, 6))
         
         # Plot SAME
-        if np.any(mask_same):
-            points_same = np.column_stack([mi_xt_same[mask_same], mi_ty_same[mask_same]])
-            values_same = distance[mask_same]
-            
-            # Check if we have enough points for interpolation
-            if len(points_same) >= min_points:
-                try:
-                    # Interpolate with smoothing
-                    Xi, Yi, Zi_same = _interpolate_with_smoothing(points_same, values_same, grid_resolution)
-                    
-                    contour_levels = np.linspace(bin_min, bin_max, 15)
-                    cf_same = axes[0].contourf(Xi, Yi, Zi_same, levels=contour_levels, cmap='Reds', alpha=0.85)
-                    cs_same = axes[0].contour(Xi, Yi, Zi_same, levels=contour_levels[::2], colors='darkred', linewidths=0.7, alpha=0.5)
-                    
-                    cbar_same = plt.colorbar(cf_same, ax=axes[0])
-                    cbar_same.set_label('Euclidean Distance', fontsize=10)
-                    
-                    # Overlay actual data points
-                    axes[0].scatter(mi_xt_same[mask_same], mi_ty_same[mask_same], 
-                                   c=distance[mask_same], cmap='Reds', s=20, alpha=0.4, edgecolors='darkred', linewidth=0.3)
-                except Exception as e:
-                    print(f"  Warning: Interpolation failed for SAME bin [{bin_min}-{bin_max}), using scatter: {str(e)[:40]}")
-                    sc_same = axes[0].scatter(mi_xt_same[mask_same], mi_ty_same[mask_same], 
-                                             c=distance[mask_same], cmap='Reds', s=20, alpha=0.6, edgecolors='darkred', linewidth=0.5)
-                    cbar_same = plt.colorbar(sc_same, ax=axes[0])
-                    cbar_same.set_label('Euclidean Distance', fontsize=10)
-            else:
-                # Use scatter plot if insufficient points
-                sc_same = axes[0].scatter(mi_xt_same[mask_same], mi_ty_same[mask_same], 
-                                         c=distance[mask_same], cmap='Reds', s=20, alpha=0.6, edgecolors='darkred', linewidth=0.5)
-                cbar_same = plt.colorbar(sc_same, ax=axes[0])
-                cbar_same.set_label('Euclidean Distance', fontsize=10)
+        dist_bin = distance[mask]
+        scatter_same = axes[0].scatter(mi_xt_same[mask], mi_ty_same[mask], 
+                                       c=dist_bin, cmap='Reds', 
+                                       s=50, alpha=0.7, edgecolors='darkred', linewidth=0.5)
+        
+        cbar_same = plt.colorbar(scatter_same, ax=axes[0])
+        cbar_same.set_label('Euclidean Distance', fontsize=10)
         
         axes[0].set_xlim(0, 4)
         axes[0].set_ylim(0, 4)
@@ -380,35 +273,12 @@ def plot_contour_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         axes[0].grid(True, alpha=0.3)
         
         # Plot DIFF
-        if np.any(mask_diff):
-            points_diff = np.column_stack([mi_xt_diff[mask_diff], mi_ty_diff[mask_diff]])
-            values_diff = distance[mask_diff]
-            
-            if len(points_diff) >= min_points:
-                try:
-                    Xi, Yi, Zi_diff = _interpolate_with_smoothing(points_diff, values_diff, grid_resolution)
-                    
-                    contour_levels_diff = np.linspace(bin_min, bin_max, 15)
-                    cf_diff = axes[1].contourf(Xi, Yi, Zi_diff, levels=contour_levels_diff, cmap='Blues', alpha=0.85)
-                    cs_diff = axes[1].contour(Xi, Yi, Zi_diff, levels=contour_levels_diff[::2], colors='darkblue', linewidths=0.7, alpha=0.5)
-                    
-                    cbar_diff = plt.colorbar(cf_diff, ax=axes[1])
-                    cbar_diff.set_label('Euclidean Distance', fontsize=10)
-                    
-                    # Overlay actual data points
-                    axes[1].scatter(mi_xt_diff[mask_diff], mi_ty_diff[mask_diff], 
-                                   c=distance[mask_diff], cmap='Blues', s=20, alpha=0.4, edgecolors='darkblue', linewidth=0.3)
-                except Exception as e:
-                    print(f"  Warning: Interpolation failed for DIFF bin [{bin_min}-{bin_max}), using scatter: {str(e)[:40]}")
-                    sc_diff = axes[1].scatter(mi_xt_diff[mask_diff], mi_ty_diff[mask_diff], 
-                                             c=distance[mask_diff], cmap='Blues', s=20, alpha=0.6, edgecolors='darkblue', linewidth=0.5)
-                    cbar_diff = plt.colorbar(sc_diff, ax=axes[1])
-                    cbar_diff.set_label('Euclidean Distance', fontsize=10)
-            else:
-                sc_diff = axes[1].scatter(mi_xt_diff[mask_diff], mi_ty_diff[mask_diff], 
-                                         c=distance[mask_diff], cmap='Blues', s=20, alpha=0.6, edgecolors='darkblue', linewidth=0.5)
-                cbar_diff = plt.colorbar(sc_diff, ax=axes[1])
-                cbar_diff.set_label('Euclidean Distance', fontsize=10)
+        scatter_diff = axes[1].scatter(mi_xt_diff[mask], mi_ty_diff[mask], 
+                                       c=dist_bin, cmap='Blues', 
+                                       s=50, alpha=0.7, edgecolors='darkblue', linewidth=0.5)
+        
+        cbar_diff = plt.colorbar(scatter_diff, ax=axes[1])
+        cbar_diff.set_label('Euclidean Distance', fontsize=10)
         
         axes[1].set_xlim(0, 4)
         axes[1].set_ylim(0, 4)
@@ -417,13 +287,13 @@ def plot_contour_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         axes[1].set_title(f"DIFF Class - Distance [{bin_min}-{bin_max})", fontsize=12, fontweight='bold')
         axes[1].grid(True, alpha=0.3)
         
-        plt.suptitle(f"Layer {layer_idx+1} - Contour Plot Comparison (Distance Bin: {bin_min}-{bin_max})", 
+        plt.suptitle(f"Layer {layer_idx+1} - Scatter Plot Comparison (Distance Bin: {bin_min}-{bin_max})", 
                      fontsize=13, fontweight='bold', y=1.00)
         plt.tight_layout()
-        plt.savefig(f"{model_name}_{dataset_name}_contour_layer{layer_idx+1}_dist{int(bin_min)}-{int(bin_max)}.png",
+        plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}_dist{int(bin_min)}-{int(bin_max)}.png",
                    dpi=150, bbox_inches='tight')
         plt.close()
-        print(f"Layer {layer_idx+1} distance [{bin_min}-{bin_max}) plot saved.")
+        print(f"Layer {layer_idx+1} distance [{bin_min}-{bin_max}) scatter plot saved.")
 
 
 if __name__ == "__main__":
@@ -506,17 +376,17 @@ if __name__ == "__main__":
     plt.rcParams['xtick.labelsize'] = 11
     plt.rcParams['ytick.labelsize'] = 11
 
-    # Plot contour: SAME vs DIFF (main)
-    print("\n=== Generating Contour Plots (SAME vs DIFF) ===")
+    # Plot scatter: SAME vs DIFF (main)
+    print("\n=== Generating Scatter Plots (SAME vs DIFF) ===")
     for layer_idx in range(distance.shape[0]):
-        plot_contour_same_diff(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
+        plot_scatter_same_diff(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
                               mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
                               distance[layer_idx], layer_idx, args.model, args.dataset)
 
-    # Plot contour with distance binning
-    print("\n=== Generating Distance-Binned Contour Plots ===")
+    # Plot scatter with distance binning
+    print("\n=== Generating Distance-Binned Scatter Plots ===")
     for layer_idx in range(distance.shape[0]):
-        plot_contour_with_distance_bins(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
+        plot_scatter_with_distance_bins(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
                                        mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
                                        distance[layer_idx], layer_idx, args.model, args.dataset)
 
