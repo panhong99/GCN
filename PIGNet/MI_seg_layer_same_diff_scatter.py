@@ -240,7 +240,6 @@ def cal_mi_x_t_conditional(x: np.ndarray,
     mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
     return mi_map_same, mi_map_diff, euc_map
 
-
 def cal_seg_mi_t_y_conditional(t: np.ndarray,
                                y: np.ndarray,
                                h_bins_t: int = 51,
@@ -316,12 +315,11 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
                 mi = h_t + h_y - h_joint
-                mi_map_diff_flat[i_t, j_y] = max(0.0, float(mi))
+                mi_map_diff_flat[i_t, j_y] = float(mi)
 
     mi_map_same = mi_map_same_flat.reshape(H, W, H, W)
     mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
     return mi_map_same, mi_map_diff, euc_map
-
 
 def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
                            distance, layer_idx, model_name, dataset_name):
@@ -527,42 +525,44 @@ if __name__ == "__main__":  # segmentation
     plt.rcParams['xtick.labelsize'] = 12
     plt.rcParams['ytick.labelsize'] = 12
 
-    # Plot per layer: SAME vs DIFF in one figure (distance as colormap intensity, alpha different)
-    print("\n=== Generating Conditional SAME/DIFF Plots (Combined) ===")
-    for layer_idx in range(distance.shape[0]):
-        plt.figure(figsize=(12, 7))
-
-        # SAME
-        sc_same = plt.scatter(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
-                              c=distance[layer_idx], cmap='Reds',
-                              alpha=0.35, s=12,
-                              edgecolors='none', rasterized=True,
-                              label='Same (conditional MI)')
-        # DIFF
-        sc_diff = plt.scatter(mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
-                              c=distance[layer_idx], cmap='Blues',
-                              alpha=0.07, s=12,
-                              edgecolors='none', rasterized=True,
-                              label='Diff (conditional MI)')
-
-        cbar1 = plt.colorbar(sc_same)
-        cbar1.set_label('Euclidean Distance (Same)', fontsize=10)
-        cbar2 = plt.colorbar(sc_diff)
-        cbar2.set_label('Euclidean Distance (Diff)', fontsize=10)
-
-        plt.legend(frameon=False, loc='upper right')
-        plt.xlabel("I(X; T)", fontsize=11, fontweight='bold')
-        plt.ylabel("I(T; Y)", fontsize=11, fontweight='bold')
-        plt.title(f"Layer {layer_idx+1} - Conditional SAME/DIFF Information Plane", fontsize=12, fontweight='bold')
-
-        plt.xlim(0, 4)
-        plt.ylim(0, 4)
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(f"{args.model}_{args.dataset}_condMI_layer{layer_idx+1}.png",
-                    dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"Layer {layer_idx+1} plot saved (conditional SAME/DIFF).")
+    # # ========== COMMENTED OUT: Combined SAME/DIFF plot ==========
+    # # Plot per layer: SAME and DIFF in one figure (distance as colormap intensity, alpha different)
+    # # Uncomment below to visualize overlapped SAME/DIFF scatter in single figure
+    # print("\n=== Generating Conditional SAME/DIFF Plots (Combined) ===")
+    # for layer_idx in range(distance.shape[0]):
+    #     plt.figure(figsize=(12, 7))
+    #
+    #     # SAME
+    #     sc_same = plt.scatter(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
+    #                           c=distance[layer_idx], cmap='Reds',
+    #                           alpha=0.35, s=12,
+    #                           edgecolors='none', rasterized=True,
+    #                           label='Same (conditional MI)')
+    #     # DIFF
+    #     sc_diff = plt.scatter(mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
+    #                           c=distance[layer_idx], cmap='Blues',
+    #                           alpha=0.07, s=12,
+    #                           edgecolors='none', rasterized=True,
+    #                           label='Diff (conditional MI)')
+    #
+    #     cbar1 = plt.colorbar(sc_same)
+    #     cbar1.set_label('Euclidean Distance (Same)', fontsize=10)
+    #     cbar2 = plt.colorbar(sc_diff)
+    #     cbar2.set_label('Euclidean Distance (Diff)', fontsize=10)
+    #
+    #     plt.legend(frameon=False, loc='upper right')
+    #     plt.xlabel("I(X; T)", fontsize=11, fontweight='bold')
+    #     plt.ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+    #     plt.title(f"Layer {layer_idx+1} - Conditional SAME/DIFF Information Plane", fontsize=12, fontweight='bold')
+    #
+    #     plt.xlim(0, 4)
+    #     plt.ylim(0, 4)
+    #     plt.grid(True, alpha=0.3)
+    #     plt.tight_layout()
+    #     plt.savefig(f"{args.model}_{args.dataset}_condMI_layer{layer_idx+1}.png",
+    #                 dpi=150, bbox_inches='tight')
+    #     plt.close()
+    #     print(f"Layer {layer_idx+1} plot saved (conditional SAME/DIFF).")
 
     # Plot per layer: SAME and DIFF separately
     print("\n=== Generating Separate SAME/DIFF Scatter Plots ===")
@@ -582,47 +582,47 @@ if __name__ == "__main__":  # segmentation
                                        mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
                                        distance[layer_idx], layer_idx, args.model, args.dataset)
 
-    for layer_idx in range(distance.shape[0]):
-        for bin_idx in range(len(distance_bins) - 1):
-            bin_min = distance_bins[bin_idx]
-            bin_max = distance_bins[bin_idx + 1]
+    # for layer_idx in range(distance.shape[0]):
+    #     for bin_idx in range(len(distance_bins) - 1):
+    #         bin_min = distance_bins[bin_idx]
+    #         bin_max = distance_bins[bin_idx + 1]
 
-            # Create mask for current distance range
-            mask_same = (distance[layer_idx] >= bin_min) & (distance[layer_idx] < bin_max)
-            mask_diff = (distance[layer_idx] >= bin_min) & (distance[layer_idx] < bin_max)
+    #         # Create mask for current distance range
+    #         mask_same = (distance[layer_idx] >= bin_min) & (distance[layer_idx] < bin_max)
+    #         mask_diff = (distance[layer_idx] >= bin_min) & (distance[layer_idx] < bin_max)
 
-            if not np.any(mask_same) and not np.any(mask_diff):
-                continue
+    #         if not np.any(mask_same) and not np.any(mask_diff):
+    #             continue
 
-            plt.figure(figsize=(12, 7))
+    #         plt.figure(figsize=(12, 7))
 
-            # SAME
-            if np.any(mask_same):
-                plt.scatter(mi_xt_same[layer_idx][mask_same], mi_ty_same[layer_idx][mask_same],
-                           alpha=0.5, s=20,
-                           edgecolors='none', rasterized=True,
-                           color='red', label='Same (conditional MI)')
+    #         # SAME
+    #         if np.any(mask_same):
+    #             plt.scatter(mi_xt_same[layer_idx][mask_same], mi_ty_same[layer_idx][mask_same],
+    #                        alpha=0.5, s=20,
+    #                        edgecolors='none', rasterized=True,
+    #                        color='red', label='Same (conditional MI)')
 
-            # DIFF
-            if np.any(mask_diff):
-                plt.scatter(mi_xt_diff[layer_idx][mask_diff], mi_ty_diff[layer_idx][mask_diff],
-                           alpha=0.15, s=20,
-                           edgecolors='none', rasterized=True,
-                           color='blue', label='Diff (conditional MI)')
+    #         # DIFF
+    #         if np.any(mask_diff):
+    #             plt.scatter(mi_xt_diff[layer_idx][mask_diff], mi_ty_diff[layer_idx][mask_diff],
+    #                        alpha=0.15, s=20,
+    #                        edgecolors='none', rasterized=True,
+    #                        color='blue', label='Diff (conditional MI)')
 
-            plt.legend(frameon=False, loc='upper right')
-            plt.xlabel("I(X; T)", fontsize=11, fontweight='bold')
-            plt.ylabel("I(T; Y)", fontsize=11, fontweight='bold')
-            plt.title(f"Layer {layer_idx+1} - Distance [{bin_min}-{bin_max}) Conditional SAME/DIFF Information Plane",
-                     fontsize=12, fontweight='bold')
+    #         plt.legend(frameon=False, loc='upper right')
+    #         plt.xlabel("I(X; T)", fontsize=11, fontweight='bold')
+    #         plt.ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+    #         plt.title(f"Layer {layer_idx+1} - Distance [{bin_min}-{bin_max}) Conditional SAME/DIFF Information Plane",
+    #                  fontsize=12, fontweight='bold')
 
-            plt.xlim(0, 4)
-            plt.ylim(0, 4)
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plt.savefig(f"{args.model}_{args.dataset}_condMI_layer{layer_idx+1}_dist{int(bin_min)}-{int(bin_max)}.png",
-                       dpi=150, bbox_inches='tight')
-            plt.close()
-            print(f"Layer {layer_idx+1} distance [{bin_min}-{bin_max}) plot saved.")
+    #         plt.xlim(0, 4)
+    #         plt.ylim(0, 4)
+    #         plt.grid(True, alpha=0.3)
+    #         plt.tight_layout()
+    #         plt.savefig(f"{args.model}_{args.dataset}_condMI_layer{layer_idx+1}_dist{int(bin_min)}-{int(bin_max)}.png",
+    #                    dpi=150, bbox_inches='tight')
+    #         plt.close()
+            # print(f"Layer {layer_idx+1} distance [{bin_min}-{bin_max}) plot saved.")
 
     print("\n=== All plots generated successfully! ===")
