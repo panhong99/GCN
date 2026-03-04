@@ -297,8 +297,6 @@ class Transformer_decoder(nn.Module):
         predictions_class.append(outputs_class)
         predictions_mask.append(outputs_mask)
 
-
-
         out = {
             'pred_logits': predictions_class[-1],
             'pred_masks': predictions_mask[-1],
@@ -307,7 +305,7 @@ class Transformer_decoder(nn.Module):
                 'pred_masks': predictions_mask,
             }
         }
-        return out
+        return out, predictions_mask
 
 
 # Copyright (c) Facebook, Inc. and its affiliates.
@@ -627,6 +625,7 @@ class Mask2Former(nn.Module):
             norm = pixel_decoder_config['norm'],
             transformer_in_features = pixel_decoder_config['transformer_in_features'],
             common_stride = pixel_decoder_config['common_stride'])
+
         transformer_decoder_config = {}
         transformer_decoder_config['n_class'] = self.num_classes
         transformer_decoder_config['L'] = 3
@@ -634,6 +633,7 @@ class Mask2Former(nn.Module):
         transformer_decoder_config['num_features'] = 3
         transformer_decoder_config['model_dim'] = 256
         transformer_decoder_config['num_heads'] = 8
+
         self.transformer_decoder = Transformer_decoder(
             n_class = transformer_decoder_config['n_class'] + 1,
             L = transformer_decoder_config['L'],
@@ -657,7 +657,7 @@ class Mask2Former(nn.Module):
         
         mask_features, transformer_encoder_features, multi_scale_features = self.pixel_decoder.forward_features(features)
 
-        out = self.transformer_decoder(multi_scale_features, mask_features)
+        out, predictions_mask = self.transformer_decoder(multi_scale_features, mask_features)
 
         mask_pred_results = F.interpolate(
             out["pred_masks"],
@@ -665,7 +665,8 @@ class Mask2Former(nn.Module):
             mode="bilinear",
             align_corners=False,
         )
-        return mask_pred_results
+
+        return mask_pred_results, predictions_mask
     
 class ResNet(nn.Module):
 

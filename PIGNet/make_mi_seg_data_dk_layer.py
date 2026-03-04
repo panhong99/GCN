@@ -109,12 +109,12 @@ def main(config, model_file, model_path):
 
     checkpoint = torch.load(os.path.join(model_path, model_file), map_location=device)
 
-    # if config.model == "ASPP":
-    #     state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
-    # else:
-    #     state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+    if config.model == "ASPP":
+        state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+    else:
+        state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
 
-    state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+    # state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
 
     model.load_state_dict(state_dict)
     model = model.to(device).eval()
@@ -297,7 +297,7 @@ if __name__ == "__main__":
         model_key = m_name.group(1) if m_name else ("Mask2Former" if "Mask2Former" in model_file else "unknown")
 
         # PIGNet, Mask2Former 제외 처리
-        if model_key in ["PIGNet", "Mask2Former"]:
+        if model_key in ["PIGNet"]:
             continue
 
         print(f"\n>>> Processing Model: {model_key}")

@@ -9,7 +9,6 @@ import numpy as np
 from tqdm.auto import trange
 import argparse
 
-
 def _mode_per_position(y_in: np.ndarray, ignore_label: int = 255) -> tuple[np.ndarray, np.ndarray]:
     """Compute per-position mode label across batch.
     Returns:

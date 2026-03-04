@@ -8,7 +8,7 @@ exp: "bn_lr7e-3"
 backbone: "resnet101"
 dataset: "cityscape"
 model_type: "pretrained"
-model_number: 1 # 1=PIGNet, 2=ASPP
+model_number: 3 # 1=PIGNet, 2=ASPP, 3=Mask2Former
 gpu: 0
 workers: 4
 resume: null
@@ -18,7 +18,7 @@ n_skip_l: 3
 embedding_size: 21
 batch_size: 16
 epochs: 50
-crop_size: 513
+crop_size: 512 #if model not M2F = 513 else 512
 groups: null
 base_lr: 0.007
 last_mult: 1.0

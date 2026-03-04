@@ -192,11 +192,8 @@ _MAX_KDE_PTS = 100_000  # KDE 계산용 최대 포인트
 
 
 def _subample_if_needed(x, y, max_pts=_MAX_KDE_PTS):
-    """포인트가 많으면 서브샘플링"""
+    """전체 데이터 사용 (서브샘플링 제거)"""
     x, y = np.asarray(x).ravel(), np.asarray(y).ravel()
-    if len(x) > max_pts:
-        idx = np.random.choice(len(x), max_pts, replace=False)
-        x, y = x[idx], y[idx]
     return x, y
 
 
@@ -205,54 +202,84 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     """
     KDE Contour: SAME과 DIFF를 별도의 contour plot으로 그림
     (scatter .py와 다른 점: scatter 대신 KDE contour 사용)
+    
+    ✓ Colorbar with unified scale (SAME/DIFF 비교 가능)
+    ✓ 밀도값 통계 출력
     """
     # 데이터 준비
     x_s, y_s = _subample_if_needed(mi_xt_same, mi_ty_same)
     x_d, y_d = _subample_if_needed(mi_xt_diff, mi_ty_diff)
 
-    # SAME plot
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    if len(x_s) > 1:
-        sns.kdeplot(x=x_s, y=y_s, ax=ax, fill=True, levels=20, cmap='Reds', thresh=0)
-        sns.kdeplot(x=x_s, y=y_s, ax=ax, fill=False, levels=10, color='darkred', linewidths=0.7)
-    
-    ax.set_xlim(0, 4)
-    ax.set_ylim(0, 4)
-    ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
-    ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
-    ax.set_title(f"Layer {layer_idx+1} - SAME Class KDE Contour", fontsize=13, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"  → Layer {layer_idx+1} SAME saved")
+    print(f"\n  Layer {layer_idx+1}:")
+    print(f"    SAME: n={len(x_s)}, x_range=[{x_s.min():.3f}, {x_s.max():.3f}], y_range=[{y_s.min():.3f}, {y_s.max():.3f}]")
+    print(f"    DIFF: n={len(x_d)}, x_range=[{x_d.min():.3f}, {x_d.max():.3f}], y_range=[{y_d.min():.3f}, {y_d.max():.3f}]")
 
-    # DIFF plot
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    if len(x_d) > 1:
-        sns.kdeplot(x=x_d, y=y_d, ax=ax, fill=True, levels=20, cmap='Blues', thresh=0)
-        sns.kdeplot(x=x_d, y=y_d, ax=ax, fill=False, levels=10, color='darkblue', linewidths=0.7)
-    
-    ax.set_xlim(0, 4)
-    ax.set_ylim(0, 4)
-    ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
-    ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
-    ax.set_title(f"Layer {layer_idx+1} - DIFF Class KDE Contour", fontsize=13, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"  → Layer {layer_idx+1} DIFF saved")
+    # SAME과 DIFF 간 density scale 통일
+    from scipy.stats import gaussian_kde
+    if len(x_s) > 1 and len(x_d) > 1:
+        kde_s = gaussian_kde(np.vstack([x_s, y_s]))
+        kde_d = gaussian_kde(np.vstack([x_d, y_d]))
+        
+        # Grid for density evaluation
+        xi = np.linspace(0, 4, 150)
+        yi = np.linspace(0, 4, 150)
+        Xi, Yi = np.meshgrid(xi, yi)
+        Z_s = kde_s(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+        Z_d = kde_d(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+        
+        # 통일된 color scale
+        vmin = min(Z_s.min(), Z_d.min())
+        vmax = max(Z_s.max(), Z_d.max())
+        print(f"    Color scale: vmin={vmin:.6f}, vmax={vmax:.6f}")
+
+        # SAME plot
+        fig, ax = plt.subplots(figsize=(10, 8))
+        cf = ax.contourf(Xi, Yi, Z_s, levels=20, cmap='Reds', vmin=vmin, vmax=vmax)
+        ax.contour(Xi, Yi, Z_s, levels=10, colors='darkred', alpha=0.4, linewidths=0.7)
+        cbar = plt.colorbar(cf, ax=ax)
+        cbar.set_label('Density', fontsize=11)
+        
+        ax.set_xlim(0, 4)
+        ax.set_ylim(0, 4)
+        ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
+        ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
+        ax.set_title(f"Layer {layer_idx+1} - SAME Class KDE Contour", fontsize=13, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"    ✓ SAME saved")
+
+        # DIFF plot
+        fig, ax = plt.subplots(figsize=(10, 8))
+        cf = ax.contourf(Xi, Yi, Z_d, levels=20, cmap='Blues', vmin=vmin, vmax=vmax)
+        ax.contour(Xi, Yi, Z_d, levels=10, colors='darkblue', alpha=0.4, linewidths=0.7)
+        cbar = plt.colorbar(cf, ax=ax)
+        cbar.set_label('Density', fontsize=11)
+        
+        ax.set_xlim(0, 4)
+        ax.set_ylim(0, 4)
+        ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
+        ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
+        ax.set_title(f"Layer {layer_idx+1} - DIFF Class KDE Contour", fontsize=13, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"    ✓ DIFF saved")
+    else:
+        print(f"    ⚠ Insufficient data for KDE (SAME: {len(x_s)}, DIFF: {len(x_d)})")
 
 
 def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
                                     distance, layer_idx, model_name, dataset_name):
     """
     거리 구간별 KDE Contour (10 단위)
+    
+    ✓ Colorbar with unified scale
+    ✓ 밀도값 통계 출력
     """
     distance = np.asarray(distance).ravel()
     bins = np.arange(0, np.max(distance) + 11, 10)
@@ -275,13 +302,50 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         if len(x_s) < 2 and len(x_d) < 2:
             continue
 
+        print(f"    dist [{b_min:.0f}–{b_max:.0f}): SAME n={len(x_s)}, DIFF n={len(x_d)}", end="")
+
+        # Grid for density evaluation
+        xi = np.linspace(0, 4, 150)
+        yi = np.linspace(0, 4, 150)
+        Xi, Yi = np.meshgrid(xi, yi)
+        
+        # KDE 계산 및 통일된 color scale
+        # 먼저 둘 다 계산해서 공통 scale 채택
+        Z_s = None
+        Z_d = None
+        
+        if len(x_s) > 1:
+            kde_s = gaussian_kde(np.vstack([x_s, y_s]))
+            Z_s = kde_s(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+        
+        if len(x_d) > 1:
+            kde_d = gaussian_kde(np.vstack([x_d, y_d]))
+            Z_d = kde_d(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+        
+        if Z_s is None and Z_d is None:
+            print(" → skip (no data)")
+            continue
+        
+        # 존재하는 데이터들의 min/max 통합
+        z_vals = [Z_s.min(), Z_s.max()] if Z_s is not None else []
+        z_vals += [Z_d.min(), Z_d.max()] if Z_d is not None else []
+        vmin, vmax = min(z_vals), max(z_vals)
+        
+        # 없는 것은 0으로 채움
+        if Z_s is None:
+            Z_s = np.zeros_like(Xi)
+        if Z_d is None:
+            Z_d = np.zeros_like(Xi)
+
         # 2x1 subplot (SAME, DIFF)
         fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
         # SAME
         if len(x_s) > 1:
-            sns.kdeplot(x=x_s, y=y_s, ax=axes[0], fill=True, levels=20, cmap='Reds', thresh=0)
-            sns.kdeplot(x=x_s, y=y_s, ax=axes[0], fill=False, levels=10, color='darkred', linewidths=0.7)
+            cf_s = axes[0].contourf(Xi, Yi, Z_s, levels=20, cmap='Reds', vmin=vmin, vmax=vmax)
+            axes[0].contour(Xi, Yi, Z_s, levels=10, colors='darkred', alpha=0.4, linewidths=0.7)
+            cbar_s = plt.colorbar(cf_s, ax=axes[0])
+            cbar_s.set_label('Density', fontsize=10)
         
         axes[0].set_xlim(0, 4)
         axes[0].set_ylim(0, 4)
@@ -292,8 +356,10 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
 
         # DIFF
         if len(x_d) > 1:
-            sns.kdeplot(x=x_d, y=y_d, ax=axes[1], fill=True, levels=20, cmap='Blues', thresh=0)
-            sns.kdeplot(x=x_d, y=y_d, ax=axes[1], fill=False, levels=10, color='darkblue', linewidths=0.7)
+            cf_d = axes[1].contourf(Xi, Yi, Z_d, levels=20, cmap='Blues', vmin=vmin, vmax=vmax)
+            axes[1].contour(Xi, Yi, Z_d, levels=10, colors='darkblue', alpha=0.4, linewidths=0.7)
+            cbar_d = plt.colorbar(cf_d, ax=axes[1])
+            cbar_d.set_label('Density', fontsize=10)
         
         axes[1].set_xlim(0, 4)
         axes[1].set_ylim(0, 4)
@@ -310,7 +376,7 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
                  f"_dist{int(b_min)}-{int(b_max)}.png")
         plt.savefig(fname, dpi=150, bbox_inches='tight')
         plt.close()
-        print(f"  → Layer {layer_idx+1} dist [{b_min:.0f}–{b_max:.0f}) saved")
+        print(" → saved")
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -358,6 +424,7 @@ if __name__ == "__main__":
         
         mi_xt_s, mi_xt_d, euc_map = cal_mi_x_t_conditional(
             x_in, t_layer, y_in, ignore_label=ignore_label)
+
         mi_ty_s, mi_ty_d, _ = cal_seg_mi_t_y_conditional(
             t_layer, y_in, ignore_label=ignore_label)
 

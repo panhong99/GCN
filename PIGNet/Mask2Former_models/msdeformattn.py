@@ -389,6 +389,7 @@ class MSDeformAttnPixelDecoder(nn.Module):
             lateral_conv = self.lateral_convs[idx]
             output_conv = self.output_convs[idx]
             cur_fpn = lateral_conv(x)
+
             # Following FPN implementation, we use nearest upsampling here
             y = cur_fpn + F.interpolate(out[-1], size=cur_fpn.shape[-2:], mode="bilinear", align_corners=False)
             y = output_conv(y)
