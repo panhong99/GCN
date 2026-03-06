@@ -374,8 +374,11 @@ class MSDeformAttnPixelDecoder(nn.Module):
                 split_size_or_sections[i] = level_start_index[i + 1] - level_start_index[i]
             else:
                 split_size_or_sections[i] = y.shape[1] - level_start_index[i]
+
+        # res3,4,5에 대해서 한 번에 연산되있는 데이터를 다시 res3,4,5에 대한 데이터로 각각 구분
         y = torch.split(y, split_size_or_sections, dim=1)
 
+        # 다시 원래 shape으로 복귀
         out = []
         multi_scale_features = []
         num_cur_levels = 0

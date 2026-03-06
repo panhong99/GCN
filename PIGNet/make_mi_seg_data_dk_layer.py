@@ -149,7 +149,35 @@ def main(config, model_file, model_path):
             outputs, layers_output = model(inputs)
         
         targets_np = targets.numpy().astype(np.uint8)
+
+        # 일단 test 반드시 저 순서의 layer값을 이용해야하는건 아님
+        # 각 layer의 shape은 (16, 100, 128, 128) -> (bs, Q, H, W)
+        # TODO 이거 shape 어떻게 할건지 고민해봐야됨 -> 그냥 줄이는거는 좀 그렇고, 
         
+        '''
+            mask_pred_results = F.interpolate(
+            out["pred_masks"],
+            size=(imgs.size(2), imgs.size(3)),
+            mode="bilinear",
+            align_corners=False,
+        )
+        업샘플링 할 때는 이런식으로 하는데 줄일때는 흐음? -> 513에서 33으로도 줄이는데 128 -> 33도 원래 줄이는 방식으로 줄여버릴까
+        
+        '''
+        
+        if config.model == "Mask2Former":
+            # 특정 인덱스만 선택 [0, 2, 5, 8, 9]
+            layers_output = [layers_output[i] for i in [0, 2, 5, 8, 9]]
+            # 각 layer를 (bs, Q, H, W) → (bs, Q, 33, 33)으로 리사이즈
+            layers_output_resized = []
+            for layer in layers_output:
+                resized = torch.nn.functional.interpolate(
+                    layer, size=(33, 33), mode='bilinear', align_corners=False
+                )
+                layers_output_resized.append(resized)
+            layers_output = layers_output_resized
+            
+
         for layer_idx in range(len(layers_output)):
             layer_data = layers_output[layer_idx].cpu().numpy()
             B, C, H, W = layer_data.shape
@@ -198,6 +226,19 @@ def main(config, model_file, model_path):
             outputs, layers_output = model(inputs)
         
         targets_np = targets.numpy().astype(np.uint8)
+        
+        # Mask2Former 레이어 선택 및 리사이즈
+        if config.model == "Mask2Former":
+            # 특정 인덱스만 선택 [0, 2, 5, 8, 9]
+            layers_output = [layers_output[i] for i in [0, 2, 5, 8, 9]]
+            # 각 layer를 (bs, Q, H, W) → (bs, Q, 33, 33)으로 리사이즈
+            layers_output_resized = []
+            for layer in layers_output:
+                resized = torch.nn.functional.interpolate(
+                    layer, size=(33, 33), mode='bilinear', align_corners=False
+                )
+                layers_output_resized.append(resized)
+            layers_output = layers_output_resized
         
         # GT 유효성 마스크 (segmentation 기반) - layer 루프 밖에서 한 번만 계산
         valid_mask_resized = resize_gt(targets_np, target_size=33, config_dataset=config.dataset)

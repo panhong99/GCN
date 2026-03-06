@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import os
 import pickle
 import cv2
@@ -8,6 +9,7 @@ import torch
 import numpy as np
 from tqdm.auto import trange
 import argparse
+from scipy.stats import gaussian_kde
 
 
 def _mode_per_position(y_in: np.ndarray, ignore_label: int = 255) -> tuple[np.ndarray, np.ndarray]:
@@ -296,64 +298,82 @@ if __name__ == "__main__":
     
     # Load data
     seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1"
-    
-    with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
-        y_in = pickle.load(f)
-    
-    if args.dataset.lower().startswith('city'):
-        ignore_label = 255
-    else:
-        ignore_label = 255
-        y_in = np.where(y_in == -1, 0, y_in)
-
-    with open(os.path.join(seg_file_path, 'layer_0.pkl'), 'rb') as f:
-        x_in = pickle.load(f)
-    
-    valid_per_sample = np.sum(y_in > 0, axis=(1, 2))
-    print(f"\n=== GT Valid Points Statistics ===")
-    print(f"Total samples: {y_in.shape[0]}")
-    print(f"Valid points per sample - Min: {valid_per_sample.min()}, Max: {valid_per_sample.max()}, Mean: {valid_per_sample.mean():.1f}")
- 
-    t_in = []
-    for i in range(1, 5):
-        with open(os.path.join(seg_file_path, f'layer_{i}.pkl'), 'rb') as f:
-            t_in.append(pickle.load(f))
-
-    # Compute unified MI (same calculation, different coloring)
-    all_distance = []
-    all_mi_xt, all_mi_ty = [], []
-    all_same_diff_xt, all_same_diff_ty = [], []
-
-    for layer_idx, t_layer in enumerate(t_in):
-        mi_xt, same_diff_xt, euc_map = cal_mi_x_t_conditional(x_in, t_layer, y_in, ignore_label=ignore_label)
-        mi_ty, same_diff_ty, _ = cal_seg_mi_t_y_conditional(t_layer, y_in, ignore_label=ignore_label)
-
-        all_distance.append(euc_map.flatten())
-        all_mi_xt.append(mi_xt.flatten())
-        all_mi_ty.append(mi_ty.flatten())
-        all_same_diff_xt.append(same_diff_xt.flatten())
-        all_same_diff_ty.append(same_diff_ty.flatten())
-
-    distance = np.array(all_distance)
-    mi_xt = np.array(all_mi_xt)
-    mi_ty = np.array(all_mi_ty)
-    same_diff_xt = np.array(all_same_diff_xt)
-    same_diff_ty = np.array(all_same_diff_ty)
-
-    # Save cache
     cache_file = os.path.join(seg_file_path, 'mi_analysis_cache_unified.pkl')
-    print(f"\nSaving computed data to {cache_file}...")
-    cache_data = {
-        'distance': distance,
-        'mi_xt': mi_xt,
-        'mi_ty': mi_ty,
-        'same_diff_xt': same_diff_xt,
-        'same_diff_ty': same_diff_ty,
-        'ignore_label': ignore_label,
-    }
-    with open(cache_file, 'wb') as f:
-        pickle.dump(cache_data, f)
-    print("Cache saved successfully!")
+    
+    # Try to load cache first
+    if os.path.exists(cache_file):
+        print(f"Loading cached MI data from {cache_file}...")
+        with open(cache_file, 'rb') as f:
+            cache_data = pickle.load(f)
+        
+        distance = cache_data['distance']
+        mi_xt = cache_data['mi_xt']
+        mi_ty = cache_data['mi_ty']
+        same_diff_xt = cache_data['same_diff_xt']
+        same_diff_ty = cache_data['same_diff_ty']
+        ignore_label = cache_data['ignore_label']
+        
+        print("Cache loaded successfully!")
+    else:
+        # Compute MI if cache doesn't exist
+        print("Cache not found. Computing MI values...")
+        
+        with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
+            y_in = pickle.load(f)
+        
+        if args.dataset.lower().startswith('city'):
+            ignore_label = 255
+        else:
+            ignore_label = 255
+            y_in = np.where(y_in == -1, 0, y_in)
+
+        with open(os.path.join(seg_file_path, 'layer_0.pkl'), 'rb') as f:
+            x_in = pickle.load(f)
+        
+        valid_per_sample = np.sum(y_in > 0, axis=(1, 2))
+        print(f"\n=== GT Valid Points Statistics ===")
+        print(f"Total samples: {y_in.shape[0]}")
+        print(f"Valid points per sample - Min: {valid_per_sample.min()}, Max: {valid_per_sample.max()}, Mean: {valid_per_sample.mean():.1f}")
+     
+        t_in = []
+        for i in range(1, 5):
+            with open(os.path.join(seg_file_path, f'layer_{i}.pkl'), 'rb') as f:
+                t_in.append(pickle.load(f))
+
+        # Compute unified MI
+        all_distance = []
+        all_mi_xt, all_mi_ty = [], []
+        all_same_diff_xt, all_same_diff_ty = [], []
+
+        for layer_idx, t_layer in enumerate(t_in):
+            mi_xt_layer, same_diff_xt_layer, euc_map = cal_mi_x_t_conditional(x_in, t_layer, y_in, ignore_label=ignore_label)
+            mi_ty_layer, same_diff_ty_layer, _ = cal_seg_mi_t_y_conditional(t_layer, y_in, ignore_label=ignore_label)
+
+            all_distance.append(euc_map.flatten())
+            all_mi_xt.append(mi_xt_layer.flatten())
+            all_mi_ty.append(mi_ty_layer.flatten())
+            all_same_diff_xt.append(same_diff_xt_layer.flatten())
+            all_same_diff_ty.append(same_diff_ty_layer.flatten())
+
+        distance = np.array(all_distance)
+        mi_xt = np.array(all_mi_xt)
+        mi_ty = np.array(all_mi_ty)
+        same_diff_xt = np.array(all_same_diff_xt)
+        same_diff_ty = np.array(all_same_diff_ty)
+
+        # Save cache
+        print(f"\nSaving computed data to {cache_file}...")
+        cache_data = {
+            'distance': distance,
+            'mi_xt': mi_xt,
+            'mi_ty': mi_ty,
+            'same_diff_xt': same_diff_xt,
+            'same_diff_ty': same_diff_ty,
+            'ignore_label': ignore_label,
+        }
+        with open(cache_file, 'wb') as f:
+            pickle.dump(cache_data, f)
+        print("Cache saved successfully!")
 
     # Plot styling
     plt.rcParams['font.size'] = 12
@@ -363,23 +383,110 @@ if __name__ == "__main__":
     plt.rcParams['xtick.labelsize'] = 11
     plt.rcParams['ytick.labelsize'] = 11
 
-    # Plot scatter: SAME vs DIFF (unified calculation, color-based distinction)
-    print("\n=== Generating Unified Scatter Plots (Color: SAME/DIFF) ===")
-    for layer_idx in range(distance.shape[0]):
-        # Create combined same_diff map (use xt for reference)
-        combined_same_diff = same_diff_xt[layer_idx].reshape(distance[layer_idx].shape)
-        plot_scatter_same_diff(mi_xt[layer_idx].reshape(distance[layer_idx].shape), 
-                              mi_ty[layer_idx].reshape(distance[layer_idx].shape),
-                              combined_same_diff,
-                              distance[layer_idx], layer_idx, args.model, args.dataset)
+    # Plot KDE contour: SAME vs DIFF (unified calculation, color-based distinction)
+    print("\n=== Generating KDE Contour Plots (Color: SAME/DIFF) ===")
 
-    # Plot scatter with distance binning
-    print("\n=== Generating Distance-Binned Scatter Plots ===")
-    for layer_idx in range(distance.shape[0]):
+    for layer_idx in trange(distance.shape[0], desc="Processing layers"):
         combined_same_diff = same_diff_xt[layer_idx].reshape(distance[layer_idx].shape)
-        plot_scatter_with_distance_bins(mi_xt[layer_idx].reshape(distance[layer_idx].shape), 
-                                       mi_ty[layer_idx].reshape(distance[layer_idx].shape),
-                                       combined_same_diff,
-                                       distance[layer_idx], layer_idx, args.model, args.dataset)
+        mi_xt_reshaped = mi_xt[layer_idx].reshape(distance[layer_idx].shape)
+        mi_ty_reshaped = mi_ty[layer_idx].reshape(distance[layer_idx].shape)
+        
+        # Flatten for KDE
+        mi_xt_flat = mi_xt_reshaped.flatten()
+        mi_ty_flat = mi_ty_reshaped.flatten()
+        same_diff_flat = combined_same_diff.flatten()
+        
+        # Separate by same/diff
+        mask_same = same_diff_flat == 1
+        mask_diff = same_diff_flat == 0
+        
+        x_s = mi_xt_flat[mask_same]
+        y_s = mi_ty_flat[mask_same]
+        x_d = mi_xt_flat[mask_diff]
+        y_d = mi_ty_flat[mask_diff]
+        
+        print(f"  Layer {layer_idx+1}:")
+        print(f"    SAME: n={len(x_s)}, x_range=[{x_s.min():.3f}, {x_s.max():.3f}], y_range=[{y_s.min():.3f}, {y_s.max():.3f}]")
+        print(f"    DIFF: n={len(x_d)}, x_range=[{x_d.min():.3f}, {x_d.max():.3f}], y_range=[{y_d.min():.3f}, {y_d.max():.3f}]")
+        
+        if len(x_s) < 2 and len(x_d) < 2:
+            print(f"    ⚠ Skip (insufficient data)")
+            continue
+        
+        # 2x1 subplot (SAME, DIFF)
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+
+        # KDE 계산 및 통일된 colorbar scale
+        Z_s = None
+        Z_d = None
+        vmin = None
+        vmax = None
+        
+        xi = np.linspace(0, 2, 100)
+        yi = np.linspace(0, 2, 100)
+        Xi, Yi = np.meshgrid(xi, yi)
+        
+        if len(x_s) > 1:
+            try:
+                kde_s = gaussian_kde(np.vstack([x_s, y_s]), bw_method=0.5)
+                Z_s = kde_s(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+            except:
+                print(f"    ⚠ SAME KDE failed")
+        
+        if len(x_d) > 1:
+            try:
+                kde_d = gaussian_kde(np.vstack([x_d, y_d]), bw_method=0.5)
+                Z_d = kde_d(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+            except:
+                print(f"    ⚠ DIFF KDE failed")
+        
+        # 통일된 colorbar scale 설정
+        if Z_s is not None and Z_d is not None:
+            vmin = min(Z_s.min(), Z_d.min())
+            vmax = max(Z_s.max(), Z_d.max())
+        elif Z_s is not None:
+            vmin, vmax = Z_s.min(), Z_s.max()
+        elif Z_d is not None:
+            vmin, vmax = Z_d.min(), Z_d.max()
+
+        # SAME plot
+        if Z_s is not None:
+            cf_s = axes[0].contourf(Xi, Yi, Z_s, levels=20, cmap='Reds', vmin=vmin, vmax=vmax)
+            cbar_s = plt.colorbar(cf_s, ax=axes[0])
+            cbar_s.set_label('Density', fontsize=10)
+            axes[0].set_title(f"SAME - {len(x_s)} points", fontsize=12, fontweight='bold')
+        else:
+            axes[0].text(0.5, 0.5, 'Insufficient data', ha='center', va='center')
+            axes[0].set_title(f"SAME - {len(x_s)} points", fontsize=12, fontweight='bold')
+        
+        axes[0].set_xlim(0, 2)
+        axes[0].set_ylim(0, 2)
+        axes[0].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
+        axes[0].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+        axes[0].grid(True, alpha=0.3)
+
+        # DIFF plot
+        if Z_d is not None:
+            cf_d = axes[1].contourf(Xi, Yi, Z_d, levels=20, cmap='Blues', vmin=vmin, vmax=vmax)
+            cbar_d = plt.colorbar(cf_d, ax=axes[1])
+            cbar_d.set_label('Density', fontsize=10)
+            axes[1].set_title(f"DIFF - {len(x_d)} points", fontsize=12, fontweight='bold')
+        else:
+            axes[1].text(0.5, 0.5, 'Insufficient data', ha='center', va='center')
+            axes[1].set_title(f"DIFF - {len(x_d)} points", fontsize=12, fontweight='bold')
+        
+        axes[1].set_xlim(0, 2)
+        axes[1].set_ylim(0, 2)
+        axes[1].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
+        axes[1].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+        axes[1].grid(True, alpha=0.3)
+
+        plt.suptitle(f"Layer {layer_idx+1} - KDE Contour (seaborn)", fontsize=13, fontweight='bold')
+        plt.tight_layout()
+        
+        fname = f"{args.model}_{args.dataset}_kde_layer{layer_idx+1}_unified.png"
+        plt.savefig(fname, dpi=150, bbox_inches='tight')
+        plt.close()
+        print(f"    ✓ KDE contour plot saved")
 
     print("\n=== All plots generated successfully! ===")

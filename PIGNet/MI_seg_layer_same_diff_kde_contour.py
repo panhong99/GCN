@@ -6,10 +6,8 @@ import pickle
 from scipy.stats import gaussian_kde
 import argparse
 from tqdm.auto import trange
-
-# ──────────────────────────────────────────────────────────────────
-#  MI 계산 함수 (scatter.py와 동일)
-# ──────────────────────────────────────────────────────────────────
+from matplotlib.colors import Normalize
+from scipy.stats import gaussian_kde
 
 def _entropy_from_counts(counts: np.ndarray, eps: float = 1e-12) -> float:
     """엔트로피 계산"""
@@ -185,184 +183,211 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
 
 
 # ──────────────────────────────────────────────────────────────────
+#  KDE 계산 함수 (분리)
+# ──────────────────────────────────────────────────────────────────
+
+def compute_kde_values(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance):
+    """
+    MI값들로부터 모든 layer의 KDE density values 계산
+    
+    Args:
+        mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff: [num_layers, num_points]
+        distance: [num_layers, num_points]
+    
+    Returns:
+        kde_data: dictionary with KDE values for all layers
+    """
+    num_layers = mi_xt_same.shape[0]
+    kde_data = {}
+    
+    # Grid 생성 (모든 layer에서 동일)
+    xi = np.linspace(0, 2, 100)
+    yi = np.linspace(0, 2, 100)
+    Xi, Yi = np.meshgrid(xi, yi)
+    kde_data['Xi'] = Xi
+    kde_data['Yi'] = Yi
+    
+    print("\n=== Computing KDE Values ===")
+    for layer_idx in trange(num_layers, desc="KDE computation", leave=False):
+        x_s = mi_xt_same[layer_idx]
+        y_s = mi_ty_same[layer_idx]
+        x_d = mi_xt_diff[layer_idx]
+        y_d = mi_ty_diff[layer_idx]
+        dist_layer = distance[layer_idx]
+        
+        # SAME mode
+        if len(x_s) > 1:
+            kde_s = gaussian_kde(np.vstack([x_s, y_s]), bw_method=0.3)
+            Z_s = kde_s(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+        else:
+            Z_s = np.zeros_like(Xi)
+        
+        # DIFF mode
+        if len(x_d) > 1:
+            kde_d = gaussian_kde(np.vstack([x_d, y_d]), bw_method=0.3)
+            Z_d = kde_d(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+        else:
+            Z_d = np.zeros_like(Xi)
+        
+        kde_data[f'layer_{layer_idx}'] = {
+            'Z_s': Z_s,
+            'Z_d': Z_d,
+            'distance': dist_layer,
+            'n_points_s': len(x_s),
+            'n_points_d': len(x_d),
+        }
+    
+    print("KDE computation done!\n")
+    return kde_data
+
+
+# ──────────────────────────────────────────────────────────────────
 #  Plotting 함수들 (KDE contour)
 # ──────────────────────────────────────────────────────────────────
 
-_MAX_KDE_PTS = 100_000  # KDE 계산용 최대 포인트
-
-
-def _subample_if_needed(x, y, max_pts=_MAX_KDE_PTS):
-    """전체 데이터 사용 (서브샘플링 제거)"""
-    x, y = np.asarray(x).ravel(), np.asarray(y).ravel()
-    return x, y
-
-
-def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
-                           distance, layer_idx, model_name, dataset_name):
+def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_data):
     """
-    KDE Contour: SAME과 DIFF를 별도의 contour plot으로 그림
-    (scatter .py와 다른 점: scatter 대신 KDE contour 사용)
+    Cache에서 받은 KDE값을 이용해 SAME/DIFF plot 생성
+    """
+    Z_s = kde_data[f'layer_{layer_idx}']['Z_s']
+    Z_d = kde_data[f'layer_{layer_idx}']['Z_d']
+    Xi = kde_data['Xi']
+    Yi = kde_data['Yi']
+    n_s = kde_data[f'layer_{layer_idx}']['n_points_s']
+    n_d = kde_data[f'layer_{layer_idx}']['n_points_d']
     
-    ✓ Colorbar with unified scale (SAME/DIFF 비교 가능)
-    ✓ 밀도값 통계 출력
-    """
-    # 데이터 준비
-    x_s, y_s = _subample_if_needed(mi_xt_same, mi_ty_same)
-    x_d, y_d = _subample_if_needed(mi_xt_diff, mi_ty_diff)
+    print(f"\n  Layer {layer_idx+1}: SAME n={n_s}, DIFF n={n_d}")
 
-    print(f"\n  Layer {layer_idx+1}:")
-    print(f"    SAME: n={len(x_s)}, x_range=[{x_s.min():.3f}, {x_s.max():.3f}], y_range=[{y_s.min():.3f}, {y_s.max():.3f}]")
-    print(f"    DIFF: n={len(x_d)}, x_range=[{x_d.min():.3f}, {x_d.max():.3f}], y_range=[{y_d.min():.3f}, {y_d.max():.3f}]")
+    # density clip (핵심)
+    Z_s_plot = np.clip(Z_s, vmin, vmax)
+    Z_d_plot = np.clip(Z_d, vmin, vmax)
 
-    # SAME과 DIFF 간 density scale 통일
-    from scipy.stats import gaussian_kde
-    if len(x_s) > 1 and len(x_d) > 1:
-        kde_s = gaussian_kde(np.vstack([x_s, y_s]))
-        kde_d = gaussian_kde(np.vstack([x_d, y_d]))
-        
-        # Grid for density evaluation
-        xi = np.linspace(0, 4, 150)
-        yi = np.linspace(0, 4, 150)
-        Xi, Yi = np.meshgrid(xi, yi)
-        Z_s = kde_s(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
-        Z_d = kde_d(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
-        
-        # 통일된 color scale
-        vmin = min(Z_s.min(), Z_d.min())
-        vmax = max(Z_s.max(), Z_d.max())
-        print(f"    Color scale: vmin={vmin:.6f}, vmax={vmax:.6f}")
+    # norm + levels 고정
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    levels = np.linspace(vmin, vmax, 21)
 
-        # SAME plot
-        fig, ax = plt.subplots(figsize=(10, 8))
-        cf = ax.contourf(Xi, Yi, Z_s, levels=20, cmap='Reds', vmin=vmin, vmax=vmax)
-        ax.contour(Xi, Yi, Z_s, levels=10, colors='darkred', alpha=0.4, linewidths=0.7)
-        cbar = plt.colorbar(cf, ax=ax)
-        cbar.set_label('Density', fontsize=11)
-        
-        ax.set_xlim(0, 4)
-        ax.set_ylim(0, 4)
-        ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
-        ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
-        ax.set_title(f"Layer {layer_idx+1} - SAME Class KDE Contour", fontsize=13, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"    ✓ SAME saved")
+    # Colormap 설정 (배경 흰색)
+    cmap_s = plt.cm.get_cmap('Reds')
+    cmap_s.set_under('white')
+    cmap_d = plt.cm.get_cmap('Blues')
+    cmap_d.set_under('white')
 
-        # DIFF plot
-        fig, ax = plt.subplots(figsize=(10, 8))
-        cf = ax.contourf(Xi, Yi, Z_d, levels=20, cmap='Blues', vmin=vmin, vmax=vmax)
-        ax.contour(Xi, Yi, Z_d, levels=10, colors='darkblue', alpha=0.4, linewidths=0.7)
-        cbar = plt.colorbar(cf, ax=ax)
-        cbar.set_label('Density', fontsize=11)
-        
-        ax.set_xlim(0, 4)
-        ax.set_ylim(0, 4)
-        ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
-        ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
-        ax.set_title(f"Layer {layer_idx+1} - DIFF Class KDE Contour", fontsize=13, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
-        plt.close()
-        print(f"    ✓ DIFF saved")
-    else:
-        print(f"    ⚠ Insufficient data for KDE (SAME: {len(x_s)}, DIFF: {len(x_d)})")
+    # SAME plot
+    fig, ax = plt.subplots(figsize=(10, 8))
 
-
-def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
-                                    distance, layer_idx, model_name, dataset_name):
-    """
-    거리 구간별 KDE Contour (10 단위)
+    cf = ax.contourf(
+        Xi, Yi,
+        Z_s_plot,        # ← clip된 density 사용
+        levels=levels,
+        cmap=cmap_s,
+        norm=norm
+    )
     
-    ✓ Colorbar with unified scale
-    ✓ 밀도값 통계 출력
+    cbar = plt.colorbar(cf, ax=ax)
+    cbar.set_label('Density', fontsize=11)
+    
+    ax.set_xlim(0, 2)
+    ax.set_ylim(0, 2)
+    ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
+    ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
+    ax.set_title(f"Layer {layer_idx+1} - SAME Class KDE Contour", fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"    ✓ SAME saved")
+
+    # DIFF plot
+    fig, ax = plt.subplots(figsize=(10, 8))
+
+    cf = ax.contourf(
+        Xi, Yi, 
+        Z_d_plot, 
+        levels=levels, 
+        cmap=cmap_d, 
+        norm=norm
+    )
+
+    cbar = plt.colorbar(cf, ax=ax)
+    cbar.set_label('Density', fontsize=11)
+    
+    ax.set_xlim(0, 2)
+    ax.set_ylim(0, 2)
+    ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
+    ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
+    ax.set_title(f"Layer {layer_idx+1} - DIFF Class KDE Contour", fontsize=13, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"    ✓ DIFF saved")
+
+def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, vmax, kde_data):
     """
+    Cache에서 받은 KDE값을 이용해 거리 구간별 plot 생성
+    """
+    Z_s = kde_data[f'layer_{layer_idx}']['Z_s']
+    Z_d = kde_data[f'layer_{layer_idx}']['Z_d']
+    distance = kde_data[f'layer_{layer_idx}']['distance']
+    Xi = kde_data['Xi']
+    Yi = kde_data['Yi']
+    
     distance = np.asarray(distance).ravel()
-    bins = np.arange(0, np.max(distance) + 11, 10)
+    bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40만 생성
 
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    levels = np.linspace(vmin, vmax, 21)
+
+    # Colormap 설정 (배경 흰색)
+    cmap_s = plt.cm.get_cmap('Reds')
+    cmap_s.set_under('white')
+    cmap_d = plt.cm.get_cmap('Blues')
+    cmap_d.set_under('white')
+
+    print(f"\n  Layer {layer_idx+1} (Distance-binned):")
     for b_min, b_max in zip(bins[:-1], bins[1:]):
         mask = (distance >= b_min) & (distance < b_max)
         if not mask.any():
             continue
 
-        # 데이터 필터링 + 서브샘플링
-        x_s, y_s = _subample_if_needed(
-            np.asarray(mi_xt_same).ravel()[mask],
-            np.asarray(mi_ty_same).ravel()[mask]
-        )
-        x_d, y_d = _subample_if_needed(
-            np.asarray(mi_xt_diff).ravel()[mask],
-            np.asarray(mi_ty_diff).ravel()[mask]
-        )
+        print(f"    dist [{b_min:.0f}–{b_max:.0f}): ", end="")
 
-        if len(x_s) < 2 and len(x_d) < 2:
-            continue
-
-        print(f"    dist [{b_min:.0f}–{b_max:.0f}): SAME n={len(x_s)}, DIFF n={len(x_d)}", end="")
-
-        # Grid for density evaluation
-        xi = np.linspace(0, 4, 150)
-        yi = np.linspace(0, 4, 150)
-        Xi, Yi = np.meshgrid(xi, yi)
+        # KDE 값을 거리로 필터링 (이미 계산된 Z 값 사용)
+        Z_s_binned = Z_s.copy()
+        Z_d_binned = Z_d.copy()
         
-        # KDE 계산 및 통일된 color scale
-        # 먼저 둘 다 계산해서 공통 scale 채택
-        Z_s = None
-        Z_d = None
+        # 실제로는 mask를 적용해서 값을 조정해야 하는데,
+        # Z는 grid 기반이므로 개별 점의 mask를 적용할 수 없음
+        # → 그냥 전체 Z를 show하되, caption으로 distance range 표시
         
-        if len(x_s) > 1:
-            kde_s = gaussian_kde(np.vstack([x_s, y_s]))
-            Z_s = kde_s(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
-        
-        if len(x_d) > 1:
-            kde_d = gaussian_kde(np.vstack([x_d, y_d]))
-            Z_d = kde_d(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
-        
-        if Z_s is None and Z_d is None:
-            print(" → skip (no data)")
-            continue
-        
-        # 존재하는 데이터들의 min/max 통합
-        z_vals = [Z_s.min(), Z_s.max()] if Z_s is not None else []
-        z_vals += [Z_d.min(), Z_d.max()] if Z_d is not None else []
-        vmin, vmax = min(z_vals), max(z_vals)
-        
-        # 없는 것은 0으로 채움
-        if Z_s is None:
-            Z_s = np.zeros_like(Xi)
-        if Z_d is None:
-            Z_d = np.zeros_like(Xi)
+        # density clip
+        Z_s_plot = np.clip(Z_s_binned, vmin, vmax)
+        Z_d_plot = np.clip(Z_d_binned, vmin, vmax)
 
         # 2x1 subplot (SAME, DIFF)
         fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
         # SAME
-        if len(x_s) > 1:
-            cf_s = axes[0].contourf(Xi, Yi, Z_s, levels=20, cmap='Reds', vmin=vmin, vmax=vmax)
-            axes[0].contour(Xi, Yi, Z_s, levels=10, colors='darkred', alpha=0.4, linewidths=0.7)
-            cbar_s = plt.colorbar(cf_s, ax=axes[0])
-            cbar_s.set_label('Density', fontsize=10)
+        cf_s = axes[0].contourf(Xi, Yi, Z_s_plot, levels=levels, cmap=cmap_s, norm=norm)
+        cbar_s = plt.colorbar(cf_s, ax=axes[0])
+        cbar_s.set_label('Density', fontsize=10)
         
-        axes[0].set_xlim(0, 4)
-        axes[0].set_ylim(0, 4)
+        axes[0].set_xlim(0, 2)
+        axes[0].set_ylim(0, 2)
         axes[0].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         axes[0].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         axes[0].set_title(f"SAME - Distance [{b_min:.0f}–{b_max:.0f})", fontsize=12, fontweight='bold')
         axes[0].grid(True, alpha=0.3)
 
         # DIFF
-        if len(x_d) > 1:
-            cf_d = axes[1].contourf(Xi, Yi, Z_d, levels=20, cmap='Blues', vmin=vmin, vmax=vmax)
-            axes[1].contour(Xi, Yi, Z_d, levels=10, colors='darkblue', alpha=0.4, linewidths=0.7)
-            cbar_d = plt.colorbar(cf_d, ax=axes[1])
-            cbar_d.set_label('Density', fontsize=10)
+        cf_d = axes[1].contourf(Xi, Yi, Z_d_plot, levels=levels, cmap=cmap_d, norm=norm)
+        cbar_d = plt.colorbar(cf_d, ax=axes[1])
+        cbar_d.set_label('Density', fontsize=10)
         
-        axes[1].set_xlim(0, 4)
-        axes[1].set_ylim(0, 4)
+        axes[1].set_xlim(0, 2)
+        axes[1].set_ylim(0, 2)
         axes[1].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         axes[1].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         axes[1].set_title(f"DIFF - Distance [{b_min:.0f}–{b_max:.0f})", fontsize=12, fontweight='bold')
@@ -376,8 +401,7 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
                  f"_dist{int(b_min)}-{int(b_max)}.png")
         plt.savefig(fname, dpi=150, bbox_inches='tight')
         plt.close()
-        print(" → saved")
-
+        print("saved")
 
 # ──────────────────────────────────────────────────────────────────
 #  Main
@@ -386,86 +410,121 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset',         type=str, default='pascal')
+    parser.add_argument('--dataset',         type=str, default='cityscape')
     parser.add_argument('--preprocess_type', type=str, default='layer')
     parser.add_argument('--model',           type=str, default='ASPP')
+    parser.add_argument('--vmin',            type=int, default=0)
+    parser.add_argument('--vmax',            type=int, default=50)
     args = parser.parse_args()
 
     seg_file_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
                      f"/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1")
 
-    # ── Load ───────────────────────────────────────────────────────
-    with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
-        y_in = pickle.load(f)
-
-    ignore_label = 255
-    if not args.dataset.lower().startswith('city'):
-        y_in = np.where(y_in == -1, 0, y_in)
-
-    with open(os.path.join(seg_file_path, 'layer_0.pkl'), 'rb') as f:
-        x_in = pickle.load(f)
-
-    vps = np.sum(y_in > 0, axis=(1, 2))
-    print(f"\n=== GT Valid Points ===")
-    print(f"N={y_in.shape[0]}  min={vps.min()}  max={vps.max()}  mean={vps.mean():.1f}")
-
-    t_in = []
-    for i in range(1, 5):
-        with open(os.path.join(seg_file_path, f'layer_{i}.pkl'), 'rb') as f:
-            t_in.append(pickle.load(f))
-
-    # ── Compute MI (scatter.py와 동일) ──────────────────────────────
-    all_dist = []
-    all_mi_xt_same, all_mi_ty_same = [], []
-    all_mi_xt_diff, all_mi_ty_diff = [], []
-
-    for layer_idx, t_layer in enumerate(t_in):
-        print(f"Layer {layer_idx+1}/4 computing MI...", end=" ")
-        
-        mi_xt_s, mi_xt_d, euc_map = cal_mi_x_t_conditional(
-            x_in, t_layer, y_in, ignore_label=ignore_label)
-
-        mi_ty_s, mi_ty_d, _ = cal_seg_mi_t_y_conditional(
-            t_layer, y_in, ignore_label=ignore_label)
-
-        all_dist.append(euc_map.flatten())
-        all_mi_xt_same.append(mi_xt_s.flatten())
-        all_mi_ty_same.append(mi_ty_s.flatten())
-        all_mi_xt_diff.append(mi_xt_d.flatten())
-        all_mi_ty_diff.append(mi_ty_d.flatten())
-        
-        print("done")
-
-    distance   = np.array(all_dist)
-    mi_xt_same = np.array(all_mi_xt_same)
-    mi_ty_same = np.array(all_mi_ty_same)
-    mi_xt_diff = np.array(all_mi_xt_diff)
-    mi_ty_diff = np.array(all_mi_ty_diff)
-
-    # ── Cache ──────────────────────────────────────────────────────
+    # ── Cache 확인 ────────────────────────────────────────────────
     cache_path = os.path.join(seg_file_path, 'mi_analysis_cache_same_diff_contour.pkl')
-    with open(cache_path, 'wb') as f:
-        pickle.dump({'distance': distance,
-                     'mi_xt_same': mi_xt_same, 'mi_ty_same': mi_ty_same,
-                     'mi_xt_diff': mi_xt_diff, 'mi_ty_diff': mi_ty_diff,
-                     'ignore_label': ignore_label}, f)
-    print(f"Cache saved → {cache_path}\n")
+    
+    if os.path.exists(cache_path):
+        print(f"Loading cached MI data from {cache_path}...")
+        with open(cache_path, 'rb') as f:
+            cache_data = pickle.load(f)
+        
+        distance = cache_data['distance']
+        mi_xt_same = cache_data['mi_xt_same']
+        mi_ty_same = cache_data['mi_ty_same']
+        mi_xt_diff = cache_data['mi_xt_diff']
+        mi_ty_diff = cache_data['mi_ty_diff']
+        ignore_label = cache_data['ignore_label']
+        
+        print("Cache loaded successfully!\n")
+    else:
+        # ── Load ───────────────────────────────────────────────────────
+        print("Cache not found. Computing MI values...")
+        
+        with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
+            y_in = pickle.load(f)
+
+        ignore_label = 255
+        if not args.dataset.lower().startswith('city'):
+            y_in = np.where(y_in == -1, 0, y_in)
+
+        with open(os.path.join(seg_file_path, 'layer_0.pkl'), 'rb') as f:
+            x_in = pickle.load(f)
+
+        vps = np.sum(y_in > 0, axis=(1, 2))
+        print(f"\n=== GT Valid Points ===")
+        print(f"N={y_in.shape[0]}  min={vps.min()}  max={vps.max()}  mean={vps.mean():.1f}")
+
+        t_in = []
+        for i in range(1, 5):
+            with open(os.path.join(seg_file_path, f'layer_{i}.pkl'), 'rb') as f:
+                t_in.append(pickle.load(f))
+
+        # ── Compute MI (scatter.py와 동일) ──────────────────────────────
+        all_dist = []
+        all_mi_xt_same, all_mi_ty_same = [], []
+        all_mi_xt_diff, all_mi_ty_diff = [], []
+
+        for layer_idx, t_layer in enumerate(t_in):
+            print(f"Layer {layer_idx+1}/4 computing MI...", end=" ")
+            
+            mi_xt_s, mi_xt_d, euc_map = cal_mi_x_t_conditional(
+                x_in, t_layer, y_in, ignore_label=ignore_label)
+
+            mi_ty_s, mi_ty_d, _ = cal_seg_mi_t_y_conditional(
+                t_layer, y_in, ignore_label=ignore_label)
+
+            all_dist.append(euc_map.flatten())
+            all_mi_xt_same.append(mi_xt_s.flatten())
+            all_mi_ty_same.append(mi_ty_s.flatten())
+            all_mi_xt_diff.append(mi_xt_d.flatten())
+            all_mi_ty_diff.append(mi_ty_d.flatten())
+            
+            print("done")
+
+        distance   = np.array(all_dist)
+        mi_xt_same = np.array(all_mi_xt_same)
+        mi_ty_same = np.array(all_mi_ty_same)
+        mi_xt_diff = np.array(all_mi_xt_diff)
+        mi_ty_diff = np.array(all_mi_ty_diff)
+
+        # ── Cache 저장 ──────────────────────────────────────────────────
+        print(f"\nSaving computed data to {cache_path}...")
+        with open(cache_path, 'wb') as f:
+            pickle.dump({'distance': distance,
+                         'mi_xt_same': mi_xt_same, 'mi_ty_same': mi_ty_same,
+                         'mi_xt_diff': mi_xt_diff, 'mi_ty_diff': mi_ty_diff,
+                         'ignore_label': ignore_label}, f)
+        print("Cache saved successfully!\n")
 
     # ── Plot ───────────────────────────────────────────────────────
     plt.rcParams.update({'font.size': 12, 'axes.labelsize': 13,
                          'axes.titlesize': 14, 'legend.fontsize': 11,
                          'xtick.labelsize': 11, 'ytick.labelsize': 11})
 
+    # ── KDE Cache 확인 ────────────────────────────────────────────────
+    kde_cache_path = os.path.join(seg_file_path, 'kde_cache_contour.pkl')
+    
+    if os.path.exists(kde_cache_path):
+        print(f"Loading cached KDE data from {kde_cache_path}...")
+        with open(kde_cache_path, 'rb') as f:
+            kde_data = pickle.load(f)
+        print("KDE cache loaded successfully!\n")
+    else:
+        print("KDE cache not found. Computing KDE values...")
+        kde_data = compute_kde_values(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance)
+        
+        # ── KDE Cache 저장 ──────────────────────────────────────────────────
+        print(f"Saving KDE data to {kde_cache_path}...")
+        with open(kde_cache_path, 'wb') as f:
+            pickle.dump(kde_data, f)
+        print("KDE cache saved successfully!\n")
+
     print("=== KDE Contour Plots (SAME vs DIFF) ===")
     for li in range(distance.shape[0]):
-        plot_scatter_same_diff(mi_xt_same[li], mi_ty_same[li],
-                               mi_xt_diff[li], mi_ty_diff[li],
-                               distance[li], li, args.model, args.dataset)
+        plot_scatter_same_diff(li, args.model, args.dataset, args.vmin, args.vmax, kde_data)
 
     print("\n=== Distance-Binned KDE Contour Plots ===")
     for li in range(distance.shape[0]):
-        plot_scatter_with_distance_bins(mi_xt_same[li], mi_ty_same[li],
-                                        mi_xt_diff[li], mi_ty_diff[li],
-                                        distance[li], li, args.model, args.dataset)
+        plot_scatter_with_distance_bins(li, args.model, args.dataset, args.vmin, args.vmax, kde_data)
 
     print("\n=== Done! ===")
