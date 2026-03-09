@@ -69,7 +69,15 @@ def main(config):
     # assert torch.cuda.is_available()
     torch.backends.cudnn.benchmark = True
 
-    model_fname = f'model/{config.model_number}/classification/{config.dataset}/{config.model_type}/classification_{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
+    if is_training == False: # eval
+
+        if config.backbone == "resnet50":
+            num=50
+
+        elif config.backbone == "resnet101":
+            num=101
+
+    model_fname = f'model_{num}/{config.model_number}/classification/{config.dataset}/{config.model_type}/classification_{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
 
     # define model, dataset
     dataset, dataset_loader, valid_dataset = get_dataset(config)
@@ -317,7 +325,7 @@ def main(config):
         cls_infer_image_dir = "cls_infer_image"
         os.makedirs(cls_infer_image_dir, exist_ok=True)
 
-        checkpoint = torch.load(f'/home/hail/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}/{model_filename}', map_location=device)
+        checkpoint = torch.load(f'/home/hail/pan/GCN/PIGNet/model_{num}/{config.model_number}/classification/{config.dataset}/{config.model_type}/{model_filename}', map_location=device)
         
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
         model.load_state_dict(state_dict)
@@ -477,7 +485,12 @@ if __name__ == "__main__":
     elif config.mode == "infer":
         print("-- Starting Infer Mode --")
         
-        path = f"/home/hail/pan/GCN/PIGNet/model/{config.model_number}/classification/{config.dataset}/{config.model_type}"
+        if config.backbone == "resnet101":
+            num = 101
+        else:
+            num = 50
+        
+        path = f"/home/hail/pan/GCN/PIGNet/model_{num}/{config.model_number}/classification/{config.dataset}/{config.model_type}"
                 
         try:
             model_list = sorted(os.listdir(path))
@@ -510,6 +523,7 @@ if __name__ == "__main__":
                     iter_config.infer_params.model_filename = name
                     iter_config.infer_params.process_type = process_key
                     iter_config.factor = float(factor_value)
+                    iter_config.crop_size = 512 if config.model == "vit" else 513
 
                     print("-" * 60)
                     print(f"Testing model: {name} | Process: {process_key} | Factor: {factor_value}")

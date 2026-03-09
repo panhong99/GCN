@@ -295,7 +295,7 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
     ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
     ax.set_title(f"Layer {layer_idx+1} - SAME Class KDE Contour", fontsize=13, fontweight='bold')
-    ax.grid(True, alpha=0.3)
+    # ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
     fname = f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_SAME.png"
@@ -327,7 +327,7 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
     ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
     ax.set_title(f"Layer {layer_idx+1} - DIFF Class KDE Contour", fontsize=13, fontweight='bold')
-    ax.grid(True, alpha=0.3)
+    # ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
     fname = f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_{vmax}_DIFF.png"
@@ -397,7 +397,7 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
         axes[0].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         axes[0].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         axes[0].set_title(f"SAME - Distance [{b_min:.0f}–{b_max:.0f})", fontsize=12, fontweight='bold')
-        axes[0].grid(True, alpha=0.3)
+        # axes[0].grid(True, alpha=0.3)
 
         # DIFF
         Z_d_masked = np.ma.masked_less_equal(Z_d_plot, threshold)
@@ -410,7 +410,7 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
         axes[1].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         axes[1].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         axes[1].set_title(f"DIFF - Distance [{b_min:.0f}–{b_max:.0f})", fontsize=12, fontweight='bold')
-        axes[1].grid(True, alpha=0.3)
+        # axes[1].grid(True, alpha=0.3)
 
         plt.suptitle(f"Layer {layer_idx+1} - KDE (dist {b_min:.0f}–{b_max:.0f})",
                      fontsize=13, fontweight='bold')

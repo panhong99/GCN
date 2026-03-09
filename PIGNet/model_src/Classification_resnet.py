@@ -320,8 +320,6 @@ class ResNet(nn.Module):
 
         return x,layer_outputs
 
-
-
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.
 

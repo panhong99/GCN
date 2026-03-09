@@ -81,20 +81,6 @@ def resize_gt(gt_masks, target_size=33, config_dataset=None):
     
     return gt_resized
 
-def calculate_variance(layer_outputs, valid_mask=None):
-    """각 layer의 벡터값들의 분산 계산"""
-    # layer_outputs: (num_samples, channels, H, W)
-    layer_flat = layer_outputs.reshape(-1, layer_outputs.shape[1])  # (num_samples*H*W, channels)
-    
-    if valid_mask is not None:
-        layer_flat = layer_flat[valid_mask.flatten()]
-    
-    variance = np.var(layer_flat, axis=0)  # 각 채널별 분산
-    mean_variance = np.mean(variance)
-    std_variance = np.std(variance)
-    
-    return mean_variance, std_variance, variance
-
 def main(config, model_file, model_path):
 
     device = f"cuda:{config.gpu}" if torch.cuda.is_available() else "cpu"
@@ -150,21 +136,6 @@ def main(config, model_file, model_path):
         
         targets_np = targets.numpy().astype(np.uint8)
 
-        # 일단 test 반드시 저 순서의 layer값을 이용해야하는건 아님
-        # 각 layer의 shape은 (16, 100, 128, 128) -> (bs, Q, H, W)
-        # TODO 이거 shape 어떻게 할건지 고민해봐야됨 -> 그냥 줄이는거는 좀 그렇고, 
-        
-        '''
-            mask_pred_results = F.interpolate(
-            out["pred_masks"],
-            size=(imgs.size(2), imgs.size(3)),
-            mode="bilinear",
-            align_corners=False,
-        )
-        업샘플링 할 때는 이런식으로 하는데 줄일때는 흐음? -> 513에서 33으로도 줄이는데 128 -> 33도 원래 줄이는 방식으로 줄여버릴까
-        
-        '''
-        
         if config.model == "Mask2Former":
             # 특정 인덱스만 선택 [0, 2, 5, 8, 9]
             layers_output = [layers_output[i] for i in [0, 2, 5, 8, 9]]
@@ -177,7 +148,6 @@ def main(config, model_file, model_path):
                 layers_output_resized.append(resized)
             layers_output = layers_output_resized
             
-
         for layer_idx in range(len(layers_output)):
             layer_data = layers_output[layer_idx].cpu().numpy()
             B, C, H, W = layer_data.shape
@@ -201,7 +171,6 @@ def main(config, model_file, model_path):
         del outputs, layers_output, inputs
         collect()
     
-    # ===== Step 4: 예측 (한번의 loader로 모든 layer 처리) =====
     print(f"\n{'='*60}")
     print(f"Predicting VQ labels for all layers")
     print(f"{'='*60}")

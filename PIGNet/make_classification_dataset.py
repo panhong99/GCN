@@ -245,6 +245,7 @@ def get_dataset(config):
     # 고정된 seed로 동일한 셔플 순서 보장 (MI가 True일 때만)
     generator = None
     worker_init_fn = None
+
     if config.MI == True:
         generator = torch.Generator()
         generator.manual_seed(42)  # 고정된 seed

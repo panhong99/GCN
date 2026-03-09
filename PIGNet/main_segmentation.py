@@ -658,6 +658,7 @@ if __name__ == "__main__":
                     iter_config.infer_params.model_filename = name
                     iter_config.infer_params.process_type = process_key
                     iter_config.factor = factor_value
+                    
 
                     print("-" * 60)
                     print(f"Testing model: {name} | Process: {process_key} | Factor: {factor_value}")
