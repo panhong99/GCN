@@ -267,20 +267,24 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
     levels = np.linspace(vmin, vmax, 21)
 
     # Colormap 설정 (배경 흰색)
-    cmap_s = plt.cm.get_cmap('Reds')
-    cmap_s.set_under('white')
-    cmap_d = plt.cm.get_cmap('Blues')
-    cmap_d.set_under('white')
+    cmap_s = plt.cm.get_cmap('Reds').copy()
+    cmap_s.set_bad('white')
+    cmap_d = plt.cm.get_cmap('Blues').copy()
+    cmap_d.set_bad('white')
 
     # SAME plot
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 8), facecolor='white')
+    ax.set_facecolor('white')
+
+    threshold = 1e-3
+    Z_s_masked = np.ma.masked_less_equal(Z_s_plot, threshold)
 
     cf = ax.contourf(
         Xi, Yi,
-        Z_s_plot,        # ← clip된 density 사용
+        Z_s_masked,      # ← masked array 사용
         levels=levels,
         cmap=cmap_s,
-        norm=norm
+        norm=norm,
     )
     
     cbar = plt.colorbar(cf, ax=ax)
@@ -294,16 +298,22 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
+    fname = f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_SAME.png"
+    folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+    os.makedirs(folder_path, exist_ok=True)
+    plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"    ✓ SAME saved")
 
     # DIFF plot
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(10, 8), facecolor='white')
+    ax.set_facecolor('white')
+
+    Z_d_masked = np.ma.masked_less_equal(Z_d_plot, threshold)
 
     cf = ax.contourf(
         Xi, Yi, 
-        Z_d_plot, 
+        Z_d_masked,      # ← masked array 사용
         levels=levels, 
         cmap=cmap_d, 
         norm=norm
@@ -320,7 +330,10 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
+    fname = f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_{vmax}_DIFF.png"
+    folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+    os.makedirs(folder_path, exist_ok=True)
+    plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')            
     plt.close()
     print(f"    ✓ DIFF saved")
 
@@ -341,10 +354,12 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
     levels = np.linspace(vmin, vmax, 21)
 
     # Colormap 설정 (배경 흰색)
-    cmap_s = plt.cm.get_cmap('Reds')
-    cmap_s.set_under('white')
-    cmap_d = plt.cm.get_cmap('Blues')
-    cmap_d.set_under('white')
+    cmap_s = plt.cm.get_cmap('Reds').copy()
+    cmap_s.set_bad('white')
+    cmap_d = plt.cm.get_cmap('Blues').copy()
+    cmap_d.set_bad('white')
+    
+    threshold = 1e-3
 
     print(f"\n  Layer {layer_idx+1} (Distance-binned):")
     for b_min, b_max in zip(bins[:-1], bins[1:]):
@@ -367,10 +382,13 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
         Z_d_plot = np.clip(Z_d_binned, vmin, vmax)
 
         # 2x1 subplot (SAME, DIFF)
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6), facecolor='white')
+        axes[0].set_facecolor('white')
+        axes[1].set_facecolor('white')
 
         # SAME
-        cf_s = axes[0].contourf(Xi, Yi, Z_s_plot, levels=levels, cmap=cmap_s, norm=norm)
+        Z_s_masked = np.ma.masked_less_equal(Z_s_plot, threshold)
+        cf_s = axes[0].contourf(Xi, Yi, Z_s_masked, levels=levels, cmap=cmap_s, norm=norm)
         cbar_s = plt.colorbar(cf_s, ax=axes[0])
         cbar_s.set_label('Density', fontsize=10)
         
@@ -382,7 +400,8 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
         axes[0].grid(True, alpha=0.3)
 
         # DIFF
-        cf_d = axes[1].contourf(Xi, Yi, Z_d_plot, levels=levels, cmap=cmap_d, norm=norm)
+        Z_d_masked = np.ma.masked_less_equal(Z_d_plot, threshold)
+        cf_d = axes[1].contourf(Xi, Yi, Z_d_masked, levels=levels, cmap=cmap_d, norm=norm)
         cbar_d = plt.colorbar(cf_d, ax=axes[1])
         cbar_d.set_label('Density', fontsize=10)
         
@@ -398,8 +417,11 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
         plt.tight_layout()
         
         fname = (f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}"
-                 f"_dist{int(b_min)}-{int(b_max)}.png")
-        plt.savefig(fname, dpi=150, bbox_inches='tight')
+                 f"_dist{int(b_min)}-{int(b_max)}_{vmax}.png")
+        
+        folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+        os.makedirs(folder_path, exist_ok=True)
+        plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')        
         plt.close()
         print("saved")
 
