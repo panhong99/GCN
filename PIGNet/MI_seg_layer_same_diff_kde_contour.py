@@ -188,14 +188,14 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
 
 def compute_kde_values(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance):
     """
-    MI값들로부터 모든 layer의 KDE density values 계산
+    MI값들로부터 모든 layer의 KDE density values 계산 (distance bin별로 분리)
     
     Args:
         mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff: [num_layers, num_points]
         distance: [num_layers, num_points]
     
     Returns:
-        kde_data: dictionary with KDE values for all layers
+        kde_data: dictionary with KDE values for all layers and distance bins
     """
     num_layers = mi_xt_same.shape[0]
     kde_data = {}
@@ -207,45 +207,86 @@ def compute_kde_values(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance)
     kde_data['Xi'] = Xi
     kde_data['Yi'] = Yi
     
-    print("\n=== Computing KDE Values ===")
-    for layer_idx in trange(num_layers, desc="KDE computation", leave=False):
-        x_s = mi_xt_same[layer_idx]
-        y_s = mi_ty_same[layer_idx]
-        x_d = mi_xt_diff[layer_idx]
-        y_d = mi_ty_diff[layer_idx]
+    # Distance bin 정의
+    dist_bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40
+    
+    print("\n=== Computing KDE Values (by distance bins) ===")
+    for layer_idx in trange(num_layers, desc="Layer", leave=False):
+        x_s_full = mi_xt_same[layer_idx]
+        y_s_full = mi_ty_same[layer_idx]
+        x_d_full = mi_xt_diff[layer_idx]
+        y_d_full = mi_ty_diff[layer_idx]
         dist_layer = distance[layer_idx]
         
-        # SAME mode
-        if len(x_s) > 1:
-            kde_s = gaussian_kde(np.vstack([x_s, y_s]), bw_method=0.3)
-            Z_s = kde_s(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+        # 전체 layer의 Z도 저장 (layer-wise plot용)
+        if len(x_s_full) > 1:
+            kde_s = gaussian_kde(np.vstack([x_s_full, y_s_full]), bw_method=0.3)
+            Z_s_full = kde_s(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
         else:
-            Z_s = np.zeros_like(Xi)
+            Z_s_full = np.zeros_like(Xi)
         
-        # DIFF mode
-        if len(x_d) > 1:
-            kde_d = gaussian_kde(np.vstack([x_d, y_d]), bw_method=0.3)
-            Z_d = kde_d(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+        if len(x_d_full) > 1:
+            kde_d = gaussian_kde(np.vstack([x_d_full, y_d_full]), bw_method=0.3)
+            Z_d_full = kde_d(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
         else:
-            Z_d = np.zeros_like(Xi)
+            Z_d_full = np.zeros_like(Xi)
         
         kde_data[f'layer_{layer_idx}'] = {
-            'Z_s': Z_s,
-            'Z_d': Z_d,
+            'Z_s': Z_s_full,
+            'Z_d': Z_d_full,
             'distance': dist_layer,
-            'n_points_s': len(x_s),
-            'n_points_d': len(x_d),
+            'n_points_s': len(x_s_full),
+            'n_points_d': len(x_d_full),
+            'mi_xt_same': x_s_full,
+            'mi_ty_same': y_s_full,
+            'mi_xt_diff': x_d_full,
+            'mi_ty_diff': y_d_full,
         }
+        
+        # Distance bin별 KDE 계산
+        for bin_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
+            mask_s = (dist_layer >= b_min) & (dist_layer < b_max)
+            mask_d = (dist_layer >= b_min) & (dist_layer < b_max)
+            
+            # SAME mode (bin별)
+            x_s_bin = x_s_full[mask_s]
+            y_s_bin = y_s_full[mask_s]
+            if len(x_s_bin) > 1:
+                kde_s_bin = gaussian_kde(np.vstack([x_s_bin, y_s_bin]), bw_method=0.3)
+                Z_s_bin = kde_s_bin(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+            else:
+                Z_s_bin = np.zeros_like(Xi)
+            
+            # DIFF mode (bin별)
+            x_d_bin = x_d_full[mask_d]
+            y_d_bin = y_d_full[mask_d]
+            if len(x_d_bin) > 1:
+                kde_d_bin = gaussian_kde(np.vstack([x_d_bin, y_d_bin]), bw_method=0.3)
+                Z_d_bin = kde_d_bin(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+            else:
+                Z_d_bin = np.zeros_like(Xi)
+            
+            kde_data[f'layer_{layer_idx}_bin_{bin_idx}'] = {
+                'Z_s': Z_s_bin,
+                'Z_d': Z_d_bin,
+                'mi_xt_same': x_s_bin,
+                'mi_ty_same': y_s_bin,
+                'mi_xt_diff': x_d_bin,
+                'mi_ty_diff': y_d_bin,
+                'n_points_s': len(x_s_bin),
+                'n_points_d': len(x_d_bin),
+            }
     
     print("KDE computation done!\n")
     return kde_data
+
 
 
 # ──────────────────────────────────────────────────────────────────
 #  Plotting 함수들 (KDE contour)
 # ──────────────────────────────────────────────────────────────────
 
-def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_data):
+def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_data, median_same_x, median_same_y, median_diff_x, median_diff_y):
     """
     Cache에서 받은 KDE값을 이용해 SAME/DIFF plot 생성
     """
@@ -287,6 +328,9 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
         norm=norm,
     )
     
+    # Median 포인트 표시
+    ax.scatter(median_same_x, median_same_y, marker='^', s=200, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
+    
     cbar = plt.colorbar(cf, ax=ax)
     cbar.set_label('Density', fontsize=11)
     
@@ -318,6 +362,9 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
         cmap=cmap_d, 
         norm=norm
     )
+    
+    # Median 포인트 표시
+    ax.scatter(median_diff_x, median_diff_y, marker='^', s=200, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
 
     cbar = plt.colorbar(cf, ax=ax)
     cbar.set_label('Density', fontsize=11)
@@ -339,16 +386,12 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
 
 def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, vmax, kde_data):
     """
-    Cache에서 받은 KDE값을 이용해 거리 구간별 plot 생성
+    Distance bin별로 계산된 KDE값을 이용해 거리 구간별 plot 생성 (SAME, DIFF 각각 개별 plot)
     """
-    Z_s = kde_data[f'layer_{layer_idx}']['Z_s']
-    Z_d = kde_data[f'layer_{layer_idx}']['Z_d']
-    distance = kde_data[f'layer_{layer_idx}']['distance']
     Xi = kde_data['Xi']
     Yi = kde_data['Yi']
     
-    distance = np.asarray(distance).ravel()
-    bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40만 생성
+    dist_bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40
 
     norm = Normalize(vmin=vmin, vmax=vmax)
     levels = np.linspace(vmin, vmax, 21)
@@ -362,68 +405,242 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
     threshold = 1e-3
 
     print(f"\n  Layer {layer_idx+1} (Distance-binned):")
-    for b_min, b_max in zip(bins[:-1], bins[1:]):
-        mask = (distance >= b_min) & (distance < b_max)
-        if not mask.any():
+    for bin_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
+        cache_key = f'layer_{layer_idx}_bin_{bin_idx}'
+        
+        if cache_key not in kde_data:
+            print(f"    dist [{b_min:.0f}–{b_max:.0f}): no data")
             continue
+        
+        bin_data = kde_data[cache_key]
+        Z_s = bin_data['Z_s']
+        Z_d = bin_data['Z_d']
+        mi_xt_s = bin_data['mi_xt_same']
+        mi_ty_s = bin_data['mi_ty_same']
+        mi_xt_d = bin_data['mi_xt_diff']
+        mi_ty_d = bin_data['mi_ty_diff']
 
         print(f"    dist [{b_min:.0f}–{b_max:.0f}): ", end="")
 
-        # KDE 값을 거리로 필터링 (이미 계산된 Z 값 사용)
-        Z_s_binned = Z_s.copy()
-        Z_d_binned = Z_d.copy()
-        
-        # 실제로는 mask를 적용해서 값을 조정해야 하는데,
-        # Z는 grid 기반이므로 개별 점의 mask를 적용할 수 없음
-        # → 그냥 전체 Z를 show하되, caption으로 distance range 표시
-        
         # density clip
-        Z_s_plot = np.clip(Z_s_binned, vmin, vmax)
-        Z_d_plot = np.clip(Z_d_binned, vmin, vmax)
+        Z_s_plot = np.clip(Z_s, vmin, vmax)
+        Z_d_plot = np.clip(Z_d, vmin, vmax)
 
-        # 2x1 subplot (SAME, DIFF)
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6), facecolor='white')
-        axes[0].set_facecolor('white')
-        axes[1].set_facecolor('white')
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # SAME 개별 plot
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        fig, ax = plt.subplots(figsize=(10, 8), facecolor='white')
+        ax.set_facecolor('white')
 
-        # SAME
         Z_s_masked = np.ma.masked_less_equal(Z_s_plot, threshold)
-        cf_s = axes[0].contourf(Xi, Yi, Z_s_masked, levels=levels, cmap=cmap_s, norm=norm)
-        cbar_s = plt.colorbar(cf_s, ax=axes[0])
-        cbar_s.set_label('Density', fontsize=10)
+        cf_s = ax.contourf(Xi, Yi, Z_s_masked, levels=levels, cmap=cmap_s, norm=norm)
         
-        axes[0].set_xlim(0, 2)
-        axes[0].set_ylim(0, 2)
-        axes[0].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
-        axes[0].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
-        axes[0].set_title(f"SAME - Distance [{b_min:.0f}–{b_max:.0f})", fontsize=12, fontweight='bold')
-        # axes[0].grid(True, alpha=0.3)
-
-        # DIFF
-        Z_d_masked = np.ma.masked_less_equal(Z_d_plot, threshold)
-        cf_d = axes[1].contourf(Xi, Yi, Z_d_masked, levels=levels, cmap=cmap_d, norm=norm)
-        cbar_d = plt.colorbar(cf_d, ax=axes[1])
-        cbar_d.set_label('Density', fontsize=10)
+        # Median 포인트 표시 (같은 데이터에서 계산)
+        if len(mi_xt_s) > 0:
+            median_x = np.median(mi_xt_s)
+            median_y = np.median(mi_ty_s)
+            ax.scatter(median_x, median_y, marker='^', s=200, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
         
-        axes[1].set_xlim(0, 2)
-        axes[1].set_ylim(0, 2)
-        axes[1].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
-        axes[1].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
-        axes[1].set_title(f"DIFF - Distance [{b_min:.0f}–{b_max:.0f})", fontsize=12, fontweight='bold')
-        # axes[1].grid(True, alpha=0.3)
-
-        plt.suptitle(f"Layer {layer_idx+1} - KDE (dist {b_min:.0f}–{b_max:.0f})",
+        cbar_s = plt.colorbar(cf_s, ax=ax)
+        cbar_s.set_label('Density', fontsize=11)
+        
+        ax.set_xlim(0, 2)
+        ax.set_ylim(0, 2)
+        ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
+        ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
+        ax.set_title(f"Layer {layer_idx+1} - SAME - Distance [{b_min:.0f}–{b_max:.0f})", 
                      fontsize=13, fontweight='bold')
+
         plt.tight_layout()
-        
         fname = (f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}"
-                 f"_dist{int(b_min)}-{int(b_max)}_{vmax}.png")
+                 f"_dist{int(b_min)}-{int(b_max)}_SAME_{vmax}.png")
         
         folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
         os.makedirs(folder_path, exist_ok=True)
         plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')        
         plt.close()
-        print("saved")
+        print("SAME saved, ", end="")
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # DIFF 개별 plot
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        fig, ax = plt.subplots(figsize=(10, 8), facecolor='white')
+        ax.set_facecolor('white')
+
+        Z_d_masked = np.ma.masked_less_equal(Z_d_plot, threshold)
+        cf_d = ax.contourf(Xi, Yi, Z_d_masked, levels=levels, cmap=cmap_d, norm=norm)
+        
+        # Median 포인트 표시 (같은 데이터에서 계산)
+        if len(mi_xt_d) > 0:
+            median_x = np.median(mi_xt_d)
+            median_y = np.median(mi_ty_d)
+            ax.scatter(median_x, median_y, marker='^', s=200, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
+        
+        cbar_d = plt.colorbar(cf_d, ax=ax)
+        cbar_d.set_label('Density', fontsize=11)
+        
+        ax.set_xlim(0, 2)
+        ax.set_ylim(0, 2)
+        ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
+        ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
+        ax.set_title(f"Layer {layer_idx+1} - DIFF - Distance [{b_min:.0f}–{b_max:.0f})", 
+                     fontsize=13, fontweight='bold')
+
+        plt.tight_layout()
+        fname = (f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}"
+                 f"_dist{int(b_min)}-{int(b_max)}_DIFF_{vmax}.png")
+        
+        folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+        os.makedirs(folder_path, exist_ok=True)
+        plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')        
+        plt.close()
+        print("DIFF saved")
+
+
+def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data):
+    """
+    Matrix plot: Layer (y축) x Distance (x축) for SAME mode
+    4x4 grid (4 layers, 4 distance bins) - bin별 KDE 사용
+    """
+    Xi = kde_data['Xi']
+    Yi = kde_data['Yi']
+    layers = 4
+    dist_bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40
+    num_dist = len(dist_bins) - 1
+    
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    levels = np.linspace(vmin, vmax, 21)
+    cmap_s = plt.cm.get_cmap('Reds').copy()
+    cmap_s.set_bad('white')
+    threshold = 1e-3
+    
+    fig, axes = plt.subplots(layers, num_dist, figsize=(20, 18), facecolor='white')
+    
+    for layer_idx in range(layers):
+        for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
+            ax = axes[layer_idx, dist_idx]
+            ax.set_facecolor('white')
+            
+            cache_key = f'layer_{layer_idx}_bin_{dist_idx}'
+            if cache_key not in kde_data:
+                ax.text(1, 1, 'No data', ha='center', va='center', fontsize=12)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_xlim(0, 2)
+                ax.set_ylim(0, 2)
+                continue
+            
+            bin_data = kde_data[cache_key]
+            Z_s = bin_data['Z_s']
+            mi_xt_s = bin_data['mi_xt_same']
+            mi_ty_s = bin_data['mi_ty_same']
+            
+            Z_s_plot = np.clip(Z_s, vmin, vmax)
+            Z_masked = np.ma.masked_less_equal(Z_s_plot, threshold)
+            cf = ax.contourf(Xi, Yi, Z_masked, levels=levels, cmap=cmap_s, norm=norm)
+            
+            # Median 포인트 표시 (bin 데이터에서)
+            if len(mi_xt_s) > 0:
+                median_x = np.median(mi_xt_s)
+                median_y = np.median(mi_ty_s)
+                ax.scatter(median_x, median_y, marker='^', s=150, c='lime', edgecolors='darkgreen', linewidth=1.5, zorder=5)
+            
+            # Ticks 제거
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_xlim(0, 2)
+            ax.set_ylim(0, 2)
+            
+            # Y축 레이블 (좌측만)
+            if dist_idx == 0:
+                ax.set_ylabel(f"Layer {layer_idx+1}", fontsize=11, fontweight='bold')
+            
+            # X축 레이블 (상단만)
+            if layer_idx == 0:
+                ax.set_title(f"Dist [{b_min:.0f}-{b_max:.0f})", fontsize=11, fontweight='bold')
+    
+    plt.suptitle(f"KDE Matrix - SAME Mode", fontsize=14, fontweight='bold', y=0.995)
+    plt.tight_layout()
+    
+    folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+    os.makedirs(folder_path, exist_ok=True)
+    fname = f"{model_name}_{dataset_name}_kde_matrix_SAME_{vmax}.png"
+    plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✓ SAME matrix plot saved: {fname}")
+
+
+def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data):
+    """
+    Matrix plot: Layer (y축) x Distance (x축) for DIFF mode
+    4x4 grid (4 layers, 4 distance bins) - bin별 KDE 사용
+    """
+    Xi = kde_data['Xi']
+    Yi = kde_data['Yi']
+    layers = 4
+    dist_bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40
+    num_dist = len(dist_bins) - 1
+    
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    levels = np.linspace(vmin, vmax, 21)
+    cmap_d = plt.cm.get_cmap('Blues').copy()
+    cmap_d.set_bad('white')
+    threshold = 1e-3
+    
+    fig, axes = plt.subplots(layers, num_dist, figsize=(20, 18), facecolor='white')
+    
+    for layer_idx in range(layers):
+        for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
+            ax = axes[layer_idx, dist_idx]
+            ax.set_facecolor('white')
+            
+            cache_key = f'layer_{layer_idx}_bin_{dist_idx}'
+            if cache_key not in kde_data:
+                ax.text(1, 1, 'No data', ha='center', va='center', fontsize=12)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_xlim(0, 2)
+                ax.set_ylim(0, 2)
+                continue
+            
+            bin_data = kde_data[cache_key]
+            Z_d = bin_data['Z_d']
+            mi_xt_d = bin_data['mi_xt_diff']
+            mi_ty_d = bin_data['mi_ty_diff']
+            
+            Z_d_plot = np.clip(Z_d, vmin, vmax)
+            Z_masked = np.ma.masked_less_equal(Z_d_plot, threshold)
+            cf = ax.contourf(Xi, Yi, Z_masked, levels=levels, cmap=cmap_d, norm=norm)
+            
+            # Median 포인트 표시 (bin 데이터에서)
+            if len(mi_xt_d) > 0:
+                median_x = np.median(mi_xt_d)
+                median_y = np.median(mi_ty_d)
+                ax.scatter(median_x, median_y, marker='^', s=150, c='lime', edgecolors='darkgreen', linewidth=1.5, zorder=5)
+            
+            # Ticks 제거
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_xlim(0, 2)
+            ax.set_ylim(0, 2)
+            
+            # Y축 레이블 (좌측만)
+            if dist_idx == 0:
+                ax.set_ylabel(f"Layer {layer_idx+1}", fontsize=11, fontweight='bold')
+            
+            # X축 레이블 (상단만)
+            if layer_idx == 0:
+                ax.set_title(f"Dist [{b_min:.0f}-{b_max:.0f})", fontsize=11, fontweight='bold')
+    
+    plt.suptitle(f"KDE Matrix - DIFF Mode", fontsize=14, fontweight='bold', y=0.995)
+    plt.tight_layout()
+    
+    folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+    os.makedirs(folder_path, exist_ok=True)
+    fname = f"{model_name}_{dataset_name}_kde_matrix_DIFF_{vmax}.png"
+    plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✓ DIFF matrix plot saved: {fname}")
 
 # ──────────────────────────────────────────────────────────────────
 #  Main
@@ -436,7 +653,7 @@ if __name__ == "__main__":
     parser.add_argument('--preprocess_type', type=str, default='layer')
     parser.add_argument('--model',           type=str, default='ASPP')
     parser.add_argument('--vmin',            type=int, default=0)
-    parser.add_argument('--vmax',            type=int, default=50)
+    parser.add_argument('--vmax',            type=int, default=25)
     args = parser.parse_args()
 
     seg_file_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
@@ -456,6 +673,12 @@ if __name__ == "__main__":
         mi_xt_diff = cache_data['mi_xt_diff']
         mi_ty_diff = cache_data['mi_ty_diff']
         ignore_label = cache_data['ignore_label']
+        
+        median_same_x = np.median(mi_xt_same)
+        median_same_y = np.median(mi_ty_same)
+
+        median_diff_x = np.median(mi_xt_diff)
+        median_diff_y = np.median(mi_ty_diff)
         
         print("Cache loaded successfully!\n")
     else:
@@ -526,27 +749,52 @@ if __name__ == "__main__":
     # ── KDE Cache 확인 ────────────────────────────────────────────────
     kde_cache_path = os.path.join(seg_file_path, 'kde_cache_contour.pkl')
     
+    # 필요한 key들 정의
+    required_keys = ['Xi', 'Yi']
+    for layer_idx in range(distance.shape[0]):
+        required_keys.append(f'layer_{layer_idx}')
+        for bin_idx in range(4):  # 0-10, 10-20, 20-30, 30-40 = 4개 bin
+            required_keys.append(f'layer_{layer_idx}_bin_{bin_idx}')
+    
+    # 캐시 파일 존재하면 로드
+    kde_cache_valid = False
     if os.path.exists(kde_cache_path):
         print(f"Loading cached KDE data from {kde_cache_path}...")
         with open(kde_cache_path, 'rb') as f:
             kde_data = pickle.load(f)
-        print("KDE cache loaded successfully!\n")
-    else:
-        print("KDE cache not found. Computing KDE values...")
+        
+        # 필요한 key들이 모두 있는지 확인
+        if all(key in kde_data for key in required_keys):
+            print("✓ All required keys found in cache!")
+            kde_cache_valid = True
+        else:
+            print("⚠ Some keys missing in cache. Recomputing KDE values...")
+            missing_keys = [k for k in required_keys if k not in kde_data]
+            print(f"  Missing keys: {missing_keys[:5]}..." if len(missing_keys) > 5 else f"  Missing keys: {missing_keys}")
+    
+    # 캐시가 유효하지 않으면 KDE 계산
+    if not kde_cache_valid:
+        print("\nComputing KDE values...")
         kde_data = compute_kde_values(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance)
         
         # ── KDE Cache 저장 ──────────────────────────────────────────────────
-        print(f"Saving KDE data to {kde_cache_path}...")
+        print(f"\nSaving KDE data to {kde_cache_path}...")
         with open(kde_cache_path, 'wb') as f:
             pickle.dump(kde_data, f)
         print("KDE cache saved successfully!\n")
+    else:
+        print("KDE cache loaded successfully!\n")
 
     print("=== KDE Contour Plots (SAME vs DIFF) ===")
     for li in range(distance.shape[0]):
-        plot_scatter_same_diff(li, args.model, args.dataset, args.vmin, args.vmax, kde_data)
+        plot_scatter_same_diff(li, args.model, args.dataset, args.vmin, args.vmax, kde_data, median_same_x, median_same_y, median_diff_x, median_diff_y)
 
     print("\n=== Distance-Binned KDE Contour Plots ===")
     for li in range(distance.shape[0]):
         plot_scatter_with_distance_bins(li, args.model, args.dataset, args.vmin, args.vmax, kde_data)
+
+    print("\n=== KDE Matrix Plots ===")
+    plot_kde_matrix_same(args.model, args.dataset, args.vmin, args.vmax, kde_data)
+    plot_kde_matrix_diff(args.model, args.dataset, args.vmin, args.vmax, kde_data)
 
     print("\n=== Done! ===")

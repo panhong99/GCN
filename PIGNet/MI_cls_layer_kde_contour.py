@@ -105,7 +105,7 @@ def cal_mi_t_y(t, y, eps=1e-12):
 def compute_kde_values(all_layers_data):
     """
     Compute KDE for all layers and store in a dictionary.
-    Returns: dict with layer_idx as key, containing KDE values
+    Returns: dict with layer_idx as key, containing KDE values and original data.
     """
     kde_data = {}
     
@@ -117,7 +117,6 @@ def compute_kde_values(all_layers_data):
         print(f"Computing KDE for Layer {layer_idx}...", end=" ")
         
         # Data validation & jitter adjustment
-        # If variance is too small, add small noise to avoid singular covariance matrix
         eps = 1e-8
         
         xt_std = np.std(mi_xt)
@@ -138,7 +137,6 @@ def compute_kde_values(all_layers_data):
             kde = gaussian_kde(points)
         except np.linalg.LinAlgError:
             print(f"[KDE fatal error - using histogram instead]", end=" ")
-            # If KDE fails, we'll use a simple histogram-based approach
             kde = None
         
         # Evaluate on grid
@@ -162,20 +160,19 @@ def compute_kde_values(all_layers_data):
         if kde is not None:
             Z = kde(positions).reshape(X.shape)
         else:
-            # Fallback: simple 2D histogram as Z values
             Z = np.zeros_like(X)
             for i in range(len(mi_xt)):
-                # Find nearest grid point
                 x_idx = np.argmin(np.abs(x_grid - mi_xt[i]))
                 y_idx = np.argmin(np.abs(y_grid - mi_ty[i]))
                 Z[y_idx, x_idx] += 1
-            # Normalize
             Z = Z / (np.max(Z) + eps)
         
+        # Store KDE data including original MI values for later processing
         kde_data[layer_idx] = {
             'X': X, 'Y': Y, 'Z': Z,
             'mi_xt': mi_xt, 'mi_ty': mi_ty,
-            'x_grid': x_grid, 'y_grid': y_grid
+            'x_grid': x_grid, 'y_grid': y_grid,
+            'n_points': len(mi_xt),
         }
         
         print("done")
@@ -196,7 +193,10 @@ def plot_kde_contour(layer_idx, model_name, dataset_name, kde_data):
     fig, ax = plt.subplots(figsize=(10, 8))
     
     # Contour plot with filled levels
-    contour_filled = ax.contourf(X, Y, Z, levels=15, cmap='magma', alpha=0.8)
+    cmap_s = plt.cm.get_cmap('Reds').copy()
+    cmap_s.set_bad('white')
+
+    contour_filled = ax.contourf(X, Y, Z, levels=15, cmap=cmap_s, alpha=0.8)
     # contour_lines = ax.contour(X, Y, Z, levels=10, colors='black', alpha=0.3, linewidths=0.5)
     
     # # Scatter points
@@ -229,6 +229,7 @@ if __name__ == "__main__":
                        help='Model name (e.g., vit, Resnet, PIGNet_GSPonly_classification)')
     args = parser.parse_args()
     
+    # Define paths and parameters first
     data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/layer_dataset/resnet101/pretrained/{args.model}/zoom/1'
     num = 7 if args.model == "PIGNet_GSPonly_classification" else 4
 
@@ -236,14 +237,26 @@ if __name__ == "__main__":
     # 1. Load or Compute MI
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     mi_cache_file = os.path.join(data_path, 'mi_analysis_cache_classification.pkl')
+    mi_cache_valid = False
     
     if os.path.exists(mi_cache_file):
         print(f"Loading cached MI data from {mi_cache_file}...")
         with open(mi_cache_file, 'rb') as f:
-            all_layers_data = pickle.load(f)
-        print("MI cache loaded successfully!\n")
-    else:
-        print("MI cache not found. Computing MI values...")
+            cached_data = pickle.load(f)
+        
+        # Check if all layers are present in cache
+        expected_layers = num - 1  # layers 1 to num-1
+        cached_layer_count = len([d for d in cached_data if isinstance(d, dict) and 'layer_idx' in d])
+        
+        if cached_layer_count == expected_layers:
+            all_layers_data = cached_data
+            mi_cache_valid = True
+            print(f"✓ All {expected_layers} layers found in MI cache!")
+        else:
+            print(f"⚠ MI cache has {cached_layer_count} layers, expected {expected_layers}. Recomputing...")
+    
+    if not mi_cache_valid:
+        print("Computing MI values...")
         
         # Load raw data
         with open(os.path.join(data_path, 'gt_labels.pkl'), 'rb') as f:
@@ -266,7 +279,7 @@ if __name__ == "__main__":
         
         # Compute MI for each layer
         for layer_idx, t_layer in enumerate(t_in):
-            print(f"\n--- Layer {layer_idx+1} ---")
+            print(f"\n--- Computing MI for Layer {layer_idx+1} ---")
             
             print("Computing I(X; T)...")
             mi_xt, euc_map = cal_mi_x_t(x_in, t_layer)
@@ -304,7 +317,7 @@ if __name__ == "__main__":
                 'distance': layer_distance,
             })
             
-            print(f"Layer {layer_idx+1} statistics:")
+            print(f"Layer {layer_idx+1} MI statistics:")
             print(f"  Data points: {len(layer_mi_xt)}")
             print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
             print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
@@ -315,19 +328,43 @@ if __name__ == "__main__":
         with open(mi_cache_file, 'wb') as f:
             pickle.dump(all_layers_data, f)
         print("MI cache saved successfully!\n")
+    else:
+        print("MI cache loaded successfully!\n")
     
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 2. Load or Compute KDE
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     kde_cache_file = os.path.join(data_path, 'kde_cache_classification.pkl')
     
+    # Check if KDE cache has all required layers
+    expected_layers = [d['layer_idx'] for d in all_layers_data]
+    required_keys = expected_layers[:]  # layer_idx values
+    
+    kde_cache_valid = False
     if os.path.exists(kde_cache_file):
         print(f"Loading cached KDE data from {kde_cache_file}...")
         with open(kde_cache_file, 'rb') as f:
             kde_data = pickle.load(f)
-        print("KDE cache loaded successfully!\n")
-    else:
-        print("KDE cache not found. Computing KDE values...")
+        
+        # Check if all required layers are present and have necessary fields
+        all_keys_present = True
+        for layer_idx in required_keys:
+            if layer_idx not in kde_data:
+                all_keys_present = False
+                break
+            layer_kde = kde_data[layer_idx]
+            if not all(key in layer_kde for key in ['X', 'Y', 'Z', 'mi_xt', 'mi_ty']):
+                all_keys_present = False
+                break
+        
+        if all_keys_present:
+            print(f"✓ All required KDE data for {len(required_keys)} layers found!")
+            kde_cache_valid = True
+        else:
+            print(f"⚠ Some KDE layers or fields missing in cache. Recomputing...")
+    
+    if not kde_cache_valid:
+        print("\nComputing KDE values...")
         kde_data = compute_kde_values(all_layers_data)
         
         # Save KDE cache
@@ -335,6 +372,8 @@ if __name__ == "__main__":
         with open(kde_cache_file, 'wb') as f:
             pickle.dump(kde_data, f)
         print("KDE cache saved successfully!\n")
+    else:
+        print("KDE cache loaded successfully!\n")
     
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 3. Plot
