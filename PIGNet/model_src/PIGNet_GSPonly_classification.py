@@ -466,13 +466,13 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
 
         x = self.layer1(x) #block1
-        backbone_layers_output.append(x)
+        backbone_layers_output.append(x.detach().cpu())
 
         x = self.layer2(x) #block2
-        backbone_layers_output.append(x)
+        backbone_layers_output.append(x.detach().cpu())
 
         x = self.layer3(x) #block3
-        backbone_layers_output.append(x)
+        backbone_layers_output.append(x.detach().cpu())
 
         #x = self.layer4(x) #block4
 
@@ -484,8 +484,8 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.FC(x)
 
-        layer_outputs = backbone_layers_output.extend(gsp_layer_outputs)
-        return x, layer_outputs
+        backbone_layers_output.extend(gsp_layer_outputs)
+        return x, backbone_layers_output
         
 
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):

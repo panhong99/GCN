@@ -40,8 +40,8 @@ def main(config, model_file, model_path):
     # 체크포인트 key가 DDP 사용여부에 따라서 좀 다름 -> 에러로그 보고 변경해주면 됨
     if config.model == "Resnet" or config.model == "vit":
         layer_num = 4
-    else: # PIGNet_GSPonly_classification
-        layer_num = 8 # backbone 4 + GSP block 4
+    elif config.model == "PIGNet_GSPonly_classification":
+        layer_num = 7 # backbone 3 + GSP block 4
 
     state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
     model.load_state_dict(state_dict)
@@ -67,17 +67,23 @@ def main(config, model_file, model_path):
             target = Variable(target.to(device)).long()
         
         if config.model == "Resnet":
-            outputs, layers_output = model(inputs)
-
-        elif config.model == "vit":
-            _, intermidiate = model.forward_intermidiate(inputs, indices=[2,5,8,11])
-            layers_output = []
-            for i in intermidiate:    
+            _, layers_output_ = model(inputs)
+            layers_output = [layers_output_[0].detach().cpu()] # 첫 레이어는 interpolation 없이 그대로 사용
+            for i in layers_output_[1:]:
+                i = i.detach().cpu()
                 i_ = F.interpolate(i, size=(grid_size, grid_size), mode='bilinear', align_corners=True)
                 layers_output.append(i_)
 
-        else: # PIGNet_GSPonly_classification
-            outputs, layers_output = model(inputs)
+        elif config.model == "vit":
+            _, intermidiate = model.forward_intermediates(inputs, indices=[2,5,8,11])
+            layers_output = []
+            for i in intermidiate:
+                i = i.detach().cpu()
+                i_ = F.interpolate(i, size=(grid_size, grid_size), mode='bilinear', align_corners=True)
+                layers_output.append(i_)
+
+        elif config.model == "PIGNet_GSPonly_classification":
+            _, layers_output = model(inputs)
             
         # layers_output return할 때 최소한 detach는 되야함 
         # detach 안되있으면 근데 return도 안될 듯 -> check해보기
@@ -88,7 +94,7 @@ def main(config, model_file, model_path):
             layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
             vq_models[layer_idx].partial_fit(layer_flat)
         
-        del outputs, layers_output, inputs
+        del layers_output, inputs
         collect()
     
     print(f"\n{'='*60}")
@@ -107,17 +113,23 @@ def main(config, model_file, model_path):
             target = Variable(target.to(device)).long()
             
         if config.model == "Resnet":
-            outputs, layers_output = model(inputs)
+            _, layers_output_ = model(inputs)
+            layers_output = [layers_output_[0].detach().cpu()] # 첫 레이어는 interpolation 없이 그대로 사용
+            for i in layers_output_[1:]:
+                i = i.detach().cpu()
+                i_ = F.interpolate(i, size=(grid_size, grid_size), mode='bilinear', align_corners=True)
+                layers_output.append(i_)
 
         elif config.model == "vit":
-            _, intermidiate = model.forward_intermidiate(inputs, indices=[2,5,8,11])
+            _, intermidiate = model.forward_intermediates(inputs, indices=[2,5,8,11])
             layers_output = []
-            for i in intermidiate:    
+            for i in intermidiate:
+                i = i.detach().cpu()
                 i_ = F.interpolate(i, size=(grid_size, grid_size), mode='bilinear', align_corners=True)
                 layers_output.append(i_)
 
         else: # PIGNet_GSPonly_classification
-            outputs , layers_output = model(inputs)
+            _ , layers_output = model(inputs)
 
         all_y.append(target.detach().cpu().numpy())
             

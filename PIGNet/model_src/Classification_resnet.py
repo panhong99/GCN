@@ -318,7 +318,7 @@ class ResNet(nn.Module):
         # for idx,model in enumerate(layer_outputs):
         #     print(f"{idx} model {model.size()}")
 
-        return x,layer_outputs
+        return x,layers_output
 
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.
