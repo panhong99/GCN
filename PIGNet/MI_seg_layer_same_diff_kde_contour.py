@@ -650,7 +650,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset',         type=str, default='cityscape')
-    parser.add_argument('--preprocess_type', type=str, default='layer')
+    parser.add_argument('--preprocess_type', type=str, default='layer', help='pixel or layer')
     parser.add_argument('--model',           type=str, default='ASPP')
     parser.add_argument('--vmin',            type=int, default=0)
     parser.add_argument('--vmax',            type=int, default=25)

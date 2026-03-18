@@ -311,7 +311,7 @@ class GSP(nn.Module):
                 x_s_f.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),
                                                feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
 
-        gsp_layers_output = [t.detach().cpu() for t in x_s_f]
+        gsp_layers_output = [t.detach().cpu().numpy() for t in x_s_f]
         
         output = torch.cat(x_s_f, dim=1)
 

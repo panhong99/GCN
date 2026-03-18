@@ -93,33 +93,51 @@ def main(config, model_file, model_path):
     # 체크포인트 key가 DDP 사용여부에 따라서 좀 다름 -> 에러로그 보고 변경해주면 됨
     if config.model == "Resnet" or config.model == "vit":
         layer_num = 5
-
-        vq_models = {layer_idx: MiniBatchKMeans(
-        n_clusters=50, 
-        random_state=42, 
-        n_init=1,
-        batch_size=50,
-        verbose=0
-    ) for layer_idx in range(layer_num)}
+        
+        # ★ PIXEL별 KMeans: 각 (layer, h, w)마다 독립적인 모델
+        vq_models = {}
+        for layer_idx in range(layer_num):
+            for h in range(grid_size):
+                for w in range(grid_size):
+                    key = (layer_idx, h, w)
+                    vq_models[key] = MiniBatchKMeans(
+                        n_clusters=50,
+                        random_state=42,
+                        n_init=1,
+                        batch_size=50,
+                        verbose=0
+                    )
 
     elif config.model == "PIGNet_GSPonly_classification":
-        backbone_num, gsp_layer_num = 4,5 # backbone 3 + GSP block 5
+        backbone_num, gsp_layer_num = 4, 5  # backbone 4 + GSP block 5
 
-        back_vq_models = {layer_idx: MiniBatchKMeans(
-        n_clusters=50, 
-        random_state=42, 
-        n_init=1,
-        batch_size=50,
-        verbose=0
-    ) for layer_idx in range(backbone_num)}
+        # ★ PIXEL별 KMeans: Backbone layers
+        back_vq_models = {}
+        for layer_idx in range(backbone_num):
+            for h in range(grid_size):
+                for w in range(grid_size):
+                    key = (layer_idx, h, w)
+                    back_vq_models[key] = MiniBatchKMeans(
+                        n_clusters=50,
+                        random_state=42,
+                        n_init=1,
+                        batch_size=50,
+                        verbose=0
+                    )
 
-        gsp_vq_models = {layer_idx: MiniBatchKMeans(
-        n_clusters=50, 
-        random_state=42, 
-        n_init=1,
-        batch_size=50,
-        verbose=0
-    ) for layer_idx in range(gsp_layer_num)}
+        # ★ PIXEL별 KMeans: GSP layers
+        gsp_vq_models = {}
+        for layer_idx in range(gsp_layer_num):
+            for h in range(grid_size):
+                for w in range(grid_size):
+                    key = (layer_idx, h, w)
+                    gsp_vq_models[key] = MiniBatchKMeans(
+                        n_clusters=50,
+                        random_state=42,
+                        n_init=1,
+                        batch_size=50,
+                        verbose=0
+                    )
 
     state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
     model.load_state_dict(state_dict)
@@ -128,8 +146,10 @@ def main(config, model_file, model_path):
     # ===== 레이어 전 공통 데이터셋 로더 생성 =====
     print(f"[INFO] Creating dataset loader...")
     print(f"\n{'='*60}")
-    print(f"Training KMeans models for all layers (batch-wise)")
+    print(f"Training KMeans models for all layers & pixels (batch-wise)")
     print(f"{'='*60}")
+    print(f"Total KMeans models: {len(vq_models) if config.model != 'PIGNet_GSPonly_classification' else len(back_vq_models) + len(gsp_vq_models)}")
+    print(f"Grid size: {grid_size} x {grid_size}")
             
     for inputs, target in tqdm(iter(MI_dataset_loader), desc="Training KMeans", leave=False):        
         with torch.no_grad():
@@ -147,42 +167,59 @@ def main(config, model_file, model_path):
         elif config.model == "PIGNet_GSPonly_classification":
             _, layers_output_, gsp_layers_output = model(inputs)
             backbone_layers_output = resize_layers_shape(layers_output_, grid_size)
-            # gsp_layers_output = resize_layers_shape(gsp_layer_outputs, grid_size)
+            # ★ GSP layers도 resize
+            gsp_layers_output_resized = resize_layers_shape(gsp_layers_output, grid_size)
             
         # layers_output return할 때 최소한 detach는 되야함 
         # detach 안되있으면 근데 return도 안될 듯 -> check해보기
 
         if config.model != "PIGNet_GSPonly_classification":
+            # ★ PIXEL별 처리: 각 픽셀마다 해당 모델에만 fit
             for layer_idx in range(len(layers_output)):
                 layer_data = layers_output[layer_idx]
                 B, C, H, W = layer_data.shape
-                            
-                layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
-                vq_models[layer_idx].partial_fit(layer_flat)
+                
+                # 각 픽셀 (h, w)에 대해
+                for h in range(H):
+                    for w in range(W):
+                        # 해당 픽셀의 배치 데이터만 추출: (B, C)
+                        pixel_features = layer_data[:, :, h, w]  # (B, C)
+                        
+                        # 해당 픽셀 전용 KMeans 모델에만 fit
+                        key = (layer_idx, h, w)
+                        vq_models[key].partial_fit(pixel_features)
 
             del layers_output, inputs
 
         else: # PIGNet_GSPonly_classification
+            # ★ Backbone layers: PIXEL별 처리
             for layer_idx in range(backbone_num):
                 layer_data = backbone_layers_output[layer_idx]
                 B, C, H, W = layer_data.shape
-                            
-                layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
-                back_vq_models[layer_idx].partial_fit(layer_flat)
+                
+                for h in range(H):
+                    for w in range(W):
+                        pixel_features = layer_data[:, :, h, w]  # (B, C)
+                        key = (layer_idx, h, w)
+                        back_vq_models[key].partial_fit(pixel_features)
 
-            for gsp_layer_idx in range(gsp_layer_num):
-                gsp_layer_data = gsp_layers_output[gsp_layer_idx]
+            # ★ GSP layers: PIXEL별 처리
+            for layer_idx in range(gsp_layer_num):
+                gsp_layer_data = gsp_layers_output_resized[layer_idx]
                 B, C, H, W = gsp_layer_data.shape
 
-                gsp_layer_flat = gsp_layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
-                gsp_vq_models[gsp_layer_idx].partial_fit(gsp_layer_flat)
+                for h in range(H):
+                    for w in range(W):
+                        pixel_features = gsp_layer_data[:, :, h, w]  # (B, C)
+                        key = (layer_idx, h, w)
+                        gsp_vq_models[key].partial_fit(pixel_features)
 
-            del backbone_layers_output, gsp_layers_output, inputs
+            del backbone_layers_output, gsp_layers_output_resized, inputs
        
         collect()
     
     print(f"\n{'='*60}")
-    print(f"Predicting VQ labels for all layers")
+    print(f"Predicting VQ labels for all layers & pixels")
     print(f"{'='*60}")
     
     config.MI = False    
@@ -215,7 +252,8 @@ def main(config, model_file, model_path):
         elif config.model == "PIGNet_GSPonly_classification":
             _, layers_output_, gsp_layers_output = model(inputs)
             backbone_layers_output = resize_layers_shape(layers_output_, grid_size)
-            # gsp_layers_output = resize_layers_shape(gsp_layer_outputs, grid_size)
+            # ★ GSP layers도 resize
+            gsp_layers_output_resized = resize_layers_shape(gsp_layers_output, grid_size)
 
         if config.model != "PIGNet_GSPonly_classification":
             all_y.append(target.detach().cpu().numpy())
@@ -224,32 +262,62 @@ def main(config, model_file, model_path):
             backbone_y.append(target.detach().cpu().numpy())
             gsp_y.append(target.detach().cpu().numpy())
 
-        # TODO
+        # ★ PIXEL별 Prediction: 각 픽셀마다 해당 모델로 predict
         if config.model != "PIGNet_GSPonly_classification":
             for layer_idx in range(len(layers_output)):
                 layer_data = layers_output[layer_idx]
                 B, C, H, W = layer_data.shape
-                            
-                layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
-                vq_pred = vq_models[layer_idx].predict(layer_flat)
-                all_vq_preds[layer_idx].append(vq_pred.reshape(B,H,W))
+                
+                # 결과를 담을 배열
+                if layer_idx not in all_vq_preds or len(all_vq_preds[layer_idx]) == 0:
+                    layer_result = np.zeros((B, H, W), dtype=np.int32)
+                else:
+                    layer_result = np.zeros((B, H, W), dtype=np.int32)
+                
+                # 각 픽셀마다
+                for h in range(H):
+                    for w in range(W):
+                        pixel_features = layer_data[:, :, h, w]  # (B, C)
+                        key = (layer_idx, h, w)
+                        
+                        # 해당 픽셀 전용 모델로 predict
+                        pixel_pred = vq_models[key].predict(pixel_features)  # (B,)
+                        layer_result[:, h, w] = pixel_pred
+                
+                all_vq_preds[layer_idx].append(layer_result)
     
         else: # PIGNet_GSPonly_classification
+            # ★ Backbone layers: PIXEL별 Prediction
             for backbone_layer_idx in range(backbone_num):
                 backbone_layer_data = backbone_layers_output[backbone_layer_idx]
                 B, C, H, W = backbone_layer_data.shape
-                            
-                layer_flat = backbone_layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
-                backbone_vq_pred = back_vq_models[backbone_layer_idx].predict(layer_flat)
-                backbone_vq_preds[backbone_layer_idx].append(backbone_vq_pred.reshape(B,H,W))
+                
+                layer_result = np.zeros((B, H, W), dtype=np.int32)
+                
+                for h in range(H):
+                    for w in range(W):
+                        pixel_features = backbone_layer_data[:, :, h, w]  # (B, C)
+                        key = (backbone_layer_idx, h, w)
+                        pixel_pred = back_vq_models[key].predict(pixel_features)  # (B,)
+                        layer_result[:, h, w] = pixel_pred
+                
+                backbone_vq_preds[backbone_layer_idx].append(layer_result)
 
+            # ★ GSP layers: PIXEL별 Prediction
             for gsp_layer_idx in range(gsp_layer_num):
-                gsp_layer_data = gsp_layers_output[gsp_layer_idx]
+                gsp_layer_data = gsp_layers_output_resized[gsp_layer_idx]
                 B, C, H, W = gsp_layer_data.shape
 
-                gsp_layer_flat = gsp_layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
-                gsp_vq_pred = gsp_vq_models[gsp_layer_idx].predict(gsp_layer_flat)
-                gsp_vq_preds[gsp_layer_idx].append(gsp_vq_pred.reshape(B,H,W))
+                layer_result = np.zeros((B, H, W), dtype=np.int32)
+                
+                for h in range(H):
+                    for w in range(W):
+                        pixel_features = gsp_layer_data[:, :, h, w]  # (B, C)
+                        key = (gsp_layer_idx, h, w)
+                        pixel_pred = gsp_vq_models[key].predict(pixel_features)  # (B,)
+                        layer_result[:, h, w] = pixel_pred
+                
+                gsp_vq_preds[gsp_layer_idx].append(layer_result)
     
     # ===== Step 5: 결과 저장 =====
     # all_vq_preds의 shape을 봐야함 -> 3차원으로 형성이 되있어야함 -> all_batch, H, W 이렇게
@@ -339,7 +407,7 @@ if __name__ == "__main__":
                 output_folder = os.path.join(
                     "/home/hail/pan/HDD/MI_dataset", 
                     config.dataset, 
-                    "layer_dataset",
+                    "pixel_dataset",  # ★ layer_dataset에서 pixel_dataset으로 변경
                     config.backbone, 
                     config.model_type, 
                     model_key, 
@@ -357,5 +425,5 @@ if __name__ == "__main__":
                 iter_config.infer_params.process_type = p_key
                 iter_config.output_folder = output_folder
                 iter_config.crop_size= 512 if iter_config.model == "vit" else 513
+                iter_config.batch_size = 50
                 main(iter_config, model_file, model_path)
-                

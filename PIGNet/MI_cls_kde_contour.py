@@ -179,7 +179,7 @@ def compute_kde_values(all_layers_data):
     
     return kde_data
 
-def plot_kde_contour(layer_idx, model_name, dataset_name, kde_data, group_name=None):
+def plot_kde_contour(layer_idx, model_name, dataset_name, process_type, kde_data, group_name=None):
     """
     Plot KDE contour for a single layer.
     """
@@ -191,7 +191,7 @@ def plot_kde_contour(layer_idx, model_name, dataset_name, kde_data, group_name=N
     mi_ty = layer_data['mi_ty']
     
     vmin=0
-    vmax=5
+    vmax=2
 
     Z = np.clip(Z, vmin, vmax)
     fig, ax = plt.subplots(figsize=(10, 8))
@@ -237,16 +237,16 @@ def plot_kde_contour(layer_idx, model_name, dataset_name, kde_data, group_name=N
     
     # Filename with group info if available
     if group_name:
-        fname = f"{model_name}_{dataset_name}_kde_contour_{group_name}_layer{layer_idx}.png"
+        fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_{group_name}_layer{layer_idx}.png"
     else:
-        fname = f"{model_name}_{dataset_name}_kde_contour_layer{layer_idx}.png"
+        fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_layer{layer_idx}.png"
     
     plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Layer {layer_idx} KDE contour plot saved.")
 
 
-def plot_kde_contour_all_layers_classification(all_layers_data, model_name, dataset_name, kde_data, num, group_name=None):
+def plot_kde_contour_all_layers_classification(all_layers_data, model_name, dataset_name, kde_data, num, process_type, group_name=None):
     """
     Plot KDE contours for all layers in a single figure with subplots.
     
@@ -256,6 +256,7 @@ def plot_kde_contour_all_layers_classification(all_layers_data, model_name, data
         dataset_name: Name of the dataset
         kde_data: Dictionary with KDE information for each layer
         num: Total number of layers
+        process_type: Process type (e.g., 'layer', 'pixel')
         group_name: Optional group name (e.g., 'Backbone', 'GSP') for file naming
     """
     num_layers = len(all_layers_data)
@@ -274,7 +275,7 @@ def plot_kde_contour_all_layers_classification(all_layers_data, model_name, data
     
     # KDE parameters (shared across all subplots)
     vmin = 0
-    vmax = 5
+    vmax = 2
     norm = Normalize(vmin=vmin, vmax=vmax)
     levels = np.linspace(vmin, vmax, 21)
     threshold = 2e-1
@@ -324,11 +325,11 @@ def plot_kde_contour_all_layers_classification(all_layers_data, model_name, data
     
     plt.tight_layout(rect=[0, 0, 0.9, 0.96])
     
-    # Include group name in filename if provided
+    # Include group name and process type in filename if provided
     if group_name:
-        fname = f"{model_name}_{dataset_name}_kde_contour_all_layers_{group_name}.png"
+        fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_all_layers_{group_name}.png"
     else:
-        fname = f"{model_name}_{dataset_name}_kde_contour_all_layers.png"
+        fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_all_layers.png"
     plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"All layers combined KDE contour plot saved as: {fname}")
@@ -340,6 +341,8 @@ if __name__ == "__main__":
                        help='Dataset name (e.g., Imagenet, CIFAR-10, CIFAR-100)')
     parser.add_argument('--model', type=str, default='PIGNet_GSPonly_classification', 
                        help='Model name (e.g., vit, Resnet, PIGNet_GSPonly_classification)')
+    parser.add_argument('--process_type', type=str, default='layer', 
+                       help='Preprocessing type (e.g., pixel or layer)')
     args = parser.parse_args()
     
     if args.model == "Resnet" or args.model == "vit":
@@ -348,7 +351,7 @@ if __name__ == "__main__":
         backbonenum, gsp_layer_num = 4, 5
     
     # Define paths and parameters first
-    data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/layer_dataset/resnet101/pretrained/{args.model}/zoom/1'
+    data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/{args.process_type}_dataset/resnet101/pretrained/{args.model}/zoom/1'
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 1. Load or Compute MI
@@ -760,12 +763,12 @@ if __name__ == "__main__":
             else:
                 print(f"Layer {layer_idx}:")
             
-            plot_kde_contour(layer_idx, args.model, args.dataset, kde_data, group_name)
+            plot_kde_contour(layer_idx, args.model, args.dataset, args.process_type, kde_data, group_name)
         
         # Generate combined subplot plot for all layers
         print(f"\n=== Generating Combined Subplot Plot ===")
         total_layers = len(all_layers_data)
-        plot_kde_contour_all_layers_classification(all_layers_data, args.model, args.dataset, kde_data, total_layers, group_name=None)
+        plot_kde_contour_all_layers_classification(all_layers_data, args.model, args.dataset, kde_data, total_layers, args.process_type, group_name=None)
         
         print("\n=== Done! ===")
     
@@ -779,20 +782,20 @@ if __name__ == "__main__":
         for layer_data in backbone_layers_data:
             layer_idx = layer_data['layer_idx']
             print(f"Backbone - Layer {layer_idx}:")
-            plot_kde_contour(layer_idx, args.model, args.dataset, backbone_kde_data, 'Backbone')
+            plot_kde_contour(layer_idx, args.model, args.dataset, args.process_type, backbone_kde_data, 'Backbone')
         
         print(f"\n--- Generating Backbone Combined Subplot Plot ---")
-        plot_kde_contour_all_layers_classification(backbone_layers_data, args.model, args.dataset, backbone_kde_data, len(backbone_layers_data), group_name='Backbone')
+        plot_kde_contour_all_layers_classification(backbone_layers_data, args.model, args.dataset, backbone_kde_data, len(backbone_layers_data), args.process_type, group_name='Backbone')
         
         # Plot GSP layers
         print("\n=== GSP Layers ===")
         for layer_data in gsp_layers_data:
             layer_idx = layer_data['layer_idx']
             print(f"GSP - Layer {layer_idx}:")
-            plot_kde_contour(layer_idx, args.model, args.dataset, gsp_kde_data, 'GSP')
+            plot_kde_contour(layer_idx, args.model, args.dataset, args.process_type, gsp_kde_data, 'GSP')
         
         print(f"\n--- Generating GSP Combined Subplot Plot ---")
-        plot_kde_contour_all_layers_classification(gsp_layers_data, args.model, args.dataset, gsp_kde_data, len(gsp_layers_data), group_name='GSP')
+        plot_kde_contour_all_layers_classification(gsp_layers_data, args.model, args.dataset, gsp_kde_data, len(gsp_layers_data), args.process_type, group_name='GSP')
         
         print("\n=== Done! ===")
 
