@@ -329,7 +329,7 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
     )
     
     # Median 포인트 표시
-    ax.scatter(median_same_x, median_same_y, marker='^', s=200, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
+    ax.scatter(median_same_x, median_same_y, marker='*', s=150, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
     
     cbar = plt.colorbar(cf, ax=ax)
     cbar.set_label('Density', fontsize=11)
@@ -364,7 +364,7 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
     )
     
     # Median 포인트 표시
-    ax.scatter(median_diff_x, median_diff_y, marker='^', s=200, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
+    ax.scatter(median_diff_x, median_diff_y, marker='*', s=150, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
 
     cbar = plt.colorbar(cf, ax=ax)
     cbar.set_label('Density', fontsize=11)
@@ -439,7 +439,7 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
         if len(mi_xt_s) > 0:
             median_x = np.median(mi_xt_s)
             median_y = np.median(mi_ty_s)
-            ax.scatter(median_x, median_y, marker='^', s=200, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
+            ax.scatter(median_x, median_y, marker='*', s=150, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
         
         cbar_s = plt.colorbar(cf_s, ax=ax)
         cbar_s.set_label('Density', fontsize=11)
@@ -474,7 +474,7 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
         if len(mi_xt_d) > 0:
             median_x = np.median(mi_xt_d)
             median_y = np.median(mi_ty_d)
-            ax.scatter(median_x, median_y, marker='^', s=200, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
+            ax.scatter(median_x, median_y, marker='*', s=150, c='lime', edgecolors='darkgreen', linewidth=2, zorder=5)
         
         cbar_d = plt.colorbar(cf_d, ax=ax)
         cbar_d.set_label('Density', fontsize=11)
@@ -543,11 +543,11 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data):
             if len(mi_xt_s) > 0:
                 median_x = np.median(mi_xt_s)
                 median_y = np.median(mi_ty_s)
-                ax.scatter(median_x, median_y, marker='^', s=150, c='lime', edgecolors='darkgreen', linewidth=1.5, zorder=5)
+                ax.scatter(median_x, median_y, marker='*', s=150, c='lime', edgecolors='darkgreen', linewidth=1.5, zorder=5)
             
             # Ticks 제거
-            ax.set_xticks([])
-            ax.set_yticks([])
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
             ax.set_xlim(0, 2)
             ax.set_ylim(0, 2)
             
@@ -559,7 +559,7 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data):
             if layer_idx == 0:
                 ax.set_title(f"Dist [{b_min:.0f}-{b_max:.0f})", fontsize=11, fontweight='bold')
     
-    plt.suptitle(f"KDE Matrix - SAME Mode", fontsize=14, fontweight='bold', y=0.995)
+    plt.suptitle(f"{model_name}_{dataset_name}_KDE Matrix - SAME Mode", fontsize=14, fontweight='bold', y=0.995)
     plt.tight_layout()
     
     folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
@@ -597,8 +597,8 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data):
             cache_key = f'layer_{layer_idx}_bin_{dist_idx}'
             if cache_key not in kde_data:
                 ax.text(1, 1, 'No data', ha='center', va='center', fontsize=12)
-                ax.set_xticks([])
-                ax.set_yticks([])
+                ax.set_xticklabels([])
+                ax.set_yticklabels([])
                 ax.set_xlim(0, 2)
                 ax.set_ylim(0, 2)
                 continue
@@ -616,11 +616,11 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data):
             if len(mi_xt_d) > 0:
                 median_x = np.median(mi_xt_d)
                 median_y = np.median(mi_ty_d)
-                ax.scatter(median_x, median_y, marker='^', s=150, c='lime', edgecolors='darkgreen', linewidth=1.5, zorder=5)
+                ax.scatter(median_x, median_y, marker='*', s=150, c='lime', edgecolors='darkgreen', linewidth=1.5, zorder=5)
             
-            # Ticks 제거
-            ax.set_xticks([])
-            ax.set_yticks([])
+            # Tick 레이블 제거 (marks는 유지)
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
             ax.set_xlim(0, 2)
             ax.set_ylim(0, 2)
             
@@ -632,7 +632,7 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data):
             if layer_idx == 0:
                 ax.set_title(f"Dist [{b_min:.0f}-{b_max:.0f})", fontsize=11, fontweight='bold')
     
-    plt.suptitle(f"KDE Matrix - DIFF Mode", fontsize=14, fontweight='bold', y=0.995)
+    plt.suptitle(f"{model_name}_{dataset_name}_KDE Matrix - DIFF Mode", fontsize=14, fontweight='bold', y=0.995)
     plt.tight_layout()
     
     folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"

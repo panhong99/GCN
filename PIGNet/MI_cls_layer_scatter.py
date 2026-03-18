@@ -154,7 +154,7 @@ def cal_mi_t_y(t, y, eps=1e-12):
     
     return mi_map
 
-def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, dataset_name):
+def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, dataset_name, group_name=None):
     """
     Plot scatter map in Information Plane for classification task.
     X-axis: I(X; T), Y-axis: I(T; Y), Color: Euclidean Distance
@@ -167,35 +167,129 @@ def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, d
     cbar = plt.colorbar(scatter, ax=ax)
     cbar.set_label('Euclidean Distance', fontsize=12)
     
-    ax.set_xlim(0,2)
-    ax.set_ylim(0,2)
+    ax.set_xlim(0, 2)
+    ax.set_ylim(0, 2)
     ax.set_xlabel("I(X; T)", fontsize=13, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=13, fontweight='bold')
-    ax.set_title(f"Layer {layer_idx+1} - Information Plane (Classification)", 
-                 fontsize=14, fontweight='bold')
-    # ax.grid(True, alpha=0.3, linestyle='--')
-        
+    
+    # Title and filename with group info if available
+    if group_name:
+        title = f"{model_name}_{dataset_name}_{group_name}_Layer {layer_idx} - Information Plane"
+        fname = f"{model_name}_{dataset_name}_scatter_{group_name}_layer{layer_idx}.png"
+    else:
+        title = f"{model_name}_{dataset_name}_Layer {layer_idx} - Information Plane"
+        fname = f"{model_name}_{dataset_name}_scatter_layer{layer_idx}.png"
+    
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    
     plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}.png", 
-                dpi=150, bbox_inches='tight')
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"Layer {layer_idx+1} scatter plot saved.")
+    print(f"Scatter plot saved: {fname}")
+
+
+def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_name, num, group_name=None):
+    """
+    Plot scatter maps for all layers in a single figure with subplots.
+    X-axis: I(X; T), Y-axis: I(T; Y), Color: Euclidean Distance
+    
+    Args:
+        all_layers_data: List of dictionaries containing layer MI data
+        model_name: Name of the model
+        dataset_name: Name of the dataset
+        num: Total number of layers
+        group_name: Optional group name (e.g., 'Backbone', 'GSP') for file naming
+    """
+    num_layers = len(all_layers_data)
+    
+    # Determine subplot dimensions (prefer wider layout)
+    ncols = max(4, num - 1)
+    nrows = (num_layers + ncols - 1) // ncols
+    
+    fig, axes = plt.subplots(nrows, ncols, figsize=(16, 4*nrows))
+    
+    # Flatten axes array for easier iteration (handle single subplot case)
+    if isinstance(axes, np.ndarray):
+        axes_flat = axes.flatten()
+    else:
+        axes_flat = [axes]
+    
+    # Track scatter objects for colorbar
+    scatter_objs = []
+    
+    for idx, layer_data in enumerate(all_layers_data):
+        ax = axes_flat[idx]
+        layer_idx = layer_data['layer_idx']
+        mi_xt = layer_data['mi_xt']
+        mi_ty = layer_data['mi_ty']
+        distance = layer_data['distance']
+        group_name = layer_data.get('group', None)
+        
+        scatter = ax.scatter(mi_xt, mi_ty, c=distance, cmap='viridis', 
+                           s=20, alpha=0.6, edgecolors='none')
+        scatter_objs.append(scatter)
+        
+        ax.set_xlim(0, 2)
+        ax.set_ylim(0, 2)
+        ax.set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
+        ax.set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+        
+        # Update title with group info if available
+        if group_name:
+            ax.set_title(f"{group_name} Layer {layer_idx}", fontsize=12, fontweight='bold')
+        else:
+            ax.set_title(f"Layer {layer_idx}", fontsize=12, fontweight='bold')
+        
+        # Remove tick labels to show clean subplot
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+    
+    # Remove empty subplots
+    for idx in range(num_layers, len(axes_flat)):
+        fig.delaxes(axes_flat[idx])
+    
+    # Add shared colorbar
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    cbar = fig.colorbar(scatter_objs[0], cax=cbar_ax)
+    cbar.set_label('Euclidean Distance', fontsize=11, fontweight='bold')
+    
+    # Overall title with model and dataset info
+    fig.suptitle(f"{model_name} - {dataset_name} - Information Plane (Classification)", 
+                fontsize=16, fontweight='bold', y=0.98)
+    
+    plt.tight_layout(rect=[0, 0, 0.9, 0.96])
+    
+    # Include group name in filename if provided
+    if group_name:
+        fname = f"{model_name}_{dataset_name}_scatter_all_layers_{group_name}.png"
+    else:
+        fname = f"{model_name}_{dataset_name}_scatter_all_layers.png"
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"All layers combined scatter plot saved as: {fname}")
+
 
 if __name__ == "__main__":  # Classification Task
     
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--dataset', type=str, default='CIFAR-10', 
+    argparser.add_argument('--dataset', type=str, default='imagenet', 
                           help='Dataset name (e.g., Imagenet, CIFAR-100)')
-    argparser.add_argument('--model', type=str, default='Resnet', 
+    argparser.add_argument('--model', type=str, default='PIGNet_GSPonly_classification', 
                           help='Model name (e.g., Resnet, PIGNet_GSPonly_classification, vit)')
     args = argparser.parse_args()
     
-    num = 7 if args.model == "PIGNet_GSPonly_classification" else 4
-    
+    if args.model == "Resnet" or args.model == "vit":
+        layer_num = 5
+    elif args.model == "PIGNet_GSPonly_classification":
+        backbonenum, gsp_layer_num = 4,5 # backbone 3 + GSP block 5    
+
     # Setup data path
     data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/layer_dataset/resnet101/pretrained/{args.model}/zoom/1'
-    mi_cache_file = os.path.join(data_path, 'mi_analysis_cache_classification.pkl')
     
+    mi_cache_file = os.path.join(data_path, 'mi_analysis_cache_classification.pkl')
+    backbone_cache_file = os.path.join(data_path, 'mi_analysis_cache_backbone_classification.pkl')
+    gsp_cache_file = os.path.join(data_path, 'mi_analysis_cache_gsp_classification.pkl')
+
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # Check MI Cache
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -204,94 +298,248 @@ if __name__ == "__main__":  # Classification Task
         with open(mi_cache_file, 'rb') as f:
             all_layers_data = pickle.load(f)
         print("MI cache loaded successfully!\n")
+
+    elif (os.path.exists(backbone_cache_file) and os.path.exists(gsp_cache_file)):
+        print(f"Loading cached MI data from: {backbone_cache_file} and {gsp_cache_file}")
+        with open(backbone_cache_file, 'rb') as f:
+            backbone_layers_data = pickle.load(f)
+        with open(gsp_cache_file, 'rb') as f:
+            gsp_layers_data = pickle.load(f)
+        print("MI cache loaded successfully!\n")
+
     else:
         print(f"Loading classification MI data from: {data_path}")
-        
-        with open(os.path.join(data_path, 'y_labels.pkl'), 'rb') as f:
-            y_in = pickle.load(f)  # (N,) - class labels
-        print(f"Loaded labels: {y_in.shape}")
-        
-        with open(os.path.join(data_path, 'layer_0.pkl'), 'rb') as f:
-            x_in = pickle.load(f)  # (N, H, W) - input features
-        print(f"Loaded input features: {x_in.shape}")
-        
-        t_in = []
-        for i in range(1, num):
-            with open(os.path.join(data_path, f'layer_{i}.pkl'), 'rb') as f:
-                t_layer = pickle.load(f)
-                t_in.append(t_layer)  # (N, H, W) - layer features
-                print(f"Loaded layer {i}: {t_layer.shape}")
-        
-        H_dim, W_dim = x_in.shape[1], x_in.shape[2]
-        num_layers = len(t_in)
-        
+
+        if args.model != "PIGNet_GSPonly_classification":        
+            with open(os.path.join(data_path, 'y_labels.pkl'), 'rb') as f:
+                y_in = pickle.load(f)  # (N,) - class labels
+            print(f"Loaded labels: {y_in.shape}")
+            
+            with open(os.path.join(data_path, 'layer_0.pkl'), 'rb') as f:
+                x_in = pickle.load(f)  # (N, H, W) - input features
+            print(f"Loaded input features: {x_in.shape}")
+            
+            t_in = []
+            for i in range(1, layer_num):
+                with open(os.path.join(data_path, f'layer_{i}.pkl'), 'rb') as f:
+                    t_layer = pickle.load(f)
+                    t_in.append(t_layer)  # (N, H, W) - layer features
+                    print(f"Loaded layer {i}: {t_layer.shape}")
+
+            H_dim, W_dim = x_in.shape[1], x_in.shape[2]
+                    
+        else: # PIGNet_GSPonly_classification
+            with open(os.path.join(data_path, 'y_labels.pkl'), 'rb') as f:
+                y_in = pickle.load(f)  # (N,) - class labels
+            print(f"Loaded labels: {y_in.shape}")
+            
+            with open(os.path.join(data_path, 'backbone_layer_0.pkl'), 'rb') as f:
+                backbone_x_in = pickle.load(f)  # (N, H, W) - input features
+            print(f"Loaded input features: {backbone_x_in.shape}")
+            
+            with open(os.path.join(data_path, 'gsp_layer_0.pkl'), 'rb') as f:
+                gsp_x_in = pickle.load(f)  # (N, H, W) - input features
+            print(f"Loaded input features: {gsp_x_in.shape}")
+            
+            backbone_t_in = []
+            gsp_t_in = []
+
+            for i in range(1, backbonenum):
+                with open(os.path.join(data_path, f'backbone_layer_{i}.pkl'), 'rb') as f:
+                    t_layer = pickle.load(f)
+                    backbone_t_in.append(t_layer)  # (N, H, W) - layer features
+                    print(f"Loaded layer {i}: {t_layer.shape}")
+
+            for i in range(1, gsp_layer_num):
+                with open(os.path.join(data_path, f'gsp_layer_{i}.pkl'), 'rb') as f:
+                    t_layer = pickle.load(f)
+                    gsp_t_in.append(t_layer)  # (N, H, W) - layer features
+                    print(f"Loaded layer {i}: {t_layer.shape}")
+
+            H_dim, W_dim = backbone_x_in.shape[1], backbone_x_in.shape[2]
+
         # Initialize storage for each layer
-        all_layers_data = []
+
         
         print(f"\n=== Computing MI for Classification ===")
-        print(f"Number of layers: {num_layers}")
         print(f"Feature map dimensions: {H_dim} x {W_dim}")
         
-        # Compute MI for each layer
-        for layer_idx, t_layer in enumerate(t_in):
-            print(f"\n--- Layer {layer_idx+1} ---")
-            
-            # Compute I(X; T)
-            print("Computing I(X; T)...")
-            mi_xt, euc_map = cal_mi_x_t(x_in, t_layer)
-            
-            # Compute I(T; Y)
-            print("Computing I(T; Y)...")
-            mi_ty = cal_mi_t_y(t_layer, y_in)
-            
-            # Flatten for scatter plot
-            # mi_xt: (H, W, H, W) -> flatten to (H*W*H*W,)
-            # mi_ty: (H, W) -> replicate for each reference pixel
-            num_pixels = H_dim * W_dim
-            
-            layer_mi_xt = []
-            layer_mi_ty = []
-            layer_distance = []
-            
-            # For each reference pixel in T (ht, wt)
-            for ht in range(H_dim):
-                for wt in range(W_dim):
-                    # Get all MI values I(X[hx,wx]; T[ht,wt]) for all (hx, wx)
-                    mi_xt_ref = mi_xt[ht, wt, :, :].flatten()  # (H*W,)
-                    
-                    # Get I(T[ht,wt]; Y) - constant for all comparison pixels
-                    mi_ty_val = mi_ty[ht, wt]
-                    mi_ty_ref = np.full_like(mi_xt_ref, mi_ty_val)  # (H*W,)
-                    
-                    # Get euclidean distances from (ht, wt) to all (hx, wx)
-                    dist_ref = euc_map[ht, wt, :, :].flatten()  # (H*W,)
-                    
-                    layer_mi_xt.extend(mi_xt_ref.tolist())
-                    layer_mi_ty.extend(mi_ty_ref.tolist())
-                    layer_distance.extend(dist_ref.tolist())
-            
-            layer_mi_xt = np.array(layer_mi_xt)
-            layer_mi_ty = np.array(layer_mi_ty)
-            layer_distance = np.array(layer_distance)
-            
-            all_layers_data.append({
-                'layer_idx': layer_idx + 1,
-                'mi_xt': layer_mi_xt,
-                'mi_ty': layer_mi_ty,
-                'distance': layer_distance,
-            })
-            
-            print(f"Layer {layer_idx+1} statistics:")
-            print(f"  Data points: {len(layer_mi_xt)}")
-            print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
-            print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
-            print(f"  Distance range: [{layer_distance.min():.2f}, {layer_distance.max():.2f}]")
+        if args.model != "PIGNet_GSPonly_classification":
+            # Standard computation for other models
+            print(f"Number of layers: {len(t_in)}")
+            all_layers_data = []
+                
+            # Compute MI for each layer
+            for layer_idx, t_layer in enumerate(t_in):
+                print(f"\n--- Layer {layer_idx+1} ---")
+                
+                # Compute I(X; T)
+                print("Computing I(X; T)...")
+                mi_xt, euc_map = cal_mi_x_t(x_in, t_layer)
+                
+                # Compute I(T; Y)
+                print("Computing I(T; Y)...")
+                mi_ty = cal_mi_t_y(t_layer, y_in)
+                
+                # Flatten for scatter plot
+                num_pixels = H_dim * W_dim
+                
+                layer_mi_xt = []
+                layer_mi_ty = []
+                layer_distance = []
+                
+                # For each reference pixel in T (ht, wt)
+                for ht in range(H_dim):
+                    for wt in range(W_dim):
+                        mi_xt_ref = mi_xt[ht, wt, :, :].flatten()
+                        mi_ty_val = mi_ty[ht, wt]
+                        mi_ty_ref = np.full_like(mi_xt_ref, mi_ty_val)
+                        dist_ref = euc_map[ht, wt, :, :].flatten()
+                        
+                        layer_mi_xt.extend(mi_xt_ref.tolist())
+                        layer_mi_ty.extend(mi_ty_ref.tolist())
+                        layer_distance.extend(dist_ref.tolist())
+                
+                layer_mi_xt = np.array(layer_mi_xt)
+                layer_mi_ty = np.array(layer_mi_ty)
+                layer_distance = np.array(layer_distance)
+                
+                all_layers_data.append({
+                    'layer_idx': layer_idx + 1,
+                    'mi_xt': layer_mi_xt,
+                    'mi_ty': layer_mi_ty,
+                    'distance': layer_distance,
+                })
+                
+                print(f"Layer {layer_idx+1} statistics:")
+                print(f"  Data points: {len(layer_mi_xt)}")
+                print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
+                print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
+                print(f"  Distance range: [{layer_distance.min():.2f}, {layer_distance.max():.2f}]")
+
+            # Save cache
+            print(f"\nSaving computed data to {mi_cache_file}...")
+            with open(mi_cache_file, 'wb') as f:
+                pickle.dump(all_layers_data, f)
+            print("Cache saved successfully!")
         
-        # Save cache
-        print(f"\nSaving computed data to {mi_cache_file}...")
-        with open(mi_cache_file, 'wb') as f:
-            pickle.dump(all_layers_data, f)
-        print("Cache saved successfully!")
+        else:  # PIGNet_GSPonly_classification
+            backbone_layers_data = []
+            gsp_layers_data = []
+
+            print(f"Number of Backbone layers: {len(backbone_t_in[:backbonenum])}")
+            print(f"Number of GSP layers: {len(backbone_t_in[backbonenum:])}")
+            
+            # Process Backbone layers
+            print(f"\n=== Computing MI for Backbone Layers ===")
+            for layer_idx, t_layer in enumerate(backbone_t_in):
+                print(f"\n--- Backbone Layer {layer_idx+1} ---")
+                
+                # Compute I(X; T)
+                print("Computing I(X; T)...")
+                mi_xt, euc_map = cal_mi_x_t(backbone_x_in, t_layer)
+                
+                # Compute I(T; Y)
+                print("Computing I(T; Y)...")
+                mi_ty = cal_mi_t_y(t_layer, y_in)
+                
+                # Flatten for scatter plot
+                num_pixels = H_dim * W_dim
+                
+                layer_mi_xt = []
+                layer_mi_ty = []
+                layer_distance = []
+                
+                # For each reference pixel in T (ht, wt)
+                for ht in range(H_dim):
+                    for wt in range(W_dim):
+                        mi_xt_ref = mi_xt[ht, wt, :, :].flatten()
+                        mi_ty_val = mi_ty[ht, wt]
+                        mi_ty_ref = np.full_like(mi_xt_ref, mi_ty_val)
+                        dist_ref = euc_map[ht, wt, :, :].flatten()
+                        
+                        layer_mi_xt.extend(mi_xt_ref.tolist())
+                        layer_mi_ty.extend(mi_ty_ref.tolist())
+                        layer_distance.extend(dist_ref.tolist())
+                
+                layer_mi_xt = np.array(layer_mi_xt)
+                layer_mi_ty = np.array(layer_mi_ty)
+                layer_distance = np.array(layer_distance)
+                
+                backbone_layers_data.append({
+                    'layer_idx': layer_idx + 1,
+                    'mi_xt': layer_mi_xt,
+                    'mi_ty': layer_mi_ty,
+                    'distance': layer_distance,
+                    'group': 'Backbone',
+                })
+                
+                print(f"Backbone Layer {layer_idx+1} statistics:")
+                print(f"  Data points: {len(layer_mi_xt)}")
+                print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
+                print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
+                print(f"  Distance range: [{layer_distance.min():.2f}, {layer_distance.max():.2f}]")
+            
+            # Process GSP layers
+            print(f"\n=== Computing MI for GSP Layers ===")
+            for layer_idx, t_layer in enumerate(gsp_t_in):
+                print(f"\n--- GSP Layer {layer_idx+1} ---")
+                
+                # Compute I(X; T)
+                print("Computing I(X; T)...")
+                mi_xt, euc_map = cal_mi_x_t(gsp_x_in, t_layer)
+                
+                # Compute I(T; Y)
+                print("Computing I(T; Y)...")
+                mi_ty = cal_mi_t_y(t_layer, y_in)
+                
+                # Flatten for scatter plot
+                num_pixels = H_dim * W_dim
+                
+                layer_mi_xt = []
+                layer_mi_ty = []
+                layer_distance = []
+                
+                # For each reference pixel in T (ht, wt)
+                for ht in range(H_dim):
+                    for wt in range(W_dim):
+                        mi_xt_ref = mi_xt[ht, wt, :, :].flatten()
+                        mi_ty_val = mi_ty[ht, wt]
+                        mi_ty_ref = np.full_like(mi_xt_ref, mi_ty_val)
+                        dist_ref = euc_map[ht, wt, :, :].flatten()
+                        
+                        layer_mi_xt.extend(mi_xt_ref.tolist())
+                        layer_mi_ty.extend(mi_ty_ref.tolist())
+                        layer_distance.extend(dist_ref.tolist())
+                
+                layer_mi_xt = np.array(layer_mi_xt)
+                layer_mi_ty = np.array(layer_mi_ty)
+                layer_distance = np.array(layer_distance)
+                
+                gsp_layers_data.append({
+                    'layer_idx': layer_idx + 1,
+                    'mi_xt': layer_mi_xt,
+                    'mi_ty': layer_mi_ty,
+                    'distance': layer_distance,
+                    'group': 'GSP',
+                })
+                
+                print(f"GSP Layer {layer_idx+1} statistics:")
+                print(f"  Data points: {len(layer_mi_xt)}")
+                print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
+                print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
+                print(f"  Distance range: [{layer_distance.min():.2f}, {layer_distance.max():.2f}]")
+            
+            # Save cache
+            print(f"\nSaving computed data to {mi_cache_file}...")
+
+            with open(backbone_cache_file, 'wb') as f:
+                pickle.dump(backbone_layers_data, f)
+            print("Cache saved successfully!")
+
+            with open(gsp_cache_file, 'wb') as f:
+                pickle.dump(gsp_layers_data, f)
+            print("Cache saved successfully!")
     
     # Plot styling
     plt.rcParams['font.size'] = 12
@@ -303,23 +551,58 @@ if __name__ == "__main__":  # Classification Task
     
     print("\n=== Generating Scatter Plots ===")
     
-    # Generate plots for each layer
-    for layer_data in all_layers_data:
-        layer_idx = layer_data['layer_idx']
-        mi_xt = layer_data['mi_xt']
-        mi_ty = layer_data['mi_ty']
-        distance = layer_data['distance']
+    # Generate individual plots for each layer
+    if args.model != "PIGNet_GSPonly_classification":
+        for layer_data in all_layers_data:
+            layer_idx = layer_data['layer_idx']
+            mi_xt = layer_data['mi_xt']
+            mi_ty = layer_data['mi_ty']
+            distance = layer_data['distance']
+            group_name = layer_data.get('group', None)
+            
+            if group_name:
+                print(f"\n{group_name} - Layer {layer_idx}:")
+                print(f"  Generating individual scatter plot...")
+                plot_scatter_classification(mi_xt, mi_ty, distance, 
+                                        layer_idx, args.model, args.dataset, group_name)
+            else:
+                print(f"\nLayer {layer_idx}:")
+                print(f"  Generating individual scatter plot...")
+                plot_scatter_classification(mi_xt, mi_ty, distance, 
+                                        layer_idx, args.model, args.dataset)
         
-        print(f"\nLayer {layer_idx}:")
+        # Generate combined subplot plot for all layers
+        print(f"\n=== Generating Combined Subplot Plot ===")
+        total_layers = len(all_layers_data)
+        plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, group_name=None)
         
-        # Overall scatter plot
-        print(f"  Generating overall scatter plot...")
-        plot_scatter_classification(mi_xt, mi_ty, distance, 
-                                   layer_idx - 1, args.model, args.dataset)
+        print("\n=== All plots generated successfully! ===")
         
-        # # Distance-binned plots
-        # print(f"  Generating distance-binned scatter plots...")
-        # plot_scatter_with_distance_bins(mi_xt, mi_ty, distance, 
-        #                                 layer_idx - 1, args.model, args.dataset)
-    
-    print("\n=== All plots generated successfully! ===")
+    else:
+        for all_layers_data in [backbone_layers_data, gsp_layers_data]:
+            group_label = [d.get('group') for d in all_layers_data][0] if all_layers_data else None
+            
+            for layer_data in all_layers_data:
+                layer_idx = layer_data['layer_idx']
+                mi_xt = layer_data['mi_xt']
+                mi_ty = layer_data['mi_ty']
+                distance = layer_data['distance']
+                group_name = layer_data.get('group', None)
+                
+                if group_name:
+                    print(f"\n{group_name} - Layer {layer_idx}:")
+                    print(f"  Generating individual scatter plot...")
+                    plot_scatter_classification(mi_xt, mi_ty, distance, 
+                                            layer_idx, args.model, args.dataset, group_name)
+                else:
+                    print(f"\nLayer {layer_idx}:")
+                    print(f"  Generating individual scatter plot...")
+                    plot_scatter_classification(mi_xt, mi_ty, distance, 
+                                            layer_idx, args.model, args.dataset)
+        
+            # Generate combined subplot plot for this group
+            print(f"\n=== Generating Combined Subplot Plot ===")
+            total_layers = len(all_layers_data)
+            plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, group_name=group_label)
+            
+            print(f"\n=== All plots generated successfully! ===")

@@ -278,7 +278,6 @@ class GSP(nn.Module):
             # extracting the tensor for this item in the batch
             single_tensor = graph[i * num_nodes: (i + 1) * num_nodes]
 
-
             # reshaping (num_nodes, 100) to (256, 3, 3)
             single_map = single_tensor.view(*feature_shape)  # single_map has shape [256, 3, 3]
 
@@ -305,10 +304,6 @@ class GSP(nn.Module):
 
         x = x.x
 
-        gsp_layer_outputs=[]
-
-        gsp_layer_outputs.append(gsp_layer_input)
-
         for ii in range(len(self.gn_layers)):
             x, edge = self.gn_layers[ii](x, edge_idx)
             # x_s[ii] = x
@@ -316,7 +311,7 @@ class GSP(nn.Module):
                 x_s_f.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),
                                                feature_shape=(self.embedding_size, self.grid_size, self.grid_size)))
 
-        gsp_layers_output = [t.detach().cpu() for t in x_s_f[1:]]
+        gsp_layers_output = [t.detach().cpu() for t in x_s_f]
         
         output = torch.cat(x_s_f, dim=1)
 
@@ -462,8 +457,8 @@ class ResNet(nn.Module):
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-
         x = self.maxpool(x)
+        backbone_layers_output.append(x.detach().cpu())
 
         x = self.layer1(x) #block1
         backbone_layers_output.append(x.detach().cpu())
@@ -484,10 +479,8 @@ class ResNet(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.FC(x)
 
-        backbone_layers_output.extend(gsp_layer_outputs)
-        return x, backbone_layers_output
+        return x, backbone_layers_output, gsp_layer_outputs
         
-
 def resnet50(pretrained=False, num_groups=None, weight_std=False, **kwargs):
     """Constructs a ResNet-50 model.
 

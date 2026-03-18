@@ -23,9 +23,7 @@ model_urls = {
 def model_size(model):
     total_size = 0
     for param in model.parameters():
-        # °¢ ÆÄ¶ó¹ÌÅÍÀÇ ¿ø¼Ò °³¼ö °è»ê
         num_elements = torch.prod(torch.tensor(param.size())).item()
-        # ¿ø¼Ò Å¸ÀÔ º°·Î ¹ÙÀÌÆ® Å©±â °è»ê (¿¹: float32 -> 4 bytes)
         num_bytes = num_elements * param.element_size()
         total_size += num_bytes
     return total_size

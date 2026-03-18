@@ -436,7 +436,7 @@ if __name__ == "__main__":  # segmentation
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--dataset', type=str, default='pascal', help='pascal or cityscape')
     argparser.add_argument('--preprocess_type', type=str, default='layer', help='layer or pixel')
-    argparser.add_argument('--model', type=str, default='ASPP', help='ASPP or PIGNet_GSPonly')
+    argparser.add_argument('--model', type=str, default='PIGNet_GSPonly', help='ASPP or PIGNet_GSPonly')
     args = argparser.parse_args()
     
     # seg

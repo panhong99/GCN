@@ -292,6 +292,7 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
+        layer_outputs.append(x)
 
         x = self.layer1(x) #block1
         layer_outputs.append(x)

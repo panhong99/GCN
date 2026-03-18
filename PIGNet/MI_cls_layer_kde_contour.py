@@ -5,12 +5,12 @@ import pickle
 from scipy.stats import gaussian_kde
 import argparse
 from tqdm.auto import trange
+from matplotlib.colors import Normalize
 
 def _entropy_from_counts(counts: np.ndarray, eps: float = 1e-12) -> float:
     """Calculate entropy from count histogram."""
     p = counts / np.maximum(1, counts.sum())
     return float(-np.sum(p * np.log2(p + eps)))
-
 
 def cal_mi_x_t(x, t):
     """
@@ -179,7 +179,7 @@ def compute_kde_values(all_layers_data):
     
     return kde_data
 
-def plot_kde_contour(layer_idx, model_name, dataset_name, kde_data):
+def plot_kde_contour(layer_idx, model_name, dataset_name, kde_data, group_name=None):
     """
     Plot KDE contour for a single layer.
     """
@@ -190,190 +190,555 @@ def plot_kde_contour(layer_idx, model_name, dataset_name, kde_data):
     mi_xt = layer_data['mi_xt']
     mi_ty = layer_data['mi_ty']
     
+    vmin=0
+    vmax=5
+
+    Z = np.clip(Z, vmin, vmax)
     fig, ax = plt.subplots(figsize=(10, 8))
-    
+        
+    # Normalize와 levels 설정
+    norm = plt.Normalize(vmin=vmin, vmax=vmax)
+    levels = np.linspace(vmin, vmax, 21)
+
     # Contour plot with filled levels
     cmap_s = plt.cm.get_cmap('Reds').copy()
     cmap_s.set_bad('white')
 
-    contour_filled = ax.contourf(X, Y, Z, levels=15, cmap=cmap_s, alpha=0.8)
-    # contour_lines = ax.contour(X, Y, Z, levels=10, colors='black', alpha=0.3, linewidths=0.5)
-    
-    # # Scatter points
-    # scatter = ax.scatter(mi_xt, mi_ty, c='red', s=5, alpha=0.3, edgecolors='none', label='Data Points')
-    
+    # Threshold 적용하여 masked array 생성
+    threshold = 2e-1
+    Z_masked = np.ma.masked_less_equal(Z, threshold)
+
+    contour_filled = ax.contourf(
+        X, Y, 
+        Z_masked, 
+        levels=levels, 
+        cmap=cmap_s, 
+        norm=norm
+    )
+        
     # Colorbar
     cbar = plt.colorbar(contour_filled, ax=ax)
     cbar.set_label('KDE Density', fontsize=12)
     
     ax.set_xlim(0,2)
     ax.set_ylim(0,2)
+
     ax.set_xlabel("I(X; T)", fontsize=13, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=13, fontweight='bold')
-    ax.set_title(f"Layer {layer_idx} - KDE Contour (Classification)", fontsize=14, fontweight='bold')
-    # ax.grid(True, alpha=0.3, linestyle='--')
-    # ax.legend(loc='upper right', fontsize=10)
+    
+    # Title with group info if available
+    if group_name:
+        title = f"Layer {layer_idx} - {group_name} - KDE Contour (Classification)"
+    else:
+        title = f"Layer {layer_idx} - KDE Contour (Classification)"
+    ax.set_title(title, fontsize=14, fontweight='bold')
     
     plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_kde_contour_layer{layer_idx}.png", 
-                dpi=150, bbox_inches='tight')
+    
+    # Filename with group info if available
+    if group_name:
+        fname = f"{model_name}_{dataset_name}_kde_contour_{group_name}_layer{layer_idx}.png"
+    else:
+        fname = f"{model_name}_{dataset_name}_kde_contour_layer{layer_idx}.png"
+    
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Layer {layer_idx} KDE contour plot saved.")
+
+
+def plot_kde_contour_all_layers_classification(all_layers_data, model_name, dataset_name, kde_data, num, group_name=None):
+    """
+    Plot KDE contours for all layers in a single figure with subplots.
+    
+    Args:
+        all_layers_data: List of dictionaries containing layer MI data
+        model_name: Name of the model
+        dataset_name: Name of the dataset
+        kde_data: Dictionary with KDE information for each layer
+        num: Total number of layers
+        group_name: Optional group name (e.g., 'Backbone', 'GSP') for file naming
+    """
+    num_layers = len(all_layers_data)
+    
+    # Determine subplot dimensions (prefer wider layout)
+    ncols = max(4, num - 1)
+    nrows = (num_layers + ncols - 1) // ncols
+    
+    fig, axes = plt.subplots(nrows, ncols, figsize=(16, 4*nrows))
+    
+    # Flatten axes array for easier iteration
+    if isinstance(axes, np.ndarray):
+        axes_flat = axes.flatten()
+    else:
+        axes_flat = [axes]
+    
+    # KDE parameters (shared across all subplots)
+    vmin = 0
+    vmax = 5
+    norm = Normalize(vmin=vmin, vmax=vmax)
+    levels = np.linspace(vmin, vmax, 21)
+    threshold = 2e-1
+    cmap_s = plt.cm.get_cmap('Reds').copy()
+    cmap_s.set_bad('white')
+    
+    # Track contour objects for colorbar
+    contour_objs = []
+    
+    for idx, layer_data in enumerate(all_layers_data):
+        ax = axes_flat[idx]
+        layer_idx = layer_data['layer_idx']
+        
+        # Get KDE data
+        kde_layer = kde_data[layer_idx]
+        X = kde_layer['X']
+        Y = kde_layer['Y']
+        Z = np.clip(kde_layer['Z'], vmin, vmax)
+        Z_masked = np.ma.masked_less_equal(Z, threshold)
+        
+        # Plot contour
+        contour = ax.contourf(X, Y, Z_masked, levels=levels, cmap=cmap_s, norm=norm)
+        contour_objs.append(contour)
+        
+        ax.set_xlim(0, 2)
+        ax.set_ylim(0, 2)
+        ax.set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
+        ax.set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
+        ax.set_title(f"Layer {layer_idx}", fontsize=12, fontweight='bold')
+        
+        # Remove tick labels to show clean subplot
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+    
+    # Remove empty subplots
+    for idx in range(num_layers, len(axes_flat)):
+        fig.delaxes(axes_flat[idx])
+    
+    # Add shared colorbar
+    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    cbar = fig.colorbar(contour_objs[0], cax=cbar_ax, norm=norm)
+    cbar.set_label('KDE Density', fontsize=11, fontweight='bold')
+    
+    # Overall title with model and dataset info
+    fig.suptitle(f"{model_name} - {dataset_name} - KDE Contour (Classification)", 
+                fontsize=16, fontweight='bold', y=0.98)
+    
+    plt.tight_layout(rect=[0, 0, 0.9, 0.96])
+    
+    # Include group name in filename if provided
+    if group_name:
+        fname = f"{model_name}_{dataset_name}_kde_contour_all_layers_{group_name}.png"
+    else:
+        fname = f"{model_name}_{dataset_name}_kde_contour_all_layers.png"
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"All layers combined KDE contour plot saved as: {fname}")
 
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', type=str, default='CIFAR-10', 
                        help='Dataset name (e.g., Imagenet, CIFAR-10, CIFAR-100)')
-    parser.add_argument('--model', type=str, default='vit', 
+    parser.add_argument('--model', type=str, default='PIGNet_GSPonly_classification', 
                        help='Model name (e.g., vit, Resnet, PIGNet_GSPonly_classification)')
     args = parser.parse_args()
     
+    if args.model == "Resnet" or args.model == "vit":
+        layer_num = 5
+    elif args.model == "PIGNet_GSPonly_classification":
+        backbonenum, gsp_layer_num = 4, 5
+    
     # Define paths and parameters first
     data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/layer_dataset/resnet101/pretrained/{args.model}/zoom/1'
-    num = 7 if args.model == "PIGNet_GSPonly_classification" else 4
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 1. Load or Compute MI
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     mi_cache_file = os.path.join(data_path, 'mi_analysis_cache_classification.pkl')
+    backbone_cache_file = os.path.join(data_path, 'mi_analysis_cache_backbone_classification.pkl')
+    gsp_cache_file = os.path.join(data_path, 'mi_analysis_cache_gsp_classification.pkl')
     mi_cache_valid = False
     
     if os.path.exists(mi_cache_file):
         print(f"Loading cached MI data from {mi_cache_file}...")
         with open(mi_cache_file, 'rb') as f:
-            cached_data = pickle.load(f)
-        
-        # Check if all layers are present in cache
-        expected_layers = num - 1  # layers 1 to num-1
-        cached_layer_count = len([d for d in cached_data if isinstance(d, dict) and 'layer_idx' in d])
-        
-        if cached_layer_count == expected_layers:
-            all_layers_data = cached_data
-            mi_cache_valid = True
-            print(f"✓ All {expected_layers} layers found in MI cache!")
-        else:
-            print(f"⚠ MI cache has {cached_layer_count} layers, expected {expected_layers}. Recomputing...")
+            all_layers_data = pickle.load(f)
+        mi_cache_valid = True
+        print("MI cache loaded successfully!\n")
+
+    elif (args.model == "PIGNet_GSPonly_classification" and 
+          os.path.exists(backbone_cache_file) and os.path.exists(gsp_cache_file)):
+        print(f"Loading cached MI data from: {backbone_cache_file} and {gsp_cache_file}")
+        with open(backbone_cache_file, 'rb') as f:
+            backbone_layers_data = pickle.load(f)
+
+        with open(gsp_cache_file, 'rb') as f:
+            gsp_layers_data = pickle.load(f)
+        # Combine for plotting later
+        all_layers_data = backbone_layers_data + gsp_layers_data
+        mi_cache_valid = True
+        print("MI cache loaded successfully!\n")
     
     if not mi_cache_valid:
-        print("Computing MI values...")
+        print(f"Loading classification MI data from: {data_path}")
         
-        # Load raw data
-        with open(os.path.join(data_path, 'gt_labels.pkl'), 'rb') as f:
-            y_in = pickle.load(f)
-        print(f"Loaded labels: {y_in.shape}")
-        
-        with open(os.path.join(data_path, 'layer_0.pkl'), 'rb') as f:
-            x_in = pickle.load(f)
-        print(f"Loaded input features: {x_in.shape}")
-        
-        t_in = []
-        for i in range(1, num):
-            with open(os.path.join(data_path, f'layer_{i}.pkl'), 'rb') as f:
-                t_layer = pickle.load(f)
-                t_in.append(t_layer)
-                print(f"Loaded layer {i}: {t_layer.shape}")
-        
-        H_dim, W_dim = x_in.shape[1], x_in.shape[2]
-        all_layers_data = []
-        
-        # Compute MI for each layer
-        for layer_idx, t_layer in enumerate(t_in):
-            print(f"\n--- Computing MI for Layer {layer_idx+1} ---")
+        if args.model != "PIGNet_GSPonly_classification":        
+            with open(os.path.join(data_path, 'y_labels.pkl'), 'rb') as f:
+                y_in = pickle.load(f)
+            print(f"Loaded labels: {y_in.shape}")
             
-            print("Computing I(X; T)...")
-            mi_xt, euc_map = cal_mi_x_t(x_in, t_layer)
+            with open(os.path.join(data_path, 'layer_0.pkl'), 'rb') as f:
+                x_in = pickle.load(f)
+            print(f"Loaded input features: {x_in.shape}")
             
-            print("Computing I(T; Y)...")
-            mi_ty = cal_mi_t_y(t_layer, y_in)
-            
-            # Flatten for scatter plot
-            num_pixels = H_dim * W_dim
-            
-            layer_mi_xt = []
-            layer_mi_ty = []
-            layer_distance = []
-            
-            # For each reference pixel in T (ht, wt)
-            for ht in range(H_dim):
-                for wt in range(W_dim):
-                    mi_xt_ref = mi_xt[ht, wt, :, :].flatten()
-                    mi_ty_val = mi_ty[ht, wt]
-                    mi_ty_ref = np.full_like(mi_xt_ref, mi_ty_val)
-                    dist_ref = euc_map[ht, wt, :, :].flatten()
+            t_in = []
+            for i in range(1, layer_num):
+                with open(os.path.join(data_path, f'layer_{i}.pkl'), 'rb') as f:
+                    t_layer = pickle.load(f)
+                    t_in.append(t_layer)
+                    print(f"Loaded layer {i}: {t_layer.shape}")
+
+            H_dim, W_dim = x_in.shape[1], x_in.shape[2]
                     
-                    layer_mi_xt.extend(mi_xt_ref.tolist())
-                    layer_mi_ty.extend(mi_ty_ref.tolist())
-                    layer_distance.extend(dist_ref.tolist())
+        else: # PIGNet_GSPonly_classification
+            with open(os.path.join(data_path, 'y_labels.pkl'), 'rb') as f:
+                y_in = pickle.load(f)
+            print(f"Loaded labels: {y_in.shape}")
             
-            layer_mi_xt = np.array(layer_mi_xt)
-            layer_mi_ty = np.array(layer_mi_ty)
-            layer_distance = np.array(layer_distance)
+            with open(os.path.join(data_path, 'backbone_layer_0.pkl'), 'rb') as f:
+                backbone_x_in = pickle.load(f)
+            print(f"Loaded input features: {backbone_x_in.shape}")
             
-            all_layers_data.append({
-                'layer_idx': layer_idx + 1,
-                'mi_xt': layer_mi_xt,
-                'mi_ty': layer_mi_ty,
-                'distance': layer_distance,
-            })
+            with open(os.path.join(data_path, 'gsp_layer_0.pkl'), 'rb') as f:
+                gsp_x_in = pickle.load(f)
+            print(f"Loaded input features: {gsp_x_in.shape}")
             
-            print(f"Layer {layer_idx+1} MI statistics:")
-            print(f"  Data points: {len(layer_mi_xt)}")
-            print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
-            print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
-            print(f"  Distance range: [{layer_distance.min():.2f}, {layer_distance.max():.2f}]")
+            backbone_t_in = []
+            gsp_t_in = []
+
+            for i in range(1, backbonenum):
+                with open(os.path.join(data_path, f'backbone_layer_{i}.pkl'), 'rb') as f:
+                    t_layer = pickle.load(f)
+                    backbone_t_in.append(t_layer)
+                    print(f"Loaded layer {i}: {t_layer.shape}")
+
+            for i in range(1, gsp_layer_num):
+                with open(os.path.join(data_path, f'gsp_layer_{i}.pkl'), 'rb') as f:
+                    t_layer = pickle.load(f)
+                    gsp_t_in.append(t_layer)
+                    print(f"Loaded layer {i}: {t_layer.shape}")
+
+            H_dim, W_dim = backbone_x_in.shape[1], backbone_x_in.shape[2]
+
+        print(f"\n=== Computing MI for Classification ===")
+        print(f"Feature map dimensions: {H_dim} x {W_dim}")
         
-        # Save MI cache
-        print(f"\nSaving MI cache to {mi_cache_file}...")
-        with open(mi_cache_file, 'wb') as f:
-            pickle.dump(all_layers_data, f)
-        print("MI cache saved successfully!\n")
-    else:
-        print("MI cache loaded successfully!\n")
+        if args.model != "PIGNet_GSPonly_classification":
+            # Standard computation for other models
+            print(f"Number of layers: {len(t_in)}")
+            all_layers_data = []
+                
+            # Compute MI for each layer
+            for layer_idx, t_layer in enumerate(t_in):
+                print(f"\n--- Layer {layer_idx+1} ---")
+                
+                # Compute I(X; T)
+                print("Computing I(X; T)...")
+                mi_xt, euc_map = cal_mi_x_t(x_in, t_layer)
+                
+                # Compute I(T; Y)
+                print("Computing I(T; Y)...")
+                mi_ty = cal_mi_t_y(t_layer, y_in)
+                
+                # Flatten for scatter plot
+                num_pixels = H_dim * W_dim
+                
+                layer_mi_xt = []
+                layer_mi_ty = []
+                layer_distance = []
+                
+                # For each reference pixel in T (ht, wt)
+                for ht in range(H_dim):
+                    for wt in range(W_dim):
+                        mi_xt_ref = mi_xt[ht, wt, :, :].flatten()
+                        mi_ty_val = mi_ty[ht, wt]
+                        mi_ty_ref = np.full_like(mi_xt_ref, mi_ty_val)
+                        dist_ref = euc_map[ht, wt, :, :].flatten()
+                        
+                        layer_mi_xt.extend(mi_xt_ref.tolist())
+                        layer_mi_ty.extend(mi_ty_ref.tolist())
+                        layer_distance.extend(dist_ref.tolist())
+                
+                layer_mi_xt = np.array(layer_mi_xt)
+                layer_mi_ty = np.array(layer_mi_ty)
+                layer_distance = np.array(layer_distance)
+                
+                all_layers_data.append({
+                    'layer_idx': layer_idx + 1,
+                    'mi_xt': layer_mi_xt,
+                    'mi_ty': layer_mi_ty,
+                    'distance': layer_distance,
+                })
+                
+                print(f"Layer {layer_idx+1} statistics:")
+                print(f"  Data points: {len(layer_mi_xt)}")
+                print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
+                print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
+                print(f"  Distance range: [{layer_distance.min():.2f}, {layer_distance.max():.2f}]")
+
+            # Save cache
+            print(f"\nSaving computed data to {mi_cache_file}...")
+            with open(mi_cache_file, 'wb') as f:
+                pickle.dump(all_layers_data, f)
+            print("Cache saved successfully!")
+        
+        else:  # PIGNet_GSPonly_classification
+            backbone_layers_data = []
+            gsp_layers_data = []
+
+            print(f"Number of Backbone layers: {len(backbone_t_in[:backbonenum])}")
+            print(f"Number of GSP layers: {len(gsp_t_in)}")
+            
+            # Process Backbone layers
+            print(f"\n=== Computing MI for Backbone Layers ===")
+            for layer_idx, t_layer in enumerate(backbone_t_in):
+                print(f"\n--- Backbone Layer {layer_idx+1} ---")
+                
+                # Compute I(X; T)
+                print("Computing I(X; T)...")
+                mi_xt, euc_map = cal_mi_x_t(backbone_x_in, t_layer)
+                
+                # Compute I(T; Y)
+                print("Computing I(T; Y)...")
+                mi_ty = cal_mi_t_y(t_layer, y_in)
+                
+                # Flatten for scatter plot
+                num_pixels = H_dim * W_dim
+                
+                layer_mi_xt = []
+                layer_mi_ty = []
+                layer_distance = []
+                
+                # For each reference pixel in T (ht, wt)
+                for ht in range(H_dim):
+                    for wt in range(W_dim):
+                        mi_xt_ref = mi_xt[ht, wt, :, :].flatten()
+                        mi_ty_val = mi_ty[ht, wt]
+                        mi_ty_ref = np.full_like(mi_xt_ref, mi_ty_val)
+                        dist_ref = euc_map[ht, wt, :, :].flatten()
+                        
+                        layer_mi_xt.extend(mi_xt_ref.tolist())
+                        layer_mi_ty.extend(mi_ty_ref.tolist())
+                        layer_distance.extend(dist_ref.tolist())
+                
+                layer_mi_xt = np.array(layer_mi_xt)
+                layer_mi_ty = np.array(layer_mi_ty)
+                layer_distance = np.array(layer_distance)
+                
+                backbone_layers_data.append({
+                    'layer_idx': layer_idx + 1,
+                    'mi_xt': layer_mi_xt,
+                    'mi_ty': layer_mi_ty,
+                    'distance': layer_distance,
+                    'group': 'Backbone',
+                })
+                
+                print(f"Backbone Layer {layer_idx+1} statistics:")
+                print(f"  Data points: {len(layer_mi_xt)}")
+                print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
+                print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
+                print(f"  Distance range: [{layer_distance.min():.2f}, {layer_distance.max():.2f}]")
+            
+            # Process GSP layers
+            print(f"\n=== Computing MI for GSP Layers ===")
+            for layer_idx, t_layer in enumerate(gsp_t_in):
+                print(f"\n--- GSP Layer {layer_idx+1} ---")
+                
+                # Compute I(X; T)
+                print("Computing I(X; T)...")
+                mi_xt, euc_map = cal_mi_x_t(gsp_x_in, t_layer)
+                
+                # Compute I(T; Y)
+                print("Computing I(T; Y)...")
+                mi_ty = cal_mi_t_y(t_layer, y_in)
+                
+                # Flatten for scatter plot
+                num_pixels = H_dim * W_dim
+                
+                layer_mi_xt = []
+                layer_mi_ty = []
+                layer_distance = []
+                
+                # For each reference pixel in T (ht, wt)
+                for ht in range(H_dim):
+                    for wt in range(W_dim):
+                        mi_xt_ref = mi_xt[ht, wt, :, :].flatten()
+                        mi_ty_val = mi_ty[ht, wt]
+                        mi_ty_ref = np.full_like(mi_xt_ref, mi_ty_val)
+                        dist_ref = euc_map[ht, wt, :, :].flatten()
+                        
+                        layer_mi_xt.extend(mi_xt_ref.tolist())
+                        layer_mi_ty.extend(mi_ty_ref.tolist())
+                        layer_distance.extend(dist_ref.tolist())
+                
+                layer_mi_xt = np.array(layer_mi_xt)
+                layer_mi_ty = np.array(layer_mi_ty)
+                layer_distance = np.array(layer_distance)
+                
+                gsp_layers_data.append({
+                    'layer_idx': layer_idx + 1,
+                    'mi_xt': layer_mi_xt,
+                    'mi_ty': layer_mi_ty,
+                    'distance': layer_distance,
+                    'group': 'GSP',
+                })
+                
+                print(f"GSP Layer {layer_idx+1} statistics:")
+                print(f"  Data points: {len(layer_mi_xt)}")
+                print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
+                print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
+                print(f"  Distance range: [{layer_distance.min():.2f}, {layer_distance.max():.2f}]")
+            
+            # Save cache
+            print(f"\nSaving computed data to {mi_cache_file}...")
+
+            with open(backbone_cache_file, 'wb') as f:
+                pickle.dump(backbone_layers_data, f)
+            print("Cache saved successfully!")
+
+            with open(gsp_cache_file, 'wb') as f:
+                pickle.dump(gsp_layers_data, f)
+            print("Cache saved successfully!")
+    
+
     
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 2. Load or Compute KDE
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     kde_cache_file = os.path.join(data_path, 'kde_cache_classification.pkl')
-    
-    # Check if KDE cache has all required layers
-    expected_layers = [d['layer_idx'] for d in all_layers_data]
-    required_keys = expected_layers[:]  # layer_idx values
+    kde_backbone_cache_file = os.path.join(data_path, 'kde_cache_backbone_classification.pkl')
+    kde_gsp_cache_file = os.path.join(data_path, 'kde_cache_gsp_classification.pkl')
     
     kde_cache_valid = False
-    if os.path.exists(kde_cache_file):
-        print(f"Loading cached KDE data from {kde_cache_file}...")
-        with open(kde_cache_file, 'rb') as f:
-            kde_data = pickle.load(f)
-        
-        # Check if all required layers are present and have necessary fields
-        all_keys_present = True
-        for layer_idx in required_keys:
-            if layer_idx not in kde_data:
-                all_keys_present = False
-                break
-            layer_kde = kde_data[layer_idx]
-            if not all(key in layer_kde for key in ['X', 'Y', 'Z', 'mi_xt', 'mi_ty']):
-                all_keys_present = False
-                break
-        
-        if all_keys_present:
-            print(f"✓ All required KDE data for {len(required_keys)} layers found!")
-            kde_cache_valid = True
-        else:
-            print(f"⚠ Some KDE layers or fields missing in cache. Recomputing...")
     
-    if not kde_cache_valid:
-        print("\nComputing KDE values...")
-        kde_data = compute_kde_values(all_layers_data)
+    # For standard models: single KDE cache file
+    if args.model != "PIGNet_GSPonly_classification":
+        # Check if KDE cache has all required layers
+        expected_layers = [d['layer_idx'] for d in all_layers_data]
+        required_keys = expected_layers[:]  # layer_idx values
         
-        # Save KDE cache
-        print(f"\nSaving KDE cache to {kde_cache_file}...")
-        with open(kde_cache_file, 'wb') as f:
-            pickle.dump(kde_data, f)
-        print("KDE cache saved successfully!\n")
-    else:
-        print("KDE cache loaded successfully!\n")
+        if os.path.exists(kde_cache_file):
+            print(f"Loading cached KDE data from {kde_cache_file}...")
+            with open(kde_cache_file, 'rb') as f:
+                kde_data = pickle.load(f)
+            
+            # Check if all required layers are present and have necessary fields
+            all_keys_present = True
+            for layer_idx in required_keys:
+                if layer_idx not in kde_data:
+                    all_keys_present = False
+                    break
+                layer_kde = kde_data[layer_idx]
+                if not all(key in layer_kde for key in ['X', 'Y', 'Z', 'mi_xt', 'mi_ty']):
+                    all_keys_present = False
+                    break
+            
+            if all_keys_present:
+                print(f"✓ All required KDE data for {len(required_keys)} layers found!")
+                kde_cache_valid = True
+            else:
+                print(f"⚠ Some KDE layers or fields missing in cache. Recomputing...")
+        
+        if not kde_cache_valid:
+            print("\nComputing KDE values...")
+            kde_data = compute_kde_values(all_layers_data)
+            
+            # Save KDE cache
+            print(f"\nSaving KDE cache to {kde_cache_file}...")
+            with open(kde_cache_file, 'wb') as f:
+                pickle.dump(kde_data, f)
+            print("KDE cache saved successfully!\n")
+        else:
+            print("KDE cache loaded successfully!\n")
+
+    else:  # PIGNet_GSPonly_classification: separate backbone and gsp KDE caches
+        # Separate all_layers_data into backbone and gsp
+        backbone_layers_data = [d for d in all_layers_data if d.get('group') == 'Backbone']
+        gsp_layers_data = [d for d in all_layers_data if d.get('group') == 'GSP']
+        
+        # Try to load both backbone and gsp KDE caches
+        backbone_kde_valid = False
+        gsp_kde_valid = False
+        
+        # Check backbone KDE cache
+        if os.path.exists(kde_backbone_cache_file):
+            print(f"Loading cached backbone KDE data from {kde_backbone_cache_file}...")
+            with open(kde_backbone_cache_file, 'rb') as f:
+                backbone_kde_data = pickle.load(f)
+            
+            backbone_expected = [d['layer_idx'] for d in backbone_layers_data]
+            all_keys_present = True
+            for layer_idx in backbone_expected:
+                if layer_idx not in backbone_kde_data:
+                    all_keys_present = False
+                    break
+                layer_kde = backbone_kde_data[layer_idx]
+                if not all(key in layer_kde for key in ['X', 'Y', 'Z', 'mi_xt', 'mi_ty']):
+                    all_keys_present = False
+                    break
+            
+            if all_keys_present:
+                print(f"✓ Backbone KDE data for {len(backbone_expected)} layers found!")
+                backbone_kde_valid = True
+            else:
+                print(f"⚠ Backbone KDE layers missing in cache. Recomputing...")
+        
+        # Check GSP KDE cache
+        if os.path.exists(kde_gsp_cache_file):
+            print(f"Loading cached GSP KDE data from {kde_gsp_cache_file}...")
+            with open(kde_gsp_cache_file, 'rb') as f:
+                gsp_kde_data = pickle.load(f)
+            
+            gsp_expected = [d['layer_idx'] for d in gsp_layers_data]
+            all_keys_present = True
+            for layer_idx in gsp_expected:
+                if layer_idx not in gsp_kde_data:
+                    all_keys_present = False
+                    break
+                layer_kde = gsp_kde_data[layer_idx]
+                if not all(key in layer_kde for key in ['X', 'Y', 'Z', 'mi_xt', 'mi_ty']):
+                    all_keys_present = False
+                    break
+            
+            if all_keys_present:
+                print(f"✓ GSP KDE data for {len(gsp_expected)} layers found!")
+                gsp_kde_valid = True
+            else:
+                print(f"⚠ GSP KDE layers missing in cache. Recomputing...")
+        
+        # Compute backbone KDE if needed
+        if not backbone_kde_valid:
+            print("\nComputing Backbone KDE values...")
+            backbone_kde_data = compute_kde_values(backbone_layers_data)
+            
+            print(f"Saving Backbone KDE cache to {kde_backbone_cache_file}...")
+            with open(kde_backbone_cache_file, 'wb') as f:
+                pickle.dump(backbone_kde_data, f)
+            print("Backbone KDE cache saved successfully!")
+        else:
+            print("Backbone KDE cache loaded successfully!")
+        
+        # Compute GSP KDE if needed
+        if not gsp_kde_valid:
+            print("\nComputing GSP KDE values...")
+            gsp_kde_data = compute_kde_values(gsp_layers_data)
+            
+            print(f"Saving GSP KDE cache to {kde_gsp_cache_file}...")
+            with open(kde_gsp_cache_file, 'wb') as f:
+                pickle.dump(gsp_kde_data, f)
+            print("GSP KDE cache saved successfully!")
+        else:
+            print("GSP KDE cache loaded successfully!")
+        
     
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 3. Plot
@@ -383,10 +748,52 @@ if __name__ == "__main__":
                          'xtick.labelsize': 11, 'ytick.labelsize': 11})
     
     print("=== KDE Contour Plots (Classification) ===")
-    for layer_data in all_layers_data:
-        layer_idx = layer_data['layer_idx']
-        plot_kde_contour(layer_idx, args.model, args.dataset, kde_data)
     
-    print("\n=== Done! ===")
+    if args.model != "PIGNet_GSPonly_classification":
+        # Standard models: plot all layers together
+        for layer_data in all_layers_data:
+            layer_idx = layer_data['layer_idx']
+            group_name = layer_data.get('group', None)
+            
+            if group_name:
+                print(f"{group_name} - Layer {layer_idx}:")
+            else:
+                print(f"Layer {layer_idx}:")
+            
+            plot_kde_contour(layer_idx, args.model, args.dataset, kde_data, group_name)
+        
+        # Generate combined subplot plot for all layers
+        print(f"\n=== Generating Combined Subplot Plot ===")
+        total_layers = len(all_layers_data)
+        plot_kde_contour_all_layers_classification(all_layers_data, args.model, args.dataset, kde_data, total_layers, group_name=None)
+        
+        print("\n=== Done! ===")
+    
+    else:  # PIGNet_GSPonly_classification: plot backbone and GSP separately
+        # Separate all_layers_data into backbone and gsp
+        backbone_layers_data = [d for d in all_layers_data if d.get('group') == 'Backbone']
+        gsp_layers_data = [d for d in all_layers_data if d.get('group') == 'GSP']
+        
+        # Plot backbone layers
+        print("\n=== Backbone Layers ===")
+        for layer_data in backbone_layers_data:
+            layer_idx = layer_data['layer_idx']
+            print(f"Backbone - Layer {layer_idx}:")
+            plot_kde_contour(layer_idx, args.model, args.dataset, backbone_kde_data, 'Backbone')
+        
+        print(f"\n--- Generating Backbone Combined Subplot Plot ---")
+        plot_kde_contour_all_layers_classification(backbone_layers_data, args.model, args.dataset, backbone_kde_data, len(backbone_layers_data), group_name='Backbone')
+        
+        # Plot GSP layers
+        print("\n=== GSP Layers ===")
+        for layer_data in gsp_layers_data:
+            layer_idx = layer_data['layer_idx']
+            print(f"GSP - Layer {layer_idx}:")
+            plot_kde_contour(layer_idx, args.model, args.dataset, gsp_kde_data, 'GSP')
+        
+        print(f"\n--- Generating GSP Combined Subplot Plot ---")
+        plot_kde_contour_all_layers_classification(gsp_layers_data, args.model, args.dataset, gsp_kde_data, len(gsp_layers_data), group_name='GSP')
+        
+        print("\n=== Done! ===")
 
 

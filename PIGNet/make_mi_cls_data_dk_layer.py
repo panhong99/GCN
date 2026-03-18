@@ -24,12 +24,65 @@ import torch.nn.functional as F
 
 warnings.filterwarnings("ignore")
 
+def resize_layers_shape(layers_output, grid_size):
+    """
+    Layer outputs를 grid_size에 맞춰 자동으로 reshape
+    - 크기가 크면: downsampling
+    - 크기가 작으면: upsampling
+    - 크기가 같으면: 그대로 유지
+    
+    Args:
+        layers_output: List of layer outputs (각 element는 torch.Tensor 또는 numpy array)
+                      shape: (B, C, H, W) for each layer
+        grid_size: Target grid size (정사각형) - 모든 layer를 이 크기로 변환
+    
+    Returns:
+        resized_layers: List of resized layer outputs with shape (B, C, grid_size, grid_size)
+    """
+    resized_layers = []
+    
+    for layer_idx, layer_data in enumerate(layers_output):
+        # torch tensor이면 detach해서 GPU에서 CPU로 이동
+        if isinstance(layer_data, torch.Tensor):
+            layer_tensor = layer_data.detach().cpu()
+        else:
+            # numpy array면 torch tensor로 변환
+            layer_tensor = torch.from_numpy(layer_data).float()
+                
+        B, C, H, W = layer_tensor.shape
+        
+        # Shape 확인 및 로깅
+        # print(f"Layer {layer_idx}: Input shape (B, C, H, W) = ({B}, {C}, {H}, {W})", end="")
+        
+        # H와 W가 grid_size와 다르면 interpolate (크기 상관없이 grid_size로 변환)
+        if H != grid_size or W != grid_size:
+            # print(f" -> Resizing to ({B}, {C}, {grid_size}, {grid_size})")
+            
+            # interpolate 수행
+            layer_resized = F.interpolate(
+                layer_tensor, 
+                size=(grid_size, grid_size),  # ★ 항상 이 크기로 변환 (어떤 입력 크기든 가능)
+                mode='bilinear', 
+                align_corners=True
+            )
+            # torch tensor → numpy로 변환해서 저장
+            resized_layers.append(layer_resized.detach().cpu().numpy())
+        else:
+            # print(f" -> Already target size")
+            # torch tensor → numpy로 변환해서 저장
+            resized_layers.append(layer_tensor.detach().cpu().numpy())
+    
+    return resized_layers
+
+
 def main(config, model_file, model_path):
 
     if config.dataset != "imagenet":
         grid_size = 8
     else:
         grid_size = 14
+
+    print(f"{config.dataset}")
 
     device = f"cuda:{config.gpu}" if torch.cuda.is_available() else "cpu"
     dataset, _, MI_dataset_loader = get_dataset(config)
@@ -39,9 +92,35 @@ def main(config, model_file, model_path):
 
     # 체크포인트 key가 DDP 사용여부에 따라서 좀 다름 -> 에러로그 보고 변경해주면 됨
     if config.model == "Resnet" or config.model == "vit":
-        layer_num = 4
+        layer_num = 5
+
+        vq_models = {layer_idx: MiniBatchKMeans(
+        n_clusters=50, 
+        random_state=42, 
+        n_init=1,
+        batch_size=50,
+        verbose=0
+    ) for layer_idx in range(layer_num)}
+
     elif config.model == "PIGNet_GSPonly_classification":
-        layer_num = 7 # backbone 3 + GSP block 4
+        backbone_num, gsp_layer_num = 4,5 # backbone 3 + GSP block 5
+
+        back_vq_models = {layer_idx: MiniBatchKMeans(
+        n_clusters=50, 
+        random_state=42, 
+        n_init=1,
+        batch_size=50,
+        verbose=0
+    ) for layer_idx in range(backbone_num)}
+
+        gsp_vq_models = {layer_idx: MiniBatchKMeans(
+        n_clusters=50, 
+        random_state=42, 
+        n_init=1,
+        batch_size=50,
+        verbose=0
+    ) for layer_idx in range(gsp_layer_num)}
+
 
     state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
     model.load_state_dict(state_dict)
@@ -52,14 +131,6 @@ def main(config, model_file, model_path):
     print(f"\n{'='*60}")
     print(f"Training KMeans models for all layers (batch-wise)")
     print(f"{'='*60}")
-    
-    vq_models = {layer_idx: MiniBatchKMeans(
-        n_clusters=50, 
-        random_state=42, 
-        n_init=1,
-        batch_size=50,
-        verbose=0
-    ) for layer_idx in range(layer_num)}
             
     for inputs, target in tqdm(iter(MI_dataset_loader), desc="Training KMeans", leave=False):        
         with torch.no_grad():
@@ -68,33 +139,47 @@ def main(config, model_file, model_path):
         
         if config.model == "Resnet":
             _, layers_output_ = model(inputs)
-            layers_output = [layers_output_[0].detach().cpu()] # 첫 레이어는 interpolation 없이 그대로 사용
-            for i in layers_output_[1:]:
-                i = i.detach().cpu()
-                i_ = F.interpolate(i, size=(grid_size, grid_size), mode='bilinear', align_corners=True)
-                layers_output.append(i_)
+            layers_output = resize_layers_shape(layers_output_, grid_size)
 
         elif config.model == "vit":
-            _, intermidiate = model.forward_intermediates(inputs, indices=[2,5,8,11])
-            layers_output = []
-            for i in intermidiate:
-                i = i.detach().cpu()
-                i_ = F.interpolate(i, size=(grid_size, grid_size), mode='bilinear', align_corners=True)
-                layers_output.append(i_)
+            _, intermidiate = model.forward_intermediates(inputs, indices=[0,2,5,8,11])
+            layers_output = resize_layers_shape(intermidiate, grid_size)
 
         elif config.model == "PIGNet_GSPonly_classification":
-            _, layers_output = model(inputs)
+            _, layers_output_, gsp_layer_outputs = model(inputs)
+            backbone_layers_output = resize_layers_shape(layers_output_, grid_size)
+            gsp_layers_output = resize_layers_shape(gsp_layer_outputs, grid_size)
             
         # layers_output return할 때 최소한 detach는 되야함 
         # detach 안되있으면 근데 return도 안될 듯 -> check해보기
-        for layer_idx in range(len(layers_output)):
-            layer_data = layers_output[layer_idx].cpu().numpy()
-            B, C, H, W = layer_data.shape
-                        
-            layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
-            vq_models[layer_idx].partial_fit(layer_flat)
-        
-        del layers_output, inputs
+
+        if config.model != "PIGNet_GSPonly_classification":
+            for layer_idx in range(len(layers_output)):
+                layer_data = layers_output[layer_idx]
+                B, C, H, W = layer_data.shape
+                            
+                layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
+                vq_models[layer_idx].partial_fit(layer_flat)
+
+            del layers_output, inputs
+
+        else: # PIGNet_GSPonly_classification
+            for layer_idx in range(backbone_num):
+                layer_data = backbone_layers_output[layer_idx]
+                B, C, H, W = layer_data.shape
+                            
+                layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
+                back_vq_models[layer_idx].partial_fit(layer_flat)
+
+            for gsp_layer_idx in range(gsp_layer_num):
+                gsp_layer_data = gsp_layers_output[gsp_layer_idx]
+                B, C, H, W = gsp_layer_data.shape
+
+                gsp_layer_flat = gsp_layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
+                gsp_vq_models[gsp_layer_idx].partial_fit(gsp_layer_flat)
+
+            del backbone_layers_output, gsp_layers_output, inputs
+       
         collect()
     
     print(f"\n{'='*60}")
@@ -104,8 +189,16 @@ def main(config, model_file, model_path):
     config.MI = False    
     dataset, _, MI_dataset_loader = get_dataset(config)
 
-    all_vq_preds = {layer_idx: [] for layer_idx in range(layer_num)}
-    all_y = []
+    if config.model != "PIGNet_GSPonly_classification":
+        all_vq_preds = {layer_idx: [] for layer_idx in range(layer_num)}
+        all_y = []
+
+    else: # PIGNet_GSPonly_classification
+        backbone_vq_preds = {layer_idx: [] for layer_idx in range(backbone_num)}
+        backbone_y = []
+
+        gsp_vq_preds = {gsp_layer_idx: [] for gsp_layer_idx in range(gsp_layer_num)}   
+        gsp_y = []
 
     for inputs, target in tqdm(iter(MI_dataset_loader), desc="Predicting KMeans", leave=False):        
         with torch.no_grad():
@@ -114,53 +207,82 @@ def main(config, model_file, model_path):
             
         if config.model == "Resnet":
             _, layers_output_ = model(inputs)
-            layers_output = [layers_output_[0].detach().cpu()] # 첫 레이어는 interpolation 없이 그대로 사용
-            for i in layers_output_[1:]:
-                i = i.detach().cpu()
-                i_ = F.interpolate(i, size=(grid_size, grid_size), mode='bilinear', align_corners=True)
-                layers_output.append(i_)
+            layers_output = resize_layers_shape(layers_output_, grid_size)
 
         elif config.model == "vit":
-            _, intermidiate = model.forward_intermediates(inputs, indices=[2,5,8,11])
-            layers_output = []
-            for i in intermidiate:
-                i = i.detach().cpu()
-                i_ = F.interpolate(i, size=(grid_size, grid_size), mode='bilinear', align_corners=True)
-                layers_output.append(i_)
+            _, intermidiate = model.forward_intermediates(inputs, indices=[0,2,5,8,11])
+            layers_output = resize_layers_shape(intermidiate, grid_size)
 
+        elif config.model == "PIGNet_GSPonly_classification":
+            _, layers_output_, gsp_layer_outputs = model(inputs)
+            backbone_layers_output = resize_layers_shape(layers_output_, grid_size)
+            gsp_layers_output = resize_layers_shape(gsp_layer_outputs, grid_size)
+
+        if config.model != "PIGNet_GSPonly_classification":
+            all_y.append(target.detach().cpu().numpy())
+        else:
+            backbone_y.append(target.detach().cpu().numpy())
+            gsp_y.append(target.detach().cpu().numpy())
+
+        # TODO
+        if config.model != "PIGNet_GSPonly_classification":
+            for layer_idx in range(len(layers_output)):
+                layer_data = layers_output[layer_idx]
+                B, C, H, W = layer_data.shape
+                            
+                layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
+                vq_pred = vq_models[layer_idx].predict(layer_flat)
+                all_vq_preds[layer_idx].append(vq_pred.reshape(B,H,W))
+    
         else: # PIGNet_GSPonly_classification
-            _ , layers_output = model(inputs)
+            for backbone_layer_idx in range(backbone_num):
+                backbone_layer_data = backbone_layers_output[backbone_layer_idx]
+                B, C, H, W = backbone_layer_data.shape
+                            
+                layer_flat = backbone_layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
+                backbone_vq_pred = back_vq_models[backbone_layer_idx].predict(layer_flat)
+                backbone_vq_preds[backbone_layer_idx].append(backbone_vq_pred.reshape(B,H,W))
 
-        all_y.append(target.detach().cpu().numpy())
-            
-         # 모든 layer에 대해 예측 수행
-        for layer_idx in range(len(layers_output)):
-            layer_data = layers_output[layer_idx].cpu().numpy()  # (batch, C, H, W)
-            B, C, H, W = layer_data.shape
-           
-            layer_flat = layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
-            vq_pred = vq_models[layer_idx].predict(layer_flat)
-            all_vq_preds[layer_idx].append(vq_pred.reshape(B,H,W))
+            for gsp_layer_idx in range(gsp_layer_num):
+                gsp_layer_data = gsp_layers_output[gsp_layer_idx]
+                B, C, H, W = gsp_layer_data.shape
+
+                gsp_layer_flat = gsp_layer_data.transpose(0, 2, 3, 1).reshape(-1, C)
+                gsp_vq_pred = gsp_vq_models[gsp_layer_idx].predict(gsp_layer_flat)
+                gsp_vq_preds[gsp_layer_idx].append(gsp_vq_pred.reshape(B,H,W))
     
     # ===== Step 5: 결과 저장 =====
     # all_vq_preds의 shape을 봐야함 -> 3차원으로 형성이 되있어야함 -> all_batch, H, W 이렇게
     print(f"\nSaving results...")
-    
-    for layer_idx in range(layer_num):        
-        vq_labels = np.concatenate(all_vq_preds[layer_idx], axis=0)
 
-        with open(config.output_folder + f'/layer_{layer_idx}.pkl', 'wb') as f:
-            pickle.dump(vq_labels, f)
-            
-    with open(config.output_folder + f'/y_labels.pkl', 'wb') as f:
-        pickle.dump(np.concatenate(all_y, axis=0), f)
+    if config.model != "PIGNet_GSPonly_classification":    
+        for layer_idx in range(layer_num):        
+            vq_labels = np.concatenate(all_vq_preds[layer_idx], axis=0)
+
+            with open(config.output_folder + f'/layer_{layer_idx}.pkl', 'wb') as f:
+                pickle.dump(vq_labels, f)
+                
+        with open(config.output_folder + f'/y_labels.pkl', 'wb') as f:
+            pickle.dump(np.concatenate(all_y, axis=0), f)
+
+    else: # PIGNet_GSPonly_classification
+        for layer_idx in range(backbone_num):
+            vq_labels = np.concatenate(backbone_vq_preds[layer_idx], axis=0)
+
+            with open(config.output_folder + f'/backbone_layer_{layer_idx}.pkl', 'wb') as f:
+                pickle.dump(vq_labels, f)
+
+        for gsp_layer_idx in range(gsp_layer_num):
+            gsp_vq_labels = np.concatenate(gsp_vq_preds[gsp_layer_idx], axis=0)
+
+            with open(config.output_folder + f'/gsp_layer_{gsp_layer_idx}.pkl', 'wb') as f:
+                pickle.dump(gsp_vq_labels, f)
+
+        with open(config.output_folder + f'/y_labels.pkl', 'wb') as f:
+            pickle.dump(np.concatenate(backbone_y, axis=0), f)
     
     print(f"Results saved to {config.output_folder}")
-    
-    del vq_models, all_vq_preds, all_y
-
-    collect()
-    
+        
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="/home/hail/pan/GCN/PIGNet/config_cls_MI.yaml")

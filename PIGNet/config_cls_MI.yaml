@@ -7,7 +7,7 @@ model: ""
 exp: "bn_lr7e-3"
 gpu: 0 
 backbone: "resnet101"
-dataset: "CIFAR-10"
+dataset: "CIFAR-10" # CIFAR-10, CIFAR-100, imagenet
 model_type: "pretrained"
 model_number: 2 # 1 PIGNet_GSPonly 2 Resnet 3 ViT
 workers: 4

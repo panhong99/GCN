@@ -336,6 +336,7 @@ if __name__ == "__main__":
                 iter_config.factor_name = f_name
                 iter_config.infer_params.process_type = p_key
                 iter_config.output_folder = output_folder
+                iter_config.crop_size = 512 if iter_config.model == "Mask2Former" else 513
 
                 main(iter_config, model_file, model_path)
                 
