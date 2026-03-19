@@ -214,7 +214,7 @@ def cal_mi_x_t_conditional(x: np.ndarray,
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
                 mi = h_t + h_x - h_joint
-                mi_map_same_flat[j_t, i_x] = max(0.0, float(mi))
+                mi_map_same_flat[j_t, i_x] = float(mi)
 
             # DIFF mode
             valid_diff = valid_base & (y_i != y_j)
@@ -321,7 +321,7 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
     return mi_map_same, mi_map_diff, euc_map
 
 def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
-                           distance, layer_idx, model_name, dataset_name):
+                           distance, layer_idx, model_name, dataset_name, process_type):
     """
     Plot scatter maps for SAME and DIFF separately in Information Plane.
     Color intensity is based on distance.
@@ -335,15 +335,15 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     cbar_same = plt.colorbar(scatter_same, ax=ax)
     cbar_same.set_label('Euclidean Distance', fontsize=11)
     
-    ax.set_xlim(0, 4)
-    ax.set_ylim(0, 4)
+    ax.set_xlim(-4, 1)
+    ax.set_ylim(-3, 1)
     ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
     ax.set_title(f"Layer {layer_idx+1} - SAME Class Conditional Information Plane", fontsize=13, fontweight='bold')
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx+1}_SAME.png", dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Layer {layer_idx+1} SAME scatter plot saved.")
     
@@ -355,21 +355,21 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     cbar_diff = plt.colorbar(scatter_diff, ax=ax)
     cbar_diff.set_label('Euclidean Distance', fontsize=11)
     
-    ax.set_xlim(0, 4)
-    ax.set_ylim(0, 4)
+    ax.set_xlim(-4, 1)
+    ax.set_ylim(-3, 1)
     ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
     ax.set_title(f"Layer {layer_idx+1} - DIFF Class Conditional Information Plane", fontsize=13, fontweight='bold')
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
+    plt.savefig(f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx+1}_DIFF.png", dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Layer {layer_idx+1} DIFF scatter plot saved.")
 
 
 def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
-                                     distance, layer_idx, model_name, dataset_name):
+                                     distance, layer_idx, model_name, dataset_name, process_type):
     """
     Plot scatter maps with distance binning (10-unit intervals).
     """
@@ -397,8 +397,8 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         cbar_same = plt.colorbar(scatter_same, ax=axes[0])
         cbar_same.set_label('Euclidean Distance', fontsize=10)
         
-        axes[0].set_xlim(0, 4)
-        axes[0].set_ylim(0, 4)
+        axes[0].set_xlim(-4, 1)
+        axes[0].set_ylim(-3, 1)
         axes[0].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         axes[0].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         axes[0].set_title(f"SAME Class - Distance [{bin_min}-{bin_max})", fontsize=12, fontweight='bold')
@@ -412,8 +412,8 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         cbar_diff = plt.colorbar(scatter_diff, ax=axes[1])
         cbar_diff.set_label('Euclidean Distance', fontsize=10)
         
-        axes[1].set_xlim(0, 4)
-        axes[1].set_ylim(0, 4)
+        axes[1].set_xlim(-4, 1)
+        axes[1].set_ylim(-3, 1)
         axes[1].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         axes[1].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         axes[1].set_title(f"DIFF Class - Distance [{bin_min}-{bin_max})", fontsize=12, fontweight='bold')
@@ -422,20 +422,17 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         plt.suptitle(f"Layer {layer_idx+1} - Scatter Plot Comparison (Distance Bin: {bin_min}-{bin_max})", 
                      fontsize=13, fontweight='bold', y=1.00)
         plt.tight_layout()
-        plt.savefig(f"{model_name}_{dataset_name}_scatter_layer{layer_idx+1}_dist{int(bin_min)}-{int(bin_max)}.png",
+        plt.savefig(f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx+1}_dist{int(bin_min)}-{int(bin_max)}.png",
                    dpi=150, bbox_inches='tight')
         plt.close()
         print(f"Layer {layer_idx+1} distance [{bin_min}-{bin_max}) scatter plot saved.")
-
-# Segmentation 코드 실행하려면 아래 주석 해제하고 classification 코드 주석 처리
-
 
 if __name__ == "__main__":  # segmentation
 # if False:  # segmentation (set to True to run segmentation code)
     
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--dataset', type=str, default='pascal', help='pascal or cityscape')
-    argparser.add_argument('--preprocess_type', type=str, default='layer', help='layer or pixel')
+    argparser.add_argument('--preprocess_type', type=str, default='pixel', help='layer or pixel')
     argparser.add_argument('--model', type=str, default='PIGNet_GSPonly', help='ASPP or PIGNet_GSPonly')
     args = argparser.parse_args()
     
@@ -447,14 +444,8 @@ if __name__ == "__main__":  # segmentation
         y_in = pickle.load(f)
     
     # Dataset-specific label handling
-    # pascal: background=0, invalid often stored as -1
-    # cityscape: ignore_label=255 (background is NOT a special class)
-    if args.dataset.lower().startswith('city'):
-        ignore_label = 255
-        # keep 255 as ignore
-    else:
-        ignore_label = 255  # keep interface consistent; pascal invalid will be remapped
-        y_in = np.where(y_in == -1, 0, y_in)
+    # Both pascal and cityscapes: invalid labels stored as -1
+    ignore_label = -1  # all datasets use -1 for invalid labels
 
     with open(os.path.join(seg_file_path, 'layer_0.pkl'), 'rb') as f:
         x_in = pickle.load(f)
@@ -485,6 +476,7 @@ if __name__ == "__main__":  # segmentation
     all_mi_xt_same, all_mi_ty_same = [], []
     all_mi_xt_diff, all_mi_ty_diff = [], []
 
+    # for layer_idx, t_layer in enumerate(t_in):
     for layer_idx, t_layer in enumerate(t_in):
         mi_xt_same, mi_xt_diff, euc_map = cal_mi_x_t_conditional(x_in, t_layer, y_in, ignore_label=ignore_label)
         mi_ty_same, mi_ty_diff, _ = cal_seg_mi_t_y_conditional(t_layer, y_in, ignore_label=ignore_label)
@@ -568,7 +560,7 @@ if __name__ == "__main__":  # segmentation
     for layer_idx in range(distance.shape[0]):
         plot_scatter_same_diff(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
                               mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
-                              distance[layer_idx], layer_idx, args.model, args.dataset)
+                              distance[layer_idx], layer_idx, args.model, args.dataset, args.preprocess_type)
 
     # Plot per layer with distance bins (10-unit intervals)
     print("\n=== Generating Distance-Binned Scatter Plots ===")
@@ -579,7 +571,7 @@ if __name__ == "__main__":  # segmentation
     for layer_idx in range(distance.shape[0]):
         plot_scatter_with_distance_bins(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
                                        mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
-                                       distance[layer_idx], layer_idx, args.model, args.dataset)
+                                       distance[layer_idx], layer_idx, args.model, args.dataset, args.preprocess_type)
 
     # for layer_idx in range(distance.shape[0]):
     #     for bin_idx in range(len(distance_bins) - 1):

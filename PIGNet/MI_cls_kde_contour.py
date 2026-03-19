@@ -190,7 +190,7 @@ def plot_kde_contour(layer_idx, model_name, dataset_name, process_type, kde_data
     mi_xt = layer_data['mi_xt']
     mi_ty = layer_data['mi_ty']
     
-    vmin=0
+    vmin=-2
     vmax=2
 
     Z = np.clip(Z, vmin, vmax)
@@ -220,8 +220,8 @@ def plot_kde_contour(layer_idx, model_name, dataset_name, process_type, kde_data
     cbar = plt.colorbar(contour_filled, ax=ax)
     cbar.set_label('KDE Density', fontsize=12)
     
-    ax.set_xlim(0,2)
-    ax.set_ylim(0,2)
+    # ax.set_xlim(0,2)
+    # ax.set_ylim(0,2)
 
     ax.set_xlabel("I(X; T)", fontsize=13, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=13, fontweight='bold')
@@ -300,8 +300,8 @@ def plot_kde_contour_all_layers_classification(all_layers_data, model_name, data
         contour = ax.contourf(X, Y, Z_masked, levels=levels, cmap=cmap_s, norm=norm)
         contour_objs.append(contour)
         
-        ax.set_xlim(0, 2)
-        ax.set_ylim(0, 2)
+        # ax.set_xlim(0, 2)
+        # ax.set_ylim(0, 2)
         ax.set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         ax.set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         ax.set_title(f"Layer {layer_idx}", fontsize=12, fontweight='bold')
@@ -343,6 +343,8 @@ if __name__ == "__main__":
                        help='Model name (e.g., vit, Resnet, PIGNet_GSPonly_classification)')
     parser.add_argument('--process_type', type=str, default='layer', 
                        help='Preprocessing type (e.g., pixel or layer)')
+    parser.add_argument('--cluster_num', type=int, default=200,
+                       help='Number of clusters used in MI data generation (e.g., 50, 100, 200)')
     args = parser.parse_args()
     
     if args.model == "Resnet" or args.model == "vit":
@@ -356,9 +358,9 @@ if __name__ == "__main__":
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 1. Load or Compute MI
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    mi_cache_file = os.path.join(data_path, 'mi_analysis_cache_classification.pkl')
-    backbone_cache_file = os.path.join(data_path, 'mi_analysis_cache_backbone_classification.pkl')
-    gsp_cache_file = os.path.join(data_path, 'mi_analysis_cache_gsp_classification.pkl')
+    mi_cache_file = os.path.join(data_path, f'mi_analysis_cache_classification_cluster{args.cluster_num}.pkl')
+    backbone_cache_file = os.path.join(data_path, f'mi_analysis_cache_backbone_classification_cluster{args.cluster_num}.pkl')
+    gsp_cache_file = os.path.join(data_path, f'mi_analysis_cache_gsp_classification_cluster{args.cluster_num}.pkl')
     mi_cache_valid = False
     
     if os.path.exists(mi_cache_file):
@@ -385,17 +387,17 @@ if __name__ == "__main__":
         print(f"Loading classification MI data from: {data_path}")
         
         if args.model != "PIGNet_GSPonly_classification":        
-            with open(os.path.join(data_path, 'y_labels.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'y_labels_{args.cluster_num}.pkl'), 'rb') as f:
                 y_in = pickle.load(f)
             print(f"Loaded labels: {y_in.shape}")
             
-            with open(os.path.join(data_path, 'layer_0.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'layer_0_{args.cluster_num}.pkl'), 'rb') as f:
                 x_in = pickle.load(f)
             print(f"Loaded input features: {x_in.shape}")
             
             t_in = []
             for i in range(1, layer_num):
-                with open(os.path.join(data_path, f'layer_{i}.pkl'), 'rb') as f:
+                with open(os.path.join(data_path, f'layer_{i}_{args.cluster_num}.pkl'), 'rb') as f:
                     t_layer = pickle.load(f)
                     t_in.append(t_layer)
                     print(f"Loaded layer {i}: {t_layer.shape}")
@@ -403,15 +405,15 @@ if __name__ == "__main__":
             H_dim, W_dim = x_in.shape[1], x_in.shape[2]
                     
         else: # PIGNet_GSPonly_classification
-            with open(os.path.join(data_path, 'y_labels.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'y_labels_{args.cluster_num}.pkl'), 'rb') as f:
                 y_in = pickle.load(f)
             print(f"Loaded labels: {y_in.shape}")
             
-            with open(os.path.join(data_path, 'backbone_layer_0.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'backbone_layer_0_{args.cluster_num}.pkl'), 'rb') as f:
                 backbone_x_in = pickle.load(f)
             print(f"Loaded input features: {backbone_x_in.shape}")
             
-            with open(os.path.join(data_path, 'gsp_layer_0.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'gsp_layer_0_{args.cluster_num}.pkl'), 'rb') as f:
                 gsp_x_in = pickle.load(f)
             print(f"Loaded input features: {gsp_x_in.shape}")
             
@@ -419,13 +421,13 @@ if __name__ == "__main__":
             gsp_t_in = []
 
             for i in range(1, backbonenum):
-                with open(os.path.join(data_path, f'backbone_layer_{i}.pkl'), 'rb') as f:
+                with open(os.path.join(data_path, f'backbone_layer_{i}_{args.cluster_num}.pkl'), 'rb') as f:
                     t_layer = pickle.load(f)
                     backbone_t_in.append(t_layer)
                     print(f"Loaded layer {i}: {t_layer.shape}")
 
             for i in range(1, gsp_layer_num):
-                with open(os.path.join(data_path, f'gsp_layer_{i}.pkl'), 'rb') as f:
+                with open(os.path.join(data_path, f'gsp_layer_{i}_{args.cluster_num}.pkl'), 'rb') as f:
                     t_layer = pickle.load(f)
                     gsp_t_in.append(t_layer)
                     print(f"Loaded layer {i}: {t_layer.shape}")
@@ -617,9 +619,9 @@ if __name__ == "__main__":
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 2. Load or Compute KDE
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    kde_cache_file = os.path.join(data_path, 'kde_cache_classification.pkl')
-    kde_backbone_cache_file = os.path.join(data_path, 'kde_cache_backbone_classification.pkl')
-    kde_gsp_cache_file = os.path.join(data_path, 'kde_cache_gsp_classification.pkl')
+    kde_cache_file = os.path.join(data_path, f'kde_cache_classification_cluster{args.cluster_num}.pkl')
+    kde_backbone_cache_file = os.path.join(data_path, f'kde_cache_backbone_classification_cluster{args.cluster_num}.pkl')
+    kde_gsp_cache_file = os.path.join(data_path, f'kde_cache_gsp_classification_cluster{args.cluster_num}.pkl')
     
     kde_cache_valid = False
     

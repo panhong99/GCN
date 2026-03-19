@@ -280,13 +280,11 @@ def compute_kde_values(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance)
     print("KDE computation done!\n")
     return kde_data
 
-
-
 # ──────────────────────────────────────────────────────────────────
 #  Plotting 함수들 (KDE contour)
 # ──────────────────────────────────────────────────────────────────
 
-def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_data, median_same_x, median_same_y, median_diff_x, median_diff_y):
+def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vmin, vmax, kde_data, median_same_x, median_same_y, median_diff_x, median_diff_y):
     """
     Cache에서 받은 KDE값을 이용해 SAME/DIFF plot 생성
     """
@@ -342,7 +340,7 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
     # ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    fname = f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_SAME.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}_SAME.png"
     folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
     os.makedirs(folder_path, exist_ok=True)
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
@@ -377,14 +375,14 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, vmin, vmax, kde_
     # ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    fname = f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}_{vmax}_DIFF.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}_{vmax}_DIFF.png"
     folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
     os.makedirs(folder_path, exist_ok=True)
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')            
     plt.close()
     print(f"    ✓ DIFF saved")
 
-def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, vmax, kde_data):
+def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process_type, vmin, vmax, kde_data):
     """
     Distance bin별로 계산된 KDE값을 이용해 거리 구간별 plot 생성 (SAME, DIFF 각각 개별 plot)
     """
@@ -452,7 +450,7 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
                      fontsize=13, fontweight='bold')
 
         plt.tight_layout()
-        fname = (f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}"
+        fname = (f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}"
                  f"_dist{int(b_min)}-{int(b_max)}_SAME_{vmax}.png")
         
         folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
@@ -487,7 +485,7 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
                      fontsize=13, fontweight='bold')
 
         plt.tight_layout()
-        fname = (f"{model_name}_{dataset_name}_kde_layer{layer_idx+1}"
+        fname = (f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}"
                  f"_dist{int(b_min)}-{int(b_max)}_DIFF_{vmax}.png")
         
         folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
@@ -497,7 +495,7 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, vmin, v
         print("DIFF saved")
 
 
-def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data):
+def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process_type):
     """
     Matrix plot: Layer (y축) x Distance (x축) for SAME mode
     4x4 grid (4 layers, 4 distance bins) - bin별 KDE 사용
@@ -564,13 +562,13 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data):
     
     folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
     os.makedirs(folder_path, exist_ok=True)
-    fname = f"{model_name}_{dataset_name}_kde_matrix_SAME_{vmax}.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_kde_matrix_SAME_{vmax}.png"
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ SAME matrix plot saved: {fname}")
 
 
-def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data):
+def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process_type):
     """
     Matrix plot: Layer (y축) x Distance (x축) for DIFF mode
     4x4 grid (4 layers, 4 distance bins) - bin별 KDE 사용
@@ -637,7 +635,7 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data):
     
     folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
     os.makedirs(folder_path, exist_ok=True)
-    fname = f"{model_name}_{dataset_name}_kde_matrix_DIFF_{vmax}.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_kde_matrix_DIFF_{vmax}.png"
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ DIFF matrix plot saved: {fname}")
@@ -787,14 +785,14 @@ if __name__ == "__main__":
 
     print("=== KDE Contour Plots (SAME vs DIFF) ===")
     for li in range(distance.shape[0]):
-        plot_scatter_same_diff(li, args.model, args.dataset, args.vmin, args.vmax, kde_data, median_same_x, median_same_y, median_diff_x, median_diff_y)
+        plot_scatter_same_diff(li, args.model, args.dataset, args.preprocess_type, args.vmin, args.vmax, kde_data, median_same_x, median_same_y, median_diff_x, median_diff_y)
 
     print("\n=== Distance-Binned KDE Contour Plots ===")
     for li in range(distance.shape[0]):
-        plot_scatter_with_distance_bins(li, args.model, args.dataset, args.vmin, args.vmax, kde_data)
+        plot_scatter_with_distance_bins(li, args.model, args.dataset, args.preprocess_type, args.vmin, args.vmax, kde_data)
 
     print("\n=== KDE Matrix Plots ===")
-    plot_kde_matrix_same(args.model, args.dataset, args.vmin, args.vmax, kde_data)
-    plot_kde_matrix_diff(args.model, args.dataset, args.vmin, args.vmax, kde_data)
+    plot_kde_matrix_same(args.model, args.dataset, args.vmin, args.vmax, kde_data, process_type=args.preprocess_type)
+    plot_kde_matrix_diff(args.model, args.dataset, args.vmin, args.vmax, kde_data, process_type=args.preprocess_type)
 
     print("\n=== Done! ===")

@@ -71,7 +71,7 @@ def cal_mi_x_t(x, t):
             
             # MI = H(T) + H(X) - H(T, X)
             mi_val = h_t_all[i_t] + h_x_all[i_x] - h_joint
-            mi_map_flat[i_t, i_x] = max(0.0, float(mi_val))
+            mi_map_flat[i_t, i_x] = float(mi_val)
     
     # Compute Euclidean distance map
     grid = np.indices((H, W)).reshape(2, -1).T
@@ -153,7 +153,7 @@ def cal_mi_t_y(t, y, eps=1e-12):
     
     return mi_map
 
-def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, dataset_name, process_type, group_name=None):
+def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, dataset_name, process_type, group_name=None, cluster_num=None):
     """
     Plot scatter map in Information Plane for classification task.
     X-axis: I(X; T), Y-axis: I(T; Y), Color: Euclidean Distance
@@ -166,18 +166,24 @@ def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, d
     cbar = plt.colorbar(scatter, ax=ax)
     cbar.set_label('Euclidean Distance', fontsize=12)
     
-    ax.set_xlim(0, 2)
-    ax.set_ylim(0, 2)
+    # ax.set_xlim(0, 2)
+    # ax.set_ylim(0, 2)
     ax.set_xlabel("I(X; T)", fontsize=13, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=13, fontweight='bold')
     
     # Title and filename with group info if available
     if group_name:
         title = f"{model_name}_{dataset_name}_{group_name}_Layer {layer_idx} - Information Plane"
-        fname = f"{model_name}_{dataset_name}_{process_type}_scatter_{group_name}_layer{layer_idx}.png"
+        if cluster_num:
+            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_{group_name}_layer{layer_idx}_cluster{cluster_num}.png"
+        else:
+            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_{group_name}_layer{layer_idx}.png"
     else:
         title = f"{model_name}_{dataset_name}_Layer {layer_idx} - Information Plane"
-        fname = f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx}.png"
+        if cluster_num:
+            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx}_cluster{cluster_num}.png"
+        else:
+            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx}.png"
     
     ax.set_title(title, fontsize=14, fontweight='bold')
     
@@ -187,7 +193,7 @@ def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, d
     print(f"Scatter plot saved: {fname}")
 
 
-def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_name, num, process_type, group_name=None):
+def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_name, num, process_type, group_name=None, cluster_num=None):
     """
     Plot scatter maps for all layers in a single figure with subplots.
     X-axis: I(X; T), Y-axis: I(T; Y), Color: Euclidean Distance
@@ -199,6 +205,7 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
         num: Total number of layers
         process_type: Process type (e.g., 'layer', 'pixel')
         group_name: Optional group name (e.g., 'Backbone', 'GSP') for file naming
+        cluster_num: Optional cluster number for file naming
     """
     num_layers = len(all_layers_data)
     
@@ -229,8 +236,8 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
                            s=20, alpha=0.6, edgecolors='none')
         scatter_objs.append(scatter)
         
-        ax.set_xlim(0, 2)
-        ax.set_ylim(0, 2)
+        # ax.set_xlim(0, 2)
+        # ax.set_ylim(0, 2)
         ax.set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         ax.set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         
@@ -259,11 +266,17 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
     
     plt.tight_layout(rect=[0, 0, 0.9, 0.96])
     
-    # Include group name and process type in filename if provided
+    # Include group name, cluster_num and process type in filename if provided
     if group_name:
-        fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers_{group_name}.png"
+        if cluster_num:
+            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers_{group_name}_cluster{cluster_num}.png"
+        else:
+            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers_{group_name}.png"
     else:
-        fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers.png"
+        if cluster_num:
+            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers_cluster{cluster_num}.png"
+        else:
+            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers.png"
     plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"All layers combined scatter plot saved as: {fname}")
@@ -278,6 +291,8 @@ if __name__ == "__main__":  # Classification Task
                           help='Process type (e.g., layer, pixel)')
     argparser.add_argument('--model', type=str, default='PIGNet_GSPonly_classification', 
                           help='Model name (e.g., Resnet, PIGNet_GSPonly_classification, vit)')
+    argparser.add_argument('--cluster_num', type=int, default=200,
+                          help='Number of clusters used in MI data generation (e.g., 50, 100)')
     args = argparser.parse_args()
     
     if args.model == "Resnet" or args.model == "vit":
@@ -288,9 +303,9 @@ if __name__ == "__main__":  # Classification Task
     # Setup data path
     data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/{args.process_type}_dataset/resnet101/pretrained/{args.model}/zoom/1'
     
-    mi_cache_file = os.path.join(data_path, 'mi_analysis_cache_classification.pkl')
-    backbone_cache_file = os.path.join(data_path, 'mi_analysis_cache_backbone_classification.pkl')
-    gsp_cache_file = os.path.join(data_path, 'mi_analysis_cache_gsp_classification.pkl')
+    mi_cache_file = os.path.join(data_path, f'mi_analysis_cache_classification_cluster{args.cluster_num}.pkl')
+    backbone_cache_file = os.path.join(data_path, f'mi_analysis_cache_backbone_classification_cluster{args.cluster_num}.pkl')
+    gsp_cache_file = os.path.join(data_path, f'mi_analysis_cache_gsp_classification_cluster{args.cluster_num}.pkl')
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # Check MI Cache
@@ -331,15 +346,15 @@ if __name__ == "__main__":  # Classification Task
             H_dim, W_dim = x_in.shape[1], x_in.shape[2]
                     
         else: # PIGNet_GSPonly_classification
-            with open(os.path.join(data_path, 'y_labels.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'y_labels_{args.cluster_num}.pkl'), 'rb') as f:
                 y_in = pickle.load(f)  # (N,) - class labels
             print(f"Loaded labels: {y_in.shape}")
             
-            with open(os.path.join(data_path, 'backbone_layer_0.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'backbone_layer_0_{args.cluster_num}.pkl'), 'rb') as f:
                 backbone_x_in = pickle.load(f)  # (N, H, W) - input features
             print(f"Loaded input features: {backbone_x_in.shape}")
             
-            with open(os.path.join(data_path, 'gsp_layer_0.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'gsp_layer_0_{args.cluster_num}.pkl'), 'rb') as f:
                 gsp_x_in = pickle.load(f)  # (N, H, W) - input features
             print(f"Loaded input features: {gsp_x_in.shape}")
             
@@ -347,13 +362,13 @@ if __name__ == "__main__":  # Classification Task
             gsp_t_in = []
 
             for i in range(1, backbonenum):
-                with open(os.path.join(data_path, f'backbone_layer_{i}.pkl'), 'rb') as f:
+                with open(os.path.join(data_path, f'backbone_layer_{i}_{args.cluster_num}.pkl'), 'rb') as f:
                     t_layer = pickle.load(f)
                     backbone_t_in.append(t_layer)  # (N, H, W) - layer features
                     print(f"Loaded layer {i}: {t_layer.shape}")
 
             for i in range(1, gsp_layer_num):
-                with open(os.path.join(data_path, f'gsp_layer_{i}.pkl'), 'rb') as f:
+                with open(os.path.join(data_path, f'gsp_layer_{i}_{args.cluster_num}.pkl'), 'rb') as f:
                     t_layer = pickle.load(f)
                     gsp_t_in.append(t_layer)  # (N, H, W) - layer features
                     print(f"Loaded layer {i}: {t_layer.shape}")
@@ -566,17 +581,17 @@ if __name__ == "__main__":  # Classification Task
                 print(f"\n{group_name} - Layer {layer_idx}:")
                 print(f"  Generating individual scatter plot...")
                 plot_scatter_classification(mi_xt, mi_ty, distance, 
-                                        layer_idx, args.model, args.dataset, args.process_type, group_name)
+                                        layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num)
             else:
                 print(f"\nLayer {layer_idx}:")
                 print(f"  Generating individual scatter plot...")
                 plot_scatter_classification(mi_xt, mi_ty, distance, 
-                                        layer_idx, args.model, args.dataset, args.process_type)
+                                        layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num)
         
         # Generate combined subplot plot for all layers
         print(f"\n=== Generating Combined Subplot Plot ===")
         total_layers = len(all_layers_data)
-        plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, args.process_type, group_name=None)
+        plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, args.process_type, group_name=None, cluster_num=args.cluster_num)
         
         print("\n=== All plots generated successfully! ===")
         
@@ -595,16 +610,16 @@ if __name__ == "__main__":  # Classification Task
                     print(f"\n{group_name} - Layer {layer_idx}:")
                     print(f"  Generating individual scatter plot...")
                     plot_scatter_classification(mi_xt, mi_ty, distance, 
-                                            layer_idx, args.model, args.dataset, args.process_type, group_name)
+                                            layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num)
                 else:
                     print(f"\nLayer {layer_idx}:")
                     print(f"  Generating individual scatter plot...")
                     plot_scatter_classification(mi_xt, mi_ty, distance, 
-                                            layer_idx, args.model, args.dataset, args.process_type)
+                                            layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num)
         
             # Generate combined subplot plot for this group
             print(f"\n=== Generating Combined Subplot Plot ===")
             total_layers = len(all_layers_data)
-            plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, args.process_type, group_name=group_label)
+            plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, args.process_type, group_name=group_label, cluster_num=args.cluster_num)
             
             print(f"\n=== All plots generated successfully! ===")

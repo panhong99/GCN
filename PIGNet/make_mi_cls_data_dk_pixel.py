@@ -132,7 +132,7 @@ def main(config, model_file, model_path):
                 for w in range(grid_size):
                     key = (layer_idx, h, w)
                     gsp_vq_models[key] = MiniBatchKMeans(
-                        n_clusters=50,
+                        n_clusters=config.cluster_num,
                         random_state=42,
                         n_init=1,
                         batch_size=50,
@@ -327,26 +327,26 @@ def main(config, model_file, model_path):
         for layer_idx in range(layer_num):        
             vq_labels = np.concatenate(all_vq_preds[layer_idx], axis=0)
 
-            with open(config.output_folder + f'/layer_{layer_idx}.pkl', 'wb') as f:
+            with open(config.output_folder + f'/layer_{layer_idx}_{config.cluster_num}.pkl', 'wb') as f:
                 pickle.dump(vq_labels, f)
                 
-        with open(config.output_folder + f'/y_labels.pkl', 'wb') as f:
+        with open(config.output_folder + f'/y_labels_{config.cluster_num}.pkl', 'wb') as f:
             pickle.dump(np.concatenate(all_y, axis=0), f)
 
     else: # PIGNet_GSPonly_classification
         for layer_idx in range(backbone_num):
             vq_labels = np.concatenate(backbone_vq_preds[layer_idx], axis=0)
 
-            with open(config.output_folder + f'/backbone_layer_{layer_idx}.pkl', 'wb') as f:
+            with open(config.output_folder + f'/backbone_layer_{layer_idx}_{config.cluster_num}.pkl', 'wb') as f:
                 pickle.dump(vq_labels, f)
 
         for gsp_layer_idx in range(gsp_layer_num):
             gsp_vq_labels = np.concatenate(gsp_vq_preds[gsp_layer_idx], axis=0)
 
-            with open(config.output_folder + f'/gsp_layer_{gsp_layer_idx}.pkl', 'wb') as f:
+            with open(config.output_folder + f'/gsp_layer_{gsp_layer_idx}_{config.cluster_num}.pkl', 'wb') as f:
                 pickle.dump(gsp_vq_labels, f)
 
-        with open(config.output_folder + f'/y_labels.pkl', 'wb') as f:
+        with open(config.output_folder + f'/y_labels_{config.cluster_num}.pkl', 'wb') as f:
             pickle.dump(np.concatenate(backbone_y, axis=0), f)
     
     print(f"Results saved to {config.output_folder}")
@@ -355,6 +355,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="/home/hail/pan/GCN/PIGNet/config_cls_MI.yaml")
     parser.add_argument("--debug", action="store_true")
+    parser.add_argument("--cluster_num", type=int, default=50)
     args = parser.parse_args()
     
     with open(args.config, "r") as f:
@@ -425,5 +426,7 @@ if __name__ == "__main__":
                 iter_config.infer_params.process_type = p_key
                 iter_config.output_folder = output_folder
                 iter_config.crop_size= 512 if iter_config.model == "vit" else 513
-                iter_config.batch_size = 50
+                iter_config.batch_size = args.cluster_num
+                iter_config.cluster_num = args.cluster_num
+
                 main(iter_config, model_file, model_path)
