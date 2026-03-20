@@ -162,7 +162,7 @@ def cal_mi_x_t_conditional(x: np.ndarray,
                            t: np.ndarray,
                            y: np.ndarray,
                            h_bins: int = 51,
-                           ignore_label: int = 255):
+                           ignore_label: int = -1):
     """
     Compute MI map I(X_i; T_j) for all (j,i) pairs for both SAME and DIFF modes.
     Returns mi_same, mi_diff, euc_map
@@ -233,7 +233,7 @@ def cal_mi_x_t_conditional(x: np.ndarray,
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
                 mi = h_t + h_x - h_joint
-                mi_map_diff_flat[j_t, i_x] = max(0.0, float(mi))
+                mi_map_diff_flat[j_t, i_x] = float(mi)
 
     mi_map_same = mi_map_same_flat.reshape(H, W, H, W)
     mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
@@ -243,7 +243,7 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
                                y: np.ndarray,
                                h_bins_t: int = 51,
                                num_classes_y: int = 21,
-                               ignore_label: int = 255):
+                               ignore_label: int = -1):
     """
     Compute MI map I(T_i; Y_j) for all (i,j) pairs for both SAME and DIFF modes.
     Returns mi_same, mi_diff, euc_map
@@ -254,7 +254,7 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
     alpha = 1e-3
 
     t_flat = t.reshape(N, -1).astype(np.int32) + 1   # 0..50
-    y_flat = y.reshape(N, -1).astype(np.int32)       # 0..C-1 or 255(ignore)
+    y_flat = y.reshape(N, -1).astype(np.int32)       # 0..C-1 or -1(ignore)
 
     max_t = h_bins_t
     max_y = num_classes_y
@@ -294,7 +294,7 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
                 mi = h_t + h_y - h_joint
-                mi_map_same_flat[i_t, j_y] = max(0.0, float(mi))
+                mi_map_same_flat[i_t, j_y] = float(mi)
 
             # DIFF mode
             valid_diff = valid_base & (y_i_all != y_j_all)
@@ -335,8 +335,8 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     cbar_same = plt.colorbar(scatter_same, ax=ax)
     cbar_same.set_label('Euclidean Distance', fontsize=11)
     
-    ax.set_xlim(-4, 1)
-    ax.set_ylim(-3, 1)
+    # ax.set_xlim(-4, 1)
+    # ax.set_ylim(-3, 1)
     ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
     ax.set_title(f"Layer {layer_idx+1} - SAME Class Conditional Information Plane", fontsize=13, fontweight='bold')
@@ -355,8 +355,8 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     cbar_diff = plt.colorbar(scatter_diff, ax=ax)
     cbar_diff.set_label('Euclidean Distance', fontsize=11)
     
-    ax.set_xlim(-4, 1)
-    ax.set_ylim(-3, 1)
+    # ax.set_xlim(-4, 1)
+    # ax.set_ylim(-3, 1)
     ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
     ax.set_title(f"Layer {layer_idx+1} - DIFF Class Conditional Information Plane", fontsize=13, fontweight='bold')
@@ -397,8 +397,8 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         cbar_same = plt.colorbar(scatter_same, ax=axes[0])
         cbar_same.set_label('Euclidean Distance', fontsize=10)
         
-        axes[0].set_xlim(-4, 1)
-        axes[0].set_ylim(-3, 1)
+        # axes[0].set_xlim(-4, 1)
+        # axes[0].set_ylim(-3, 1)
         axes[0].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         axes[0].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         axes[0].set_title(f"SAME Class - Distance [{bin_min}-{bin_max})", fontsize=12, fontweight='bold')
@@ -412,8 +412,8 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         cbar_diff = plt.colorbar(scatter_diff, ax=axes[1])
         cbar_diff.set_label('Euclidean Distance', fontsize=10)
         
-        axes[1].set_xlim(-4, 1)
-        axes[1].set_ylim(-3, 1)
+        # axes[1].set_xlim(-4, 1)
+        # axes[1].set_ylim(-3, 1)
         axes[1].set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
         axes[1].set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
         axes[1].set_title(f"DIFF Class - Distance [{bin_min}-{bin_max})", fontsize=12, fontweight='bold')
@@ -426,6 +426,120 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
                    dpi=150, bbox_inches='tight')
         plt.close()
         print(f"Layer {layer_idx+1} distance [{bin_min}-{bin_max}) scatter plot saved.")
+
+
+def plot_scatter_matrix_same(mi_xt_same, mi_ty_same, distance, 
+                             model_name, dataset_name, process_type):
+    """
+    Matrix plot: Layer (y축) x Distance (x축) for SAME mode
+    4x4 grid (4 layers, 4 distance bins)
+    """
+    layers = mi_xt_same.shape[0]
+    dist_bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40
+    num_dist = len(dist_bins) - 1
+    
+    fig, axes = plt.subplots(layers, num_dist, figsize=(20, 18), facecolor='white')
+    
+    for layer_idx in range(layers):
+        for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
+            ax = axes[layer_idx, dist_idx]
+            ax.set_facecolor('white')
+            
+            # Distance bin mask
+            mask = (distance[layer_idx] >= b_min) & (distance[layer_idx] < b_max)
+            
+            if not np.any(mask):
+                ax.text(0.5, 0.5, 'No data', ha='center', va='center', fontsize=12,
+                       transform=ax.transAxes)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                continue
+            
+            # Scatter plot
+            dist_bin = distance[layer_idx][mask]
+            scatter = ax.scatter(mi_xt_same[layer_idx][mask], 
+                                mi_ty_same[layer_idx][mask], 
+                                c=dist_bin, cmap='Reds', 
+                                s=30, alpha=0.6, edgecolors='darkred', linewidth=0.3)
+            
+            # Ticks 제거
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.grid(True, alpha=0.2)
+            
+            # Y축 레이블 (좌측만)
+            if dist_idx == 0:
+                ax.set_ylabel(f"Layer {layer_idx+1}", fontsize=11, fontweight='bold')
+            
+            # X축 레이블 (상단만)
+            if layer_idx == 0:
+                ax.set_title(f"Dist [{b_min:.0f}-{b_max:.0f})", fontsize=11, fontweight='bold')
+    
+    plt.suptitle(f"{model_name}_{dataset_name}_Scatter Matrix - SAME Mode", 
+                fontsize=14, fontweight='bold', y=0.995)
+    plt.tight_layout()
+    
+    fname = f"{model_name}_{dataset_name}_{process_type}_scatter_matrix_SAME.png"
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✓ SAME scatter matrix plot saved: {fname}")
+
+
+def plot_scatter_matrix_diff(mi_xt_diff, mi_ty_diff, distance, 
+                             model_name, dataset_name, process_type):
+    """
+    Matrix plot: Layer (y축) x Distance (x축) for DIFF mode
+    4x4 grid (4 layers, 4 distance bins)
+    """
+    layers = mi_xt_diff.shape[0]
+    dist_bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40
+    num_dist = len(dist_bins) - 1
+    
+    fig, axes = plt.subplots(layers, num_dist, figsize=(20, 18), facecolor='white')
+    
+    for layer_idx in range(layers):
+        for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
+            ax = axes[layer_idx, dist_idx]
+            ax.set_facecolor('white')
+            
+            # Distance bin mask
+            mask = (distance[layer_idx] >= b_min) & (distance[layer_idx] < b_max)
+            
+            if not np.any(mask):
+                ax.text(0.5, 0.5, 'No data', ha='center', va='center', fontsize=12,
+                       transform=ax.transAxes)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                continue
+            
+            # Scatter plot
+            dist_bin = distance[layer_idx][mask]
+            scatter = ax.scatter(mi_xt_diff[layer_idx][mask], 
+                                mi_ty_diff[layer_idx][mask], 
+                                c=dist_bin, cmap='Blues', 
+                                s=30, alpha=0.6, edgecolors='darkblue', linewidth=0.3)
+            
+            # Ticks 제거
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.grid(True, alpha=0.2)
+            
+            # Y축 레이블 (좌측만)
+            if dist_idx == 0:
+                ax.set_ylabel(f"Layer {layer_idx+1}", fontsize=11, fontweight='bold')
+            
+            # X축 레이블 (상단만)
+            if layer_idx == 0:
+                ax.set_title(f"Dist [{b_min:.0f}-{b_max:.0f})", fontsize=11, fontweight='bold')
+    
+    plt.suptitle(f"{model_name}_{dataset_name}_Scatter Matrix - DIFF Mode", 
+                fontsize=14, fontweight='bold', y=0.995)
+    plt.tight_layout()
+    
+    fname = f"{model_name}_{dataset_name}_{process_type}_scatter_matrix_DIFF.png"
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✓ DIFF scatter matrix plot saved: {fname}")
 
 if __name__ == "__main__":  # segmentation
 # if False:  # segmentation (set to True to run segmentation code)
@@ -451,10 +565,10 @@ if __name__ == "__main__":  # segmentation
         x_in = pickle.load(f)
     
     # Debug: GT 유효 포인트 분포 확인
-    valid_per_sample = np.sum(y_in > 0, axis=(1, 2))
-    print(f"\n=== GT Valid Points Statistics ===")
-    print(f"Total samples: {y_in.shape[0]}")
-    print(f"Valid points per sample - Min: {valid_per_sample.min()}, Max: {valid_per_sample.max()}, Mean: {valid_per_sample.mean():.1f}")
+    # valid_per_sample = np.sum(y_in > 0, axis=(1, 2))
+    # print(f"\n=== GT Valid Points Statistics ===")
+    # print(f"Total samples: {y_in.shape[0]}")
+    # print(f"Valid points per sample - Min: {valid_per_sample.min()}, Max: {valid_per_sample.max()}, Mean: {valid_per_sample.mean():.1f}")
  
     t_in = []
     for i in range(1, 5):
@@ -467,46 +581,64 @@ if __name__ == "__main__":  # segmentation
     # Conditional SAME/DIFF MI
     # =========================
 
-    # For Pascal we keep background(0) as valid class.
-    # For Cityscapes we remove only ignore_label=255.
-    # (No Y>0 filtering is applied.)
-
-    # Containers: per-layer flattened arrays for SAME and DIFF
-    all_distance = []
-    all_mi_xt_same, all_mi_ty_same = [], []
-    all_mi_xt_diff, all_mi_ty_diff = [], []
-
-    # for layer_idx, t_layer in enumerate(t_in):
-    for layer_idx, t_layer in enumerate(t_in):
-        mi_xt_same, mi_xt_diff, euc_map = cal_mi_x_t_conditional(x_in, t_layer, y_in, ignore_label=ignore_label)
-        mi_ty_same, mi_ty_diff, _ = cal_seg_mi_t_y_conditional(t_layer, y_in, ignore_label=ignore_label)
-
-        all_distance.append(euc_map.flatten())
-        all_mi_xt_same.append(mi_xt_same.flatten())
-        all_mi_ty_same.append(mi_ty_same.flatten())
-        all_mi_xt_diff.append(mi_xt_diff.flatten())
-        all_mi_ty_diff.append(mi_ty_diff.flatten())
-
-    distance = np.array(all_distance)
-    mi_xt_same = np.array(all_mi_xt_same)
-    mi_ty_same = np.array(all_mi_ty_same)
-    mi_xt_diff = np.array(all_mi_xt_diff)
-    mi_ty_diff = np.array(all_mi_ty_diff)
-
-    # Save cache
     cache_file = os.path.join(seg_file_path, 'mi_analysis_cache_same_diff_condmi.pkl')
-    print(f"Saving computed data to {cache_file}...")
-    cache_data = {
-        'distance': distance,
-        'mi_xt_same': mi_xt_same,
-        'mi_ty_same': mi_ty_same,
-        'mi_xt_diff': mi_xt_diff,
-        'mi_ty_diff': mi_ty_diff,
-        'ignore_label': ignore_label,
-    }
-    with open(cache_file, 'wb') as f:
-        pickle.dump(cache_data, f)
-    print("Cache saved successfully!")
+    
+    # 캐시 확인
+    if os.path.exists(cache_file):
+        print(f"Loading cached MI data from {cache_file}...")
+        with open(cache_file, 'rb') as f:
+            cache_data = pickle.load(f)
+        
+        distance = cache_data['distance']
+        mi_xt_same = cache_data['mi_xt_same']
+        mi_ty_same = cache_data['mi_ty_same']
+        mi_xt_diff = cache_data['mi_xt_diff']
+        mi_ty_diff = cache_data['mi_ty_diff']
+        ignore_label = cache_data['ignore_label']
+        
+        print("✓ Cache loaded successfully!\n")
+    else:
+        print("Cache not found. Computing MI values...\n")
+        
+        # For Pascal we keep background(0) as valid class.
+        # For Cityscapes we remove only ignore_label=255.
+        # (No Y>0 filtering is applied.)
+
+        # Containers: per-layer flattened arrays for SAME and DIFF
+        all_distance = []
+        all_mi_xt_same, all_mi_ty_same = [], []
+        all_mi_xt_diff, all_mi_ty_diff = [], []
+
+        # for layer_idx, t_layer in enumerate(t_in):
+        for layer_idx, t_layer in enumerate(t_in):
+            mi_xt_same, mi_xt_diff, euc_map = cal_mi_x_t_conditional(x_in, t_layer, y_in, ignore_label=ignore_label)
+            mi_ty_same, mi_ty_diff, _ = cal_seg_mi_t_y_conditional(t_layer, y_in, ignore_label=ignore_label)
+
+            all_distance.append(euc_map.flatten())
+            all_mi_xt_same.append(mi_xt_same.flatten())
+            all_mi_ty_same.append(mi_ty_same.flatten())
+            all_mi_xt_diff.append(mi_xt_diff.flatten())
+            all_mi_ty_diff.append(mi_ty_diff.flatten())
+
+        distance = np.array(all_distance)
+        mi_xt_same = np.array(all_mi_xt_same)
+        mi_ty_same = np.array(all_mi_ty_same)
+        mi_xt_diff = np.array(all_mi_xt_diff)
+        mi_ty_diff = np.array(all_mi_ty_diff)
+
+        # Save cache
+        print(f"Saving computed data to {cache_file}...")
+        cache_data = {
+            'distance': distance,
+            'mi_xt_same': mi_xt_same,
+            'mi_ty_same': mi_ty_same,
+            'mi_xt_diff': mi_xt_diff,
+            'mi_ty_diff': mi_ty_diff,
+            'ignore_label': ignore_label,
+        }
+        with open(cache_file, 'wb') as f:
+            pickle.dump(cache_data, f)
+        print("✓ Cache saved successfully!\n")
 
     # Plot styling
     plt.rcParams['font.size'] = 13
@@ -522,7 +654,7 @@ if __name__ == "__main__":  # segmentation
     # print("\n=== Generating Conditional SAME/DIFF Plots (Combined) ===")
     # for layer_idx in range(distance.shape[0]):
     #     plt.figure(figsize=(12, 7))
-    #
+    
     #     # SAME
     #     sc_same = plt.scatter(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
     #                           c=distance[layer_idx], cmap='Reds',
@@ -535,19 +667,19 @@ if __name__ == "__main__":  # segmentation
     #                           alpha=0.07, s=12,
     #                           edgecolors='none', rasterized=True,
     #                           label='Diff (conditional MI)')
-    #
+    
     #     cbar1 = plt.colorbar(sc_same)
     #     cbar1.set_label('Euclidean Distance (Same)', fontsize=10)
     #     cbar2 = plt.colorbar(sc_diff)
     #     cbar2.set_label('Euclidean Distance (Diff)', fontsize=10)
-    #
+    
     #     plt.legend(frameon=False, loc='upper right')
     #     plt.xlabel("I(X; T)", fontsize=11, fontweight='bold')
     #     plt.ylabel("I(T; Y)", fontsize=11, fontweight='bold')
     #     plt.title(f"Layer {layer_idx+1} - Conditional SAME/DIFF Information Plane", fontsize=12, fontweight='bold')
-    #
-    #     plt.xlim(0, 4)
-    #     plt.ylim(0, 4)
+    
+    #     # plt.xlim(0, 4)
+    #     # plt.ylim(0, 4)
     #     plt.grid(True, alpha=0.3)
     #     plt.tight_layout()
     #     plt.savefig(f"{args.model}_{args.dataset}_condMI_layer{layer_idx+1}.png",
@@ -572,6 +704,13 @@ if __name__ == "__main__":  # segmentation
         plot_scatter_with_distance_bins(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
                                        mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
                                        distance[layer_idx], layer_idx, args.model, args.dataset, args.preprocess_type)
+
+    # Plot matrix: Layer x Distance bins
+    print("\n=== Generating Scatter Matrix Plots ===")
+    plot_scatter_matrix_same(mi_xt_same, mi_ty_same, distance, 
+                            args.model, args.dataset, args.preprocess_type)
+    plot_scatter_matrix_diff(mi_xt_diff, mi_ty_diff, distance, 
+                            args.model, args.dataset, args.preprocess_type)
 
     # for layer_idx in range(distance.shape[0]):
     #     for bin_idx in range(len(distance_bins) - 1):

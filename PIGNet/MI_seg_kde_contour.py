@@ -18,7 +18,7 @@ def cal_mi_x_t_conditional(x: np.ndarray,
                            t: np.ndarray,
                            y: np.ndarray,
                            h_bins: int = 51,
-                           ignore_label: int = 255):
+                           ignore_label: int = -1):
     """
     Compute MI map I(X_i; T_j) for all (j,i) pairs for both SAME and DIFF modes.
     Returns mi_same, mi_diff, euc_map
@@ -32,7 +32,7 @@ def cal_mi_x_t_conditional(x: np.ndarray,
 
     x_flat = x.reshape(N, -1).astype(np.int32) + 1   # 0..50
     t_flat = t.reshape(N, -1).astype(np.int32) + 1   # 0..50
-    y_flat = y.reshape(N, -1).astype(np.int32)
+    y_flat = y.reshape(N, -1).astype(np.int32)       # 0..C-1 or -1(ignore)
 
     max_x = h_bins
     max_t = h_bins
@@ -72,7 +72,7 @@ def cal_mi_x_t_conditional(x: np.ndarray,
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
                 mi = h_t + h_x - h_joint
-                mi_map_same_flat[j_t, i_x] = max(0.0, float(mi))
+                mi_map_same_flat[j_t, i_x] = float(mi)
 
             # DIFF mode: Y_i != Y_j
             valid_diff = valid_base & (y_i != y_j)
@@ -91,7 +91,7 @@ def cal_mi_x_t_conditional(x: np.ndarray,
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
                 mi = h_t + h_x - h_joint
-                mi_map_diff_flat[j_t, i_x] = max(0.0, float(mi))
+                mi_map_diff_flat[j_t, i_x] = float(mi)
 
     mi_map_same = mi_map_same_flat.reshape(H, W, H, W)
     mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
@@ -102,7 +102,7 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
                                y: np.ndarray,
                                h_bins_t: int = 51,
                                num_classes_y: int = 21,
-                               ignore_label: int = 255):
+                               ignore_label: int = -1):
     """
     Compute MI map I(T_i; Y_j) for all (i,j) pairs for both SAME and DIFF modes.
     Returns mi_same, mi_diff, euc_map
@@ -115,7 +115,7 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
     alpha = 1e-3
 
     t_flat = t.reshape(N, -1).astype(np.int32) + 1   # 0..50
-    y_flat = y.reshape(N, -1).astype(np.int32)       # 0..C-1 or 255(ignore)
+    y_flat = y.reshape(N, -1).astype(np.int32)       # 0..C-1 or -1(ignore)
 
     max_t = h_bins_t
     max_y = num_classes_y
@@ -155,7 +155,7 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
                 mi = h_t + h_y - h_joint
-                mi_map_same_flat[i_t, j_y] = max(0.0, float(mi))
+                mi_map_same_flat[i_t, j_y] = float(mi)
 
             # DIFF mode: Y_i != Y_j
             valid_diff = valid_base & (y_i_all != y_j_all)
@@ -175,7 +175,7 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
                 mi = h_t + h_y - h_joint
-                mi_map_diff_flat[i_t, j_y] = max(0.0, float(mi))
+                mi_map_diff_flat[i_t, j_y] = float(mi)
 
     mi_map_same = mi_map_same_flat.reshape(H, W, H, W)
     mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
@@ -332,8 +332,8 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vm
     cbar = plt.colorbar(cf, ax=ax)
     cbar.set_label('Density', fontsize=11)
     
-    ax.set_xlim(0, 2)
-    ax.set_ylim(0, 2)
+    # ax.set_xlim(0, 2)
+    # ax.set_ylim(0, 2)
     ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
     ax.set_title(f"Layer {layer_idx+1} - SAME Class KDE Contour", fontsize=13, fontweight='bold')
@@ -367,8 +367,8 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vm
     cbar = plt.colorbar(cf, ax=ax)
     cbar.set_label('Density', fontsize=11)
     
-    ax.set_xlim(0, 2)
-    ax.set_ylim(0, 2)
+    # ax.set_xlim(0, 2)
+    # ax.set_ylim(0, 2)
     ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
     ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
     ax.set_title(f"Layer {layer_idx+1} - DIFF Class KDE Contour", fontsize=13, fontweight='bold')
@@ -442,8 +442,8 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process
         cbar_s = plt.colorbar(cf_s, ax=ax)
         cbar_s.set_label('Density', fontsize=11)
         
-        ax.set_xlim(0, 2)
-        ax.set_ylim(0, 2)
+        # ax.set_xlim(0, 2)
+        # ax.set_ylim(0, 2)
         ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
         ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
         ax.set_title(f"Layer {layer_idx+1} - SAME - Distance [{b_min:.0f}–{b_max:.0f})", 
@@ -477,8 +477,8 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process
         cbar_d = plt.colorbar(cf_d, ax=ax)
         cbar_d.set_label('Density', fontsize=11)
         
-        ax.set_xlim(0, 2)
-        ax.set_ylim(0, 2)
+        # ax.set_xlim(0, 2)
+        # ax.set_ylim(0, 2)
         ax.set_xlabel("I(X; T)", fontsize=12, fontweight='bold')
         ax.set_ylabel("I(T; Y)", fontsize=12, fontweight='bold')
         ax.set_title(f"Layer {layer_idx+1} - DIFF - Distance [{b_min:.0f}–{b_max:.0f})", 
@@ -524,8 +524,8 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
                 ax.text(1, 1, 'No data', ha='center', va='center', fontsize=12)
                 ax.set_xticks([])
                 ax.set_yticks([])
-                ax.set_xlim(0, 2)
-                ax.set_ylim(0, 2)
+                # ax.set_xlim(0, 2)
+                # ax.set_ylim(0, 2)
                 continue
             
             bin_data = kde_data[cache_key]
@@ -546,8 +546,8 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
             # Ticks 제거
             ax.set_xticklabels([])
             ax.set_yticklabels([])
-            ax.set_xlim(0, 2)
-            ax.set_ylim(0, 2)
+            # ax.set_xlim(0, 2)
+            # ax.set_ylim(0, 2)
             
             # Y축 레이블 (좌측만)
             if dist_idx == 0:
@@ -597,8 +597,8 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process
                 ax.text(1, 1, 'No data', ha='center', va='center', fontsize=12)
                 ax.set_xticklabels([])
                 ax.set_yticklabels([])
-                ax.set_xlim(0, 2)
-                ax.set_ylim(0, 2)
+                # ax.set_xlim(0, 2)
+                # ax.set_ylim(0, 2)
                 continue
             
             bin_data = kde_data[cache_key]
@@ -619,8 +619,8 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process
             # Tick 레이블 제거 (marks는 유지)
             ax.set_xticklabels([])
             ax.set_yticklabels([])
-            ax.set_xlim(0, 2)
-            ax.set_ylim(0, 2)
+            # ax.set_xlim(0, 2)
+            # ax.set_ylim(0, 2)
             
             # Y축 레이블 (좌측만)
             if dist_idx == 0:
@@ -686,9 +686,9 @@ if __name__ == "__main__":
         with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
             y_in = pickle.load(f)
 
-        ignore_label = 255
-        if not args.dataset.lower().startswith('city'):
-            y_in = np.where(y_in == -1, 0, y_in)
+        ignore_label = -1  # Cityscapes에서는 ignore_label이 -1이므로 그대로 사용
+        # if not args.dataset.lower().startswith('city'):
+        #     y_in = np.where(y_in == -1, 0, y_in)
 
         with open(os.path.join(seg_file_path, 'layer_0.pkl'), 'rb') as f:
             x_in = pickle.load(f)
