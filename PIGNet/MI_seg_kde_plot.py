@@ -62,7 +62,7 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vm
     
     plt.tight_layout()
     fname = f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}_SAME.png"
-    folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+    folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
     os.makedirs(folder_path, exist_ok=True)
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
@@ -93,8 +93,8 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vm
     ax.set_title(f"Layer {layer_idx+1} - DIFF Class KDE Contour", fontsize=13, fontweight='bold')
     
     plt.tight_layout()
-    fname = f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}_{vmax}_DIFF.png"
-    folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+    fname = f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}_DIFF.png"
+    folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
     os.makedirs(folder_path, exist_ok=True)
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')            
     plt.close()
@@ -168,9 +168,9 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process
 
         plt.tight_layout()
         fname = (f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}"
-                 f"_dist{int(b_min)}-{int(b_max)}_SAME_{vmax}.png")
+                 f"_dist{int(b_min)}-{int(b_max)}_SAME.png")
         
-        folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+        folder_path = f"./{model_name}/{dataset_name}/{process_type}/distance"
         os.makedirs(folder_path, exist_ok=True)
         plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')        
         plt.close()
@@ -201,9 +201,9 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process
 
         plt.tight_layout()
         fname = (f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}"
-                 f"_dist{int(b_min)}-{int(b_max)}_DIFF_{vmax}.png")
+                 f"_dist{int(b_min)}-{int(b_max)}_DIFF.png")
         
-        folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+        folder_path = f"./{model_name}/{dataset_name}/{process_type}/distance"
         os.makedirs(folder_path, exist_ok=True)
         plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')        
         plt.close()
@@ -271,9 +271,9 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
     plt.suptitle(f"{model_name}_{dataset_name}_KDE Matrix - SAME Mode", fontsize=14, fontweight='bold', y=0.995)
     plt.tight_layout()
     
-    folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+    folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
     os.makedirs(folder_path, exist_ok=True)
-    fname = f"{model_name}_{dataset_name}_{process_type}_kde_matrix_SAME_{vmax}.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_kde_matrix_SAME.png"
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ SAME matrix plot saved: {fname}")
@@ -340,9 +340,9 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process
     plt.suptitle(f"{model_name}_{dataset_name}_KDE Matrix - DIFF Mode", fontsize=14, fontweight='bold', y=0.995)
     plt.tight_layout()
     
-    folder_path = f"./kde_imgs/{model_name}/{dataset_name}/{vmax}"
+    folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
     os.makedirs(folder_path, exist_ok=True)
-    fname = f"{model_name}_{dataset_name}_{process_type}_kde_matrix_DIFF_{vmax}.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_kde_matrix_DIFF.png"
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ DIFF matrix plot saved: {fname}")
