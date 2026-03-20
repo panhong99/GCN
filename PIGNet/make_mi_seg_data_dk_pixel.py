@@ -97,8 +97,8 @@ def main(config, model_file, model_path):
 
     checkpoint = torch.load(os.path.join(model_path, model_file), map_location=device)
 
-    if config.model == "ASPP" or config.model == "PIGNet_GSPonly":
-    # if config.model == "ASPP":
+    # if config.model == "ASPP" or config.model == "PIGNet_GSPonly":
+    if config.model == "ASPP":
         state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
     else:
         state_dict = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
@@ -268,8 +268,13 @@ def main(config, model_file, model_path):
     # GT 라벨 저장 (invalid 값을 -1로 치환)
     gt_final = np.concatenate(gt_masks, axis=0).astype(np.int32)
     
-    gt_final = np.where(gt_final == 255, -1, gt_final)
-    
+    # gt_final = np.where(gt_final == 255, -1, gt_final)
+
+    if config.dataset == "cityscapes":
+        gt_final = np.where(gt_final == 255, -1, gt_final)
+    else:  # pascal
+        gt_final = np.where((gt_final == 0) | (gt_final == 255), -1, gt_final)
+            
     with open(config.output_folder + f'/gt_labels.pkl', 'wb') as f:
         pickle.dump(gt_final, f)
     
