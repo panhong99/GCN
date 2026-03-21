@@ -9,7 +9,11 @@ import os
 import pickle
 import argparse
 from MI_seg_compute import compute_and_cache_mi
-from GCN.PIGNet.MI_seg_scatter_plot import (plot_scatter_same_diff, 
+# from GCN.PIGNet.MI_seg_scatter_plot import (plot_scatter_same_diff, 
+#                          plot_scatter_with_distance_bins,
+#                          plot_scatter_matrix_same,
+#                          plot_scatter_matrix_diff)
+from MI_seg_scatter_plot import (plot_scatter_same_diff, 
                          plot_scatter_with_distance_bins,
                          plot_scatter_matrix_same,
                          plot_scatter_matrix_diff)
@@ -21,6 +25,7 @@ if __name__ == "__main__":
     argparser.add_argument('--dataset', type=str, default='pascal', help='pascal or cityscape')
     argparser.add_argument('--preprocess_type', type=str, default='pixel', help='layer or pixel')
     argparser.add_argument('--model', type=str, default='PIGNet_GSPonly', help='ASPP or PIGNet_GSPonly')
+    argparser.add_argument('--valid_pascal', action='store_true', help='Use valid Pascal subset')
     args = argparser.parse_args()
     
     # ============ Data Loading ============
@@ -28,7 +33,7 @@ if __name__ == "__main__":
     print("Loading data...")
     print("=" * 50)
     
-    seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1"
+    seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1{args.valid_pascal}"
     
     with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
         y_in = pickle.load(f)

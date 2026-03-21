@@ -23,9 +23,17 @@ def compute_kde_values(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance)
     num_layers = mi_xt_same.shape[0]
     kde_data = {}
     
-    # Grid 생성 (모든 layer에서 동일)
-    xi = np.linspace(0, 2, 100)
-    yi = np.linspace(0, 2, 100)
+    # xi = np.linspace(0,2,100)
+    # yi = np.linspace(0,2,100)
+    
+    # Grid 생성 (데이터의 실제 범위 사용)
+    all_values = np.concatenate([mi_xt_same.ravel(), mi_ty_same.ravel(), 
+                                  mi_xt_diff.ravel(), mi_ty_diff.ravel()])
+    v_min, v_max = all_values.min(), all_values.max()
+    margin = (v_max - v_min) * 0.1
+    
+    xi = np.linspace(v_min - margin, v_max + margin, 100)
+    yi = np.linspace(v_min - margin, v_max + margin, 100)
     Xi, Yi = np.meshgrid(xi, yi)
     kde_data['Xi'] = Xi
     kde_data['Yi'] = Yi
@@ -46,6 +54,7 @@ def compute_kde_values(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance)
             try:
                 kde_s = gaussian_kde(np.vstack([x_s_full, y_s_full]), bw_method=0.3)
                 Z_s_full = kde_s(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+
             except np.linalg.LinAlgError:
                 Z_s_full = np.zeros_like(Xi)
         else:
@@ -55,8 +64,10 @@ def compute_kde_values(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance)
             try:
                 kde_d = gaussian_kde(np.vstack([x_d_full, y_d_full]), bw_method=0.3)
                 Z_d_full = kde_d(np.vstack([Xi.ravel(), Yi.ravel()])).reshape(Xi.shape)
+
             except np.linalg.LinAlgError:
                 Z_d_full = np.zeros_like(Xi)
+
         else:
             Z_d_full = np.zeros_like(Xi)
         

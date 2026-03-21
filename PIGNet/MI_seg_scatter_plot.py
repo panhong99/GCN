@@ -57,7 +57,6 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     plt.close()
     print(f"Layer {layer_idx+1} DIFF scatter plot saved.")
 
-
 def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
                                      distance, layer_idx, model_name, dataset_name, process_type):
     """

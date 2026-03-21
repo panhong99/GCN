@@ -1,0 +1,2 @@
+"지금 pascal에서 cls 0에 대해서 valid, invalid인 경우를 구분지어서 scatter plot만 그리는 작업을 진행중
+따라서 지금 생성되는 파일은 cls가 invalid할 때의 img들이고, valid일 때의 img는 260320_imgs에 있음"
