@@ -21,17 +21,18 @@ if __name__ == "__main__":
     parser.add_argument('--vmin',            type=int, default=0)
     parser.add_argument('--vmax',            type=int, default=25)
     parser.add_argument('--valid_pascal', action='store_true', 
-                    help='if specified, use valid_0; otherwise use invalid_0')    
+                    help='if specified, use valid_0; otherwise use invalid_0')
+    parser.add_argument('--calcul_type', type=str, default='MI', help='MI or joint')
     args = parser.parse_args()
 
     seg_file_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
                      f"/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1")
 
     if args.dataset != "pascal":
-        cache_path = os.path.join(seg_file_path, 'mi_analysis_cache_same_diff_condmi.pkl')
+        cache_path = os.path.join(seg_file_path, 'analysis_cache_same_diff_joint.pkl')
     else:
         valid_dir = 'valid_0' if args.valid_pascal else 'invalid_0'
-        cache_path = os.path.join(seg_file_path, f'{valid_dir}/mi_analysis_cache_same_diff_condmi.pkl')
+        cache_path = os.path.join(seg_file_path, f'{valid_dir}/analysis_cache_same_diff_joint.pkl')
     
     if not os.path.exists(cache_path):
         print("\n" + "="*60)
@@ -115,17 +116,19 @@ if __name__ == "__main__":
     for li in range(distance.shape[0]):
         plot_scatter_same_diff(li, args.model, args.dataset, args.preprocess_type, 
                                args.vmin, args.vmax, kde_data, 
-                               median_same_x, median_same_y, median_diff_x, median_diff_y)
+                               median_same_x, median_same_y, median_diff_x, median_diff_y,
+                               args.valid_pascal, args.calcul_type)
 
     print("\n=== Distance-Binned KDE Contour Plots ===")
     for li in range(distance.shape[0]):
         plot_scatter_with_distance_bins(li, args.model, args.dataset, args.preprocess_type, 
-                                        args.vmin, args.vmax, kde_data)
+                                        args.vmin, args.vmax, kde_data,
+                                        args.valid_pascal, args.calcul_type)
 
     print("\n=== KDE Matrix Plots ===")
     plot_kde_matrix_same(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
-                         process_type=args.preprocess_type)
+                         process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
     plot_kde_matrix_diff(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
-                         process_type=args.preprocess_type)
+                         process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
 
     print("\n=== Done! ===")

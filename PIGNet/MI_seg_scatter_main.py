@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 import os
 import pickle
 import argparse
-from GCN.PIGNet.MI_seg_mi_compute import compute_and_cache_mi
-from GCN.PIGNet.MI_seg_scatter_plot import (plot_scatter_same_diff, 
+from MI_seg_mi_compute import compute_and_cache_mi
+from MI_seg_scatter_plot import (plot_scatter_same_diff, 
                          plot_scatter_with_distance_bins,
                          plot_scatter_matrix_same,
                          plot_scatter_matrix_diff)
@@ -22,10 +22,11 @@ from MI_seg_scatter_plot import (plot_scatter_same_diff,
 if __name__ == "__main__":
     
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--dataset', type=str, default='pascal', help='pascal or cityscape')
+    argparser.add_argument('--dataset', type=str, default='cityscape', help='pascal or cityscape')
     argparser.add_argument('--preprocess_type', type=str, default='pixel', help='layer or pixel')
     argparser.add_argument('--model', type=str, default='PIGNet_GSPonly', help='ASPP or PIGNet_GSPonly')
     argparser.add_argument('--valid_pascal', action='store_true', help='Use valid Pascal subset')
+    argparser.add_argument('--calcul_type', type=str, default='joint', help='joint or MI')
     args = argparser.parse_args()
     
     # ============ Data Loading ============
@@ -33,7 +34,10 @@ if __name__ == "__main__":
     print("Loading data...")
     print("=" * 50)
     
-    seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1{args.valid_pascal}"
+    if args.dataset == "pascal":
+        seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1/{'valid_0' if args.valid_pascal else 'invalid_0'}"
+    else:
+        seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1"
     
     with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
         y_in = pickle.load(f)
@@ -56,7 +60,7 @@ if __name__ == "__main__":
     
     ignore_label = -1
     distance, mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, ignore_label = \
-        compute_and_cache_mi(seg_file_path, x_in, t_in, y_in, ignore_label)
+        compute_and_cache_mi(seg_file_path, x_in, t_in, y_in, ignore_label, args.calcul_type)
     
     # ============ Plot Setup ============
     plt.rcParams['font.size'] = 13
@@ -76,21 +80,25 @@ if __name__ == "__main__":
     for layer_idx in range(distance.shape[0]):
         plot_scatter_same_diff(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
                               mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
-                              distance[layer_idx], layer_idx, args.model, args.dataset, args.preprocess_type)
+                              distance[layer_idx], layer_idx, args.model, args.dataset, args.preprocess_type,
+                              args.valid_pascal, args.calcul_type)
 
     # Plot per layer with distance bins
     print("\n=== Generating Distance-Binned Scatter Plots ===")
     for layer_idx in range(distance.shape[0]):
         plot_scatter_with_distance_bins(mi_xt_same[layer_idx], mi_ty_same[layer_idx],
                                        mi_xt_diff[layer_idx], mi_ty_diff[layer_idx],
-                                       distance[layer_idx], layer_idx, args.model, args.dataset, args.preprocess_type)
+                                       distance[layer_idx], layer_idx, args.model, args.dataset, args.preprocess_type,
+                                       args.valid_pascal, args.calcul_type)
 
     # Plot matrix: Layer x Distance bins
     print("\n=== Generating Scatter Matrix Plots ===")
     plot_scatter_matrix_same(mi_xt_same, mi_ty_same, distance, 
-                            args.model, args.dataset, args.preprocess_type)
+                            args.model, args.dataset, args.preprocess_type,
+                            args.valid_pascal, args.calcul_type)
     plot_scatter_matrix_diff(mi_xt_diff, mi_ty_diff, distance, 
-                            args.model, args.dataset, args.preprocess_type)
+                            args.model, args.dataset, args.preprocess_type,
+                            args.valid_pascal, args.calcul_type)
 
     print("\n" + "=" * 50)
     print("✓ All plots generated successfully!")

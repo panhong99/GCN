@@ -8,10 +8,11 @@ import matplotlib.pyplot as plt
 import os
 from matplotlib.colors import Normalize
 
-def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vmin, vmax, kde_data, median_same_x, median_same_y, median_diff_x, median_diff_y):
+def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vmin, vmax, kde_data, median_same_x, median_same_y, median_diff_x, median_diff_y, valid_pascal=False, calcul_type='MI'):
     """
     Cache에서 받은 KDE값을 이용해 SAME/DIFF plot 생성
     """
+    valid_str = 'valid' if valid_pascal else 'invalid'
     Z_s = kde_data[f'layer_{layer_idx}']['Z_s']
     Z_d = kde_data[f'layer_{layer_idx}']['Z_d']
     Xi = kde_data['Xi']
@@ -61,7 +62,7 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vm
     ax.set_title(f"Layer {layer_idx+1} - SAME Class KDE Contour", fontsize=13, fontweight='bold')
     
     plt.tight_layout()
-    fname = f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}_SAME.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_kde_layer{layer_idx+1}_SAME.png"
     folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
     os.makedirs(folder_path, exist_ok=True)
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
@@ -93,7 +94,7 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vm
     ax.set_title(f"Layer {layer_idx+1} - DIFF Class KDE Contour", fontsize=13, fontweight='bold')
     
     plt.tight_layout()
-    fname = f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}_DIFF.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_kde_layer{layer_idx+1}_DIFF.png"
     folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
     os.makedirs(folder_path, exist_ok=True)
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')            
@@ -101,10 +102,11 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vm
     print(f"    ✓ DIFF saved")
 
 
-def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process_type, vmin, vmax, kde_data):
+def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process_type, vmin, vmax, kde_data, valid_pascal=False, calcul_type='MI'):
     """
     Distance bin별로 계산된 KDE값을 이용해 거리 구간별 plot 생성 (SAME, DIFF 각각 개별 plot)
     """
+    valid_str = 'valid' if valid_pascal else 'invalid'
     Xi = kde_data['Xi']
     Yi = kde_data['Yi']
     
@@ -167,7 +169,7 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process
                      fontsize=13, fontweight='bold')
 
         plt.tight_layout()
-        fname = (f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}"
+        fname = (f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_kde_layer{layer_idx+1}"
                  f"_dist{int(b_min)}-{int(b_max)}_SAME.png")
         
         folder_path = f"./{model_name}/{dataset_name}/{process_type}/distance"
@@ -200,7 +202,7 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process
                      fontsize=13, fontweight='bold')
 
         plt.tight_layout()
-        fname = (f"{model_name}_{dataset_name}_{process_type}_kde_layer{layer_idx+1}"
+        fname = (f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_kde_layer{layer_idx+1}"
                  f"_dist{int(b_min)}-{int(b_max)}_DIFF.png")
         
         folder_path = f"./{model_name}/{dataset_name}/{process_type}/distance"
@@ -210,11 +212,12 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process
         print("DIFF saved")
 
 
-def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process_type):
+def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process_type, valid_pascal=False, calcul_type='MI'):
     """
     Matrix plot: Layer (y축) x Distance (x축) for SAME mode
     4x4 grid (4 layers, 4 distance bins) - bin별 KDE 사용
     """
+    valid_str = 'valid' if valid_pascal else 'invalid'
     Xi = kde_data['Xi']
     Yi = kde_data['Yi']
     layers = 4
@@ -273,17 +276,18 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
     
     folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
     os.makedirs(folder_path, exist_ok=True)
-    fname = f"{model_name}_{dataset_name}_{process_type}_kde_matrix_SAME.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_kde_matrix_SAME.png"
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ SAME matrix plot saved: {fname}")
 
 
-def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process_type):
+def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process_type, valid_pascal=False, calcul_type='MI'):
     """
     Matrix plot: Layer (y축) x Distance (x축) for DIFF mode
     4x4 grid (4 layers, 4 distance bins) - bin별 KDE 사용
     """
+    valid_str = 'valid' if valid_pascal else 'invalid'
     Xi = kde_data['Xi']
     Yi = kde_data['Yi']
     layers = 4
@@ -342,7 +346,7 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process
     
     folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
     os.makedirs(folder_path, exist_ok=True)
-    fname = f"{model_name}_{dataset_name}_{process_type}_kde_matrix_DIFF.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_kde_matrix_DIFF.png"
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ DIFF matrix plot saved: {fname}")

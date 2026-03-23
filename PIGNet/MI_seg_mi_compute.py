@@ -13,7 +13,6 @@ def _entropy_from_counts(counts: np.ndarray, eps: float = 1e-12) -> float:
     p = counts / np.maximum(1, counts.sum())
     return float(-np.sum(p * np.log2(p + eps)))
 
-
 def cal_mi_x_t_conditional(x: np.ndarray,
                            t: np.ndarray,
                            y: np.ndarray,
@@ -37,6 +36,9 @@ def cal_mi_x_t_conditional(x: np.ndarray,
 
     mi_map_same_flat = np.zeros((P, P), dtype=np.float32)
     mi_map_diff_flat = np.zeros((P, P), dtype=np.float32)
+
+    joint_map_same_flat = np.zeros((P, P), dtype=np.float32)
+    joint_map_diff_flat = np.zeros((P, P), dtype=np.float32)
 
     # Precompute grid distances once
     grid = np.indices((H, W)).reshape(2, -1).T
@@ -69,8 +71,9 @@ def cal_mi_x_t_conditional(x: np.ndarray,
                 h_t = _entropy_from_counts(counts_t, eps)
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
-                mi = h_t + h_x - h_joint
-                mi_map_same_flat[j_t, i_x] = float(mi)
+                # mi = h_t + h_x - h_joint
+                # mi_map_same_flat[j_t, i_x] = float(mi)
+                joint_map_same_flat[j_t, i_x] = float(h_joint)
 
             # DIFF mode
             valid_diff = valid_base & (y_i != y_j)
@@ -88,13 +91,18 @@ def cal_mi_x_t_conditional(x: np.ndarray,
                 h_t = _entropy_from_counts(counts_t, eps)
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
-                mi = h_t + h_x - h_joint
-                mi_map_diff_flat[j_t, i_x] = float(mi)
+                # mi = h_t + h_x - h_joint
+                # mi_map_diff_flat[j_t, i_x] = float(mi)
+                joint_map_diff_flat[j_t, i_x] = float(h_joint)
 
-    mi_map_same = mi_map_same_flat.reshape(H, W, H, W)
-    mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
-    return mi_map_same, mi_map_diff, euc_map
+    # mi_map_same = mi_map_same_flat.reshape(H, W, H, W)
+    # mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
 
+    joint_map_same = joint_map_same_flat.reshape(H, W, H, W)
+    joint_map_diff = joint_map_diff_flat.reshape(H, W, H, W)
+
+    # return mi_map_same, mi_map_diff, euc_map
+    return joint_map_same, joint_map_diff, euc_map
 
 def cal_seg_mi_t_y_conditional(t: np.ndarray,
                                y: np.ndarray,
@@ -118,6 +126,9 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
 
     mi_map_same_flat = np.zeros((P, P), dtype=np.float32)
     mi_map_diff_flat = np.zeros((P, P), dtype=np.float32)
+
+    joint_map_same_flat = np.zeros((P, P), dtype=np.float32)
+    joint_map_diff_flat = np.zeros((P, P), dtype=np.float32)
 
     grid = np.indices((H, W)).reshape(2, -1).T
     h_diff = grid[:, 0:1] - grid[:, 0:1].T
@@ -150,8 +161,10 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
                 h_y = _entropy_from_counts(counts_y, eps)
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
-                mi = h_t + h_y - h_joint
-                mi_map_same_flat[i_t, j_y] = float(mi)
+                # mi = h_t + h_y - h_joint
+                # mi_map_same_flat[i_t, j_y] = float(mi)
+
+                joint_map_same_flat[i_t, j_y] = float(h_joint)
 
             # DIFF mode
             valid_diff = valid_base & (y_i_all != y_j_all)
@@ -170,22 +183,23 @@ def cal_seg_mi_t_y_conditional(t: np.ndarray,
                 h_y = _entropy_from_counts(counts_y, eps)
                 h_joint = _entropy_from_counts(counts_joint, eps)
 
-                mi = h_t + h_y - h_joint
-                mi_map_diff_flat[i_t, j_y] = float(mi)
+                # mi = h_t + h_y - h_joint
+                # mi_map_diff_flat[i_t, j_y] = float(mi)
+                joint_map_diff_flat[i_t, j_y] = float(h_joint)
 
-    mi_map_same = mi_map_same_flat.reshape(H, W, H, W)
-    mi_map_diff = mi_map_diff_flat.reshape(H, W, H, W)
-    return mi_map_same, mi_map_diff, euc_map
+    joint_map_same = joint_map_same_flat.reshape(H, W, H, W)
+    joint_map_diff = joint_map_diff_flat.reshape(H, W, H, W)
+    return joint_map_same, joint_map_diff, euc_map
 
 
-def compute_and_cache_mi(seg_file_path, x_in, t_in, y_in, ignore_label=-1):
+def compute_and_cache_mi(seg_file_path, x_in, t_in, y_in, ignore_label=-1,calcul_type='joint'):
     """
     캐시 확인 후 MI 계산 또는 로드
     
     Returns:
         distance, mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, ignore_label
     """
-    cache_file = os.path.join(seg_file_path, 'mi_analysis_cache_same_diff_condmi.pkl')
+    cache_file = os.path.join(seg_file_path, f'analysis_cache_same_diff_{calcul_type}.pkl')
     
     # 캐시 확인
     if os.path.exists(cache_file):

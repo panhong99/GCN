@@ -9,14 +9,16 @@ import os
 
 
 def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
-                           distance, layer_idx, model_name, dataset_name, process_type):
+                           distance, layer_idx, model_name, dataset_name, process_type,
+                           valid_pascal=False, calcul_type='MI'):
     """
     Plot scatter maps for SAME and DIFF separately in Information Plane.
     Color intensity is based on distance.
     """
+    valid_str = 'valid' if valid_pascal else 'invalid'
     
     # Create folder structure
-    folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
+    folder_path = f"./{model_name}/{dataset_name}/{process_type}/joint/all"
     os.makedirs(folder_path, exist_ok=True)
     
     # Plot SAME
@@ -33,7 +35,7 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    fname_same = f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx+1}_SAME.png"
+    fname_same = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_scatter_layer{layer_idx+1}_SAME.png"
     plt.savefig(os.path.join(folder_path, fname_same), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Layer {layer_idx+1} SAME scatter plot saved.")
@@ -52,16 +54,18 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     ax.grid(True, alpha=0.3)
     
     plt.tight_layout()
-    fname_diff = f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx+1}_DIFF.png"
+    fname_diff = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_scatter_layer{layer_idx+1}_DIFF.png"
     plt.savefig(os.path.join(folder_path, fname_diff), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Layer {layer_idx+1} DIFF scatter plot saved.")
 
 def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, 
-                                     distance, layer_idx, model_name, dataset_name, process_type):
+                                     distance, layer_idx, model_name, dataset_name, process_type,
+                                     valid_pascal=False, calcul_type='MI'):
     """
     Plot scatter maps with distance binning (10-unit intervals).
     """
+    valid_str = 'valid' if valid_pascal else 'invalid'
     
     # Create folder structure
     folder_path = f"./{model_name}/{dataset_name}/{process_type}/distance"
@@ -111,18 +115,20 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         plt.suptitle(f"Layer {layer_idx+1} - Scatter Plot Comparison (Distance Bin: {bin_min}-{bin_max})", 
                      fontsize=13, fontweight='bold', y=1.00)
         plt.tight_layout()
-        fname = f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx+1}_dist{int(bin_min)}-{int(bin_max)}.png"
+        fname = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_scatter_layer{layer_idx+1}_dist{int(bin_min)}-{int(bin_max)}.png"
         plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
         plt.close()
         print(f"Layer {layer_idx+1} distance [{bin_min}-{bin_max}) scatter plot saved.")
 
 
 def plot_scatter_matrix_same(mi_xt_same, mi_ty_same, distance, 
-                             model_name, dataset_name, process_type):
+                             model_name, dataset_name, process_type,
+                             valid_pascal=False, calcul_type='MI'):
     """
     Matrix plot: Layer (y축) x Distance (x축) for SAME mode
     4x4 grid (4 layers, 4 distance bins)
     """
+    valid_str = 'valid' if valid_pascal else 'invalid'
     layers = mi_xt_same.shape[0]
     dist_bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40
     num_dist = len(dist_bins) - 1
@@ -172,18 +178,20 @@ def plot_scatter_matrix_same(mi_xt_same, mi_ty_same, distance,
                 fontsize=14, fontweight='bold', y=0.995)
     plt.tight_layout()
     
-    fname = f"{model_name}_{dataset_name}_{process_type}_scatter_matrix_SAME.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_scatter_matrix_SAME.png"
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ SAME scatter matrix plot saved: {fname}")
 
 
 def plot_scatter_matrix_diff(mi_xt_diff, mi_ty_diff, distance, 
-                             model_name, dataset_name, process_type):
+                             model_name, dataset_name, process_type,
+                             valid_pascal=False, calcul_type='MI'):
     """
     Matrix plot: Layer (y축) x Distance (x축) for DIFF mode
     4x4 grid (4 layers, 4 distance bins)
     """
+    valid_str = 'valid' if valid_pascal else 'invalid'
     layers = mi_xt_diff.shape[0]
     dist_bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40
     num_dist = len(dist_bins) - 1
@@ -233,7 +241,7 @@ def plot_scatter_matrix_diff(mi_xt_diff, mi_ty_diff, distance,
                 fontsize=14, fontweight='bold', y=0.995)
     plt.tight_layout()
     
-    fname = f"{model_name}_{dataset_name}_{process_type}_scatter_matrix_DIFF.png"
+    fname = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_scatter_matrix_DIFF.png"
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ DIFF scatter matrix plot saved: {fname}")
