@@ -8,11 +8,11 @@ import matplotlib.pyplot as plt
 import os
 import pickle
 import argparse
-from MI_seg_compute import compute_and_cache_mi
-# from GCN.PIGNet.MI_seg_scatter_plot import (plot_scatter_same_diff, 
-#                          plot_scatter_with_distance_bins,
-#                          plot_scatter_matrix_same,
-#                          plot_scatter_matrix_diff)
+from GCN.PIGNet.MI_seg_mi_compute import compute_and_cache_mi
+from GCN.PIGNet.MI_seg_scatter_plot import (plot_scatter_same_diff, 
+                         plot_scatter_with_distance_bins,
+                         plot_scatter_matrix_same,
+                         plot_scatter_matrix_diff)
 from MI_seg_scatter_plot import (plot_scatter_same_diff, 
                          plot_scatter_with_distance_bins,
                          plot_scatter_matrix_same,
