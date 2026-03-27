@@ -23,8 +23,10 @@ def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vm
     print(f"\n  Layer {layer_idx+1}: SAME n={n_s}, DIFF n={n_d}")
 
     # density clip (핵심)
-    Z_s_plot = np.clip(Z_s, vmin, vmax)
-    Z_d_plot = np.clip(Z_d, vmin, vmax)
+    # Z_s_plot = np.clip(Z_s, vmin, vmax)
+    # Z_d_plot = np.clip(Z_d, vmin, vmax)
+    Z_s_plot = Z_s
+    Z_d_plot = Z_d
 
     # norm + levels 고정
     norm = Normalize(vmin=vmin, vmax=vmax)
@@ -142,8 +144,10 @@ def plot_scatter_with_distance_bins(layer_idx, model_name, dataset_name, process
         print(f"    dist [{b_min:.0f}–{b_max:.0f}): ", end="")
 
         # density clip
-        Z_s_plot = np.clip(Z_s, vmin, vmax)
-        Z_d_plot = np.clip(Z_d, vmin, vmax)
+        # Z_s_plot = np.clip(Z_s, vmin, vmax)
+        # Z_d_plot = np.clip(Z_d, vmin, vmax)
+        Z_s_plot = Z_s
+        Z_d_plot = Z_d
 
         # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
         # SAME 개별 plot
@@ -249,7 +253,8 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
             mi_xt_s = bin_data['mi_xt_same']
             mi_ty_s = bin_data['mi_ty_same']
             
-            Z_s_plot = np.clip(Z_s, vmin, vmax)
+            # Z_s_plot = np.clip(Z_s, vmin, vmax)
+            Z_s_plot = Z_s
             Z_masked = np.ma.masked_less_equal(Z_s_plot, threshold)
             cf = ax.contourf(Xi, Yi, Z_masked, levels=levels, cmap=cmap_s, norm=norm)
             
@@ -281,6 +286,173 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
     plt.close()
     print(f"✓ SAME matrix plot saved: {fname}")
 
+
+def plot_ratio_boxplot_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance,
+                                    model_name, dataset_name, process_type,
+                                    valid_pascal=False, calcul_type='MI', median_alpha=0.8):
+    """
+    Distance bin별로 subplot 생성 (1, 4)
+    각 subplot에서 x축=Layer(1-4), y축=ratio boxplot 표시
+    + 각 layer의 median을 point로 표시하고 line으로 연결
+    
+    Parameters:
+    -----------
+    mi_xt_same, mi_ty_same: shape (n_layers, n_samples)
+    mi_xt_diff, mi_ty_diff: shape (n_layers, n_samples)
+    distance: shape (n_layers, n_samples)
+    median_alpha: float, median point의 투명도 (0~1)
+    """
+    valid_str = 'valid' if valid_pascal else 'invalid'
+    
+    dist_bins = np.arange(0, 50, 10)  # 0-10, 10-20, 20-30, 30-40
+    num_dist = len(dist_bins) - 1      # 4
+    n_layers = mi_xt_same.shape[0]     # 4
+    
+    eps = 1e-8
+    layer_labels = [f"L{i+1}" for i in range(n_layers)]
+    x_positions = np.arange(1, n_layers + 1)  # x축 위치: 1, 2, 3, 4
+    
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # SAME 그래프
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    fig_s, axes_s = plt.subplots(1, num_dist, figsize=(20, 5), facecolor='white')
+    fig_s.suptitle(f"{model_name} {dataset_name} — SAME: I(X;T)/I(T;Y) Ratio",
+                   fontsize=14, fontweight='bold')
+    
+    for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
+        ax = axes_s[dist_idx]
+        ax.set_facecolor('white')
+        
+        same_ratios = []      # list of arrays (layer별)
+        median_values = []    # median point 저장
+        
+        for layer_idx in range(n_layers):
+            # 해당 layer의 distance bin 범위 내 데이터 추출
+            mask = (distance[layer_idx] >= b_min) & (distance[layer_idx] < b_max)
+            
+            mi_xt = np.asarray(mi_xt_same[layer_idx][mask], dtype=float)
+            mi_ty = np.asarray(mi_ty_same[layer_idx][mask], dtype=float)
+            
+            ratio = mi_xt / (mi_ty + eps)
+            same_ratios.append(ratio)
+            
+            # Median 값 저장
+            if len(ratio) > 0:
+                median_values.append(np.median(ratio))
+            else:
+                median_values.append(np.nan)
+        
+        # Boxplot 그리기
+        bp = ax.boxplot(same_ratios, positions=x_positions, patch_artist=True, 
+                        showfliers=False, widths=0.6, labels=layer_labels)
+        
+        for patch in bp['boxes']:
+            patch.set_facecolor('coral')
+            patch.set_alpha(0.7)
+        
+        for median in bp['medians']:
+            median.set_color('salmon')
+            median.set_linewidth(1.5)
+        
+        # Median point 표시 및 line 연결
+        median_values = np.array(median_values)
+        valid_mask = ~np.isnan(median_values)
+        valid_x = x_positions[valid_mask]
+        valid_y = median_values[valid_mask]
+        
+        if len(valid_x) > 0:
+            # Point 표시 (테두리 없음)
+            ax.scatter(valid_x, valid_y, s=100, c='darkred', marker='o', 
+                      zorder=5, alpha=median_alpha)
+            # Line 연결
+            if len(valid_x) > 1:
+                ax.plot(valid_x, valid_y, 'r-', linewidth=2, alpha=0.6, zorder=4)
+        
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(layer_labels)
+        ax.set_xlabel("Layer", fontsize=11)
+        if dist_idx == 0:
+            ax.set_ylabel("I(X;T) / I(T;Y)", fontsize=11)
+        ax.set_title(f"Distance [{b_min:.0f}–{b_max:.0f})", fontsize=11, fontweight='bold')
+        ax.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    folder_path = f"./{model_name}/{dataset_name}/{process_type}/ratio"
+    os.makedirs(folder_path, exist_ok=True)
+    fname = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_ratio_boxplot_SAME.png"
+    plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✓ SAME boxplot saved: {fname}")
+    
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # DIFF 그래프
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    fig_d, axes_d = plt.subplots(1, num_dist, figsize=(20, 5), facecolor='white')
+    fig_d.suptitle(f"{model_name} {dataset_name} — DIFF: I(X;T)/I(T;Y) Ratio",
+                   fontsize=14, fontweight='bold')
+    
+    for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
+        ax = axes_d[dist_idx]
+        ax.set_facecolor('white')
+        
+        diff_ratios = []      # list of arrays (layer별)
+        median_values = []    # median point 저장
+        
+        for layer_idx in range(n_layers):
+            # 해당 layer의 distance bin 범위 내 데이터 추출
+            mask = (distance[layer_idx] >= b_min) & (distance[layer_idx] < b_max)
+            
+            mi_xt = np.asarray(mi_xt_diff[layer_idx][mask], dtype=float)
+            mi_ty = np.asarray(mi_ty_diff[layer_idx][mask], dtype=float)
+            
+            ratio = mi_xt / (mi_ty + eps)
+            diff_ratios.append(ratio)
+            
+            # Median 값 저장
+            if len(ratio) > 0:
+                median_values.append(np.median(ratio))
+            else:
+                median_values.append(np.nan)
+        
+        # Boxplot 그리기
+        bp = ax.boxplot(diff_ratios, positions=x_positions, patch_artist=True, 
+                        showfliers=False, widths=0.6, labels=layer_labels)
+        
+        for patch in bp['boxes']:
+            patch.set_facecolor('azure')
+            patch.set_alpha(0.7)
+        
+        for median in bp['medians']:
+            median.set_color('navy')
+            median.set_linewidth(1.5)
+        
+        # Median point 표시 및 line 연결
+        median_values = np.array(median_values)
+        valid_mask = ~np.isnan(median_values)
+        valid_x = x_positions[valid_mask]
+        valid_y = median_values[valid_mask]
+        
+        if len(valid_x) > 0:
+            # Point 표시 (테두리 없음)
+            ax.scatter(valid_x, valid_y, s=100, c='darkblue', marker='o', 
+                      zorder=5, alpha=median_alpha)
+            # Line 연결
+            if len(valid_x) > 1:
+                ax.plot(valid_x, valid_y, 'b-', linewidth=2, alpha=0.6, zorder=4)
+        
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(layer_labels)
+        ax.set_xlabel("Layer", fontsize=11)
+        if dist_idx == 0:
+            ax.set_ylabel("I(X;T) / I(T;Y)", fontsize=11)
+        ax.set_title(f"Distance [{b_min:.0f}–{b_max:.0f})", fontsize=11, fontweight='bold')
+        ax.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    fname = f"{model_name}_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_ratio_boxplot_DIFF.png"
+    plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✓ DIFF boxplot saved: {fname}")
 
 def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process_type, valid_pascal=False, calcul_type='MI'):
     """
@@ -319,7 +491,8 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process
             mi_xt_d = bin_data['mi_xt_diff']
             mi_ty_d = bin_data['mi_ty_diff']
             
-            Z_d_plot = np.clip(Z_d, vmin, vmax)
+            # Z_d_plot = np.clip(Z_d, vmin, vmax)
+            Z_d_plot = Z_d
             Z_masked = np.ma.masked_less_equal(Z_d_plot, threshold)
             cf = ax.contourf(Xi, Yi, Z_masked, levels=levels, cmap=cmap_d, norm=norm)
             

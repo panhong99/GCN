@@ -10,19 +10,20 @@ import pickle
 import argparse
 from MI_seg_kde_compute import compute_kde_values
 from MI_seg_kde_plot import (plot_scatter_same_diff, plot_scatter_with_distance_bins,
-                             plot_kde_matrix_same, plot_kde_matrix_diff)
+                             plot_kde_matrix_same, plot_kde_matrix_diff,
+                             plot_ratio_boxplot_distance_bins)
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset',         type=str, default='cityscape')
-    parser.add_argument('--preprocess_type', type=str, default='layer', help='pixel or layer')
-    parser.add_argument('--model',           type=str, default='ASPP')
+    parser.add_argument('--dataset',         type=str, default='pascal')
+    parser.add_argument('--preprocess_type', type=str, default='pixel', help='pixel or layer')
+    parser.add_argument('--model',           type=str, default='PIGNet_GSPonly')
     parser.add_argument('--vmin',            type=int, default=0)
     parser.add_argument('--vmax',            type=int, default=25)
-    parser.add_argument('--valid_pascal', action='store_true', 
+    parser.add_argument('--valid_pascal', action='store_true', default=True, 
                     help='if specified, use valid_0; otherwise use invalid_0')
-    parser.add_argument('--calcul_type', type=str, default='MI', help='MI or joint')
+    parser.add_argument('--calcul_type', type=str, default='joint', help='MI or joint')
     args = parser.parse_args()
 
     seg_file_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
@@ -111,24 +112,30 @@ if __name__ == "__main__":
     else:
         print("✓ KDE cache loaded successfully!\n")
 
-    # ── Plot ───────────────────────────────────────────────────────
-    print("=== KDE Contour Plots (SAME vs DIFF) ===")
-    for li in range(distance.shape[0]):
-        plot_scatter_same_diff(li, args.model, args.dataset, args.preprocess_type, 
-                               args.vmin, args.vmax, kde_data, 
-                               median_same_x, median_same_y, median_diff_x, median_diff_y,
-                               args.valid_pascal, args.calcul_type)
+    # # ── Plot ───────────────────────────────────────────────────────
+    # print("=== KDE Contour Plots (SAME vs DIFF) ===")
+    # for li in range(distance.shape[0]):
+    #     plot_scatter_same_diff(li, args.model, args.dataset, args.preprocess_type, 
+    #                            args.vmin, args.vmax, kde_data, 
+    #                            median_same_x, median_same_y, median_diff_x, median_diff_y,
+    #                            args.valid_pascal, args.calcul_type)
 
-    print("\n=== Distance-Binned KDE Contour Plots ===")
-    for li in range(distance.shape[0]):
-        plot_scatter_with_distance_bins(li, args.model, args.dataset, args.preprocess_type, 
-                                        args.vmin, args.vmax, kde_data,
-                                        args.valid_pascal, args.calcul_type)
+    # print("\n=== Distance-Binned KDE Contour Plots ===")
+    # for li in range(distance.shape[0]):
+    #     plot_scatter_with_distance_bins(li, args.model, args.dataset, args.preprocess_type, 
+    #                                     args.vmin, args.vmax, kde_data,
+    #                                     args.valid_pascal, args.calcul_type)
 
-    print("\n=== KDE Matrix Plots ===")
-    plot_kde_matrix_same(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
-                         process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
-    plot_kde_matrix_diff(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
-                         process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
+    # print("\n=== KDE Matrix Plots ===")
+    # plot_kde_matrix_same(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
+    #                      process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
+    # plot_kde_matrix_diff(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
+    #                      process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
+
+    print("\n=== Ratio Boxplot ===")
+    plot_ratio_boxplot_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance,
+                                     args.model, args.dataset, args.preprocess_type,
+                                     valid_pascal=args.valid_pascal,
+                                     calcul_type=args.calcul_type)
 
     print("\n=== Done! ===")

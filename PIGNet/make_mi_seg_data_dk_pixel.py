@@ -87,10 +87,10 @@ def main(config, model_file, model_path):
 
     device = f"cuda:{config.gpu}" if torch.cuda.is_available() else "cpu"
 
-    if config.dataset == "cityscapes":
-        invalid_cls = 255
-    else: # pascal
-        invalid_cls = 255
+    # if config.dataset == "cityscapes":
+    #     invalid_cls = 255
+    # else: # pascal
+    #     invalid_cls = 255
 
     dataset = get_dataset(config)
     model = get_model(config, dataset)
