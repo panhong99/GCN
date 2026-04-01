@@ -16,9 +16,9 @@ from MI_seg_kde_plot import (plot_scatter_same_diff, plot_scatter_with_distance_
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset',         type=str, default='pascal')
+    parser.add_argument('--dataset',         type=str, default='cityscape', help='pascal or cityscape')
     parser.add_argument('--preprocess_type', type=str, default='pixel', help='pixel or layer')
-    parser.add_argument('--model',           type=str, default='PIGNet_GSPonly')
+    parser.add_argument('--model',           type=str, default='ASPP')
     parser.add_argument('--vmin',            type=int, default=0)
     parser.add_argument('--vmax',            type=int, default=25)
     parser.add_argument('--valid_pascal', action='store_true', default=True, 

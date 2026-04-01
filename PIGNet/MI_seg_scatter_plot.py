@@ -24,7 +24,7 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     # Plot SAME
     fig, ax = plt.subplots(figsize=(10, 8))
     scatter_same = ax.scatter(mi_xt_same, mi_ty_same, c=distance, cmap='Reds', 
-                              s=50, alpha=0.7, edgecolors='darkred', linewidth=0.5)
+                              s=50, alpha=0.7, edgecolors='none', linewidth=0.5)
     
     cbar_same = plt.colorbar(scatter_same, ax=ax)
     cbar_same.set_label('Euclidean Distance', fontsize=11)
@@ -43,7 +43,7 @@ def plot_scatter_same_diff(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff,
     # Plot DIFF
     fig, ax = plt.subplots(figsize=(10, 8))
     scatter_diff = ax.scatter(mi_xt_diff, mi_ty_diff, c=distance, cmap='Blues', 
-                              s=50, alpha=0.7, edgecolors='darkblue', linewidth=0.5)
+                              s=50, alpha=0.7, edgecolors='none', linewidth=0.5)
     
     cbar_diff = plt.colorbar(scatter_diff, ax=ax)
     cbar_diff.set_label('Euclidean Distance', fontsize=11)
@@ -89,7 +89,7 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         dist_bin = distance[mask]
         scatter_same = axes[0].scatter(mi_xt_same[mask], mi_ty_same[mask], 
                                        c=dist_bin, cmap='Reds', 
-                                       s=50, alpha=0.7, edgecolors='darkred', linewidth=0.5)
+                                       s=50, alpha=0.7, edgecolors='none', linewidth=0.5)
         
         cbar_same = plt.colorbar(scatter_same, ax=axes[0])
         cbar_same.set_label('Euclidean Distance', fontsize=10)
@@ -102,7 +102,7 @@ def plot_scatter_with_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_di
         # Plot DIFF
         scatter_diff = axes[1].scatter(mi_xt_diff[mask], mi_ty_diff[mask], 
                                        c=dist_bin, cmap='Blues', 
-                                       s=50, alpha=0.7, edgecolors='darkblue', linewidth=0.5)
+                                       s=50, alpha=0.7, edgecolors='none', linewidth=0.5)
         
         cbar_diff = plt.colorbar(scatter_diff, ax=axes[1])
         cbar_diff.set_label('Euclidean Distance', fontsize=10)
@@ -159,7 +159,7 @@ def plot_scatter_matrix_same(mi_xt_same, mi_ty_same, distance,
             scatter = ax.scatter(mi_xt_same[layer_idx][mask], 
                                 mi_ty_same[layer_idx][mask], 
                                 c=dist_bin, cmap='Reds', 
-                                s=30, alpha=0.6, edgecolors='darkred', linewidth=0.3)
+                                s=30, alpha=0.6, edgecolors='none', linewidth=0.3)
             
             # Ticks 제거
             ax.set_xticklabels([])
@@ -222,7 +222,7 @@ def plot_scatter_matrix_diff(mi_xt_diff, mi_ty_diff, distance,
             scatter = ax.scatter(mi_xt_diff[layer_idx][mask], 
                                 mi_ty_diff[layer_idx][mask], 
                                 c=dist_bin, cmap='Blues', 
-                                s=30, alpha=0.6, edgecolors='darkblue', linewidth=0.3)
+                                s=30, alpha=0.6, edgecolors='none', linewidth=0.3)
             
             # Ticks 제거
             ax.set_xticklabels([])

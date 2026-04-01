@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from matplotlib.colors import Normalize
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 def plot_scatter_same_diff(layer_idx, model_name, dataset_name, process_type, vmin, vmax, kde_data, median_same_x, median_same_y, median_diff_x, median_diff_y, valid_pascal=False, calcul_type='MI'):
     """
@@ -220,6 +221,7 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
     """
     Matrix plot: Layer (y축) x Distance (x축) for SAME mode
     4x4 grid (4 layers, 4 distance bins) - bin별 KDE 사용
+    전체 figure 오른쪽에 하나의 colorbar 표시
     """
     valid_str = 'valid' if valid_pascal else 'invalid'
     Xi = kde_data['Xi']
@@ -234,7 +236,9 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
     cmap_s.set_bad('white')
     threshold = 1e-3
     
-    fig, axes = plt.subplots(layers, num_dist, figsize=(20, 18), facecolor='white')
+    fig, axes = plt.subplots(layers, num_dist, figsize=(22, 18), facecolor='white')
+    
+    last_cf = None  # 마지막 contourf를 저장할 변수
     
     for layer_idx in range(layers):
         for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
@@ -257,6 +261,7 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
             Z_s_plot = Z_s
             Z_masked = np.ma.masked_less_equal(Z_s_plot, threshold)
             cf = ax.contourf(Xi, Yi, Z_masked, levels=levels, cmap=cmap_s, norm=norm)
+            last_cf = cf  # 마지막 contourf 저장
             
             # Median 포인트 표시 (bin 데이터에서)
             if len(mi_xt_s) > 0:
@@ -278,6 +283,11 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
     
     plt.suptitle(f"{model_name}_{dataset_name}_KDE Matrix - SAME Mode", fontsize=14, fontweight='bold', y=0.995)
     plt.tight_layout()
+
+    # 전체 matrix에 하나의 colorbar (tight_layout 이후 axes에 위임)
+    if last_cf is not None:
+        cbar = fig.colorbar(last_cf, ax=axes.ravel().tolist())
+        cbar.set_label('Density', fontsize=12, fontweight='bold')
     
     folder_path = f"./{model_name}/{dataset_name}/{process_type}/all"
     os.makedirs(folder_path, exist_ok=True)
@@ -285,7 +295,6 @@ def plot_kde_matrix_same(model_name, dataset_name, vmin, vmax, kde_data, process
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
     print(f"✓ SAME matrix plot saved: {fname}")
-
 
 def plot_ratio_boxplot_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance,
                                     model_name, dataset_name, process_type,
@@ -316,7 +325,7 @@ def plot_ratio_boxplot_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_d
     # SAME 그래프
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     fig_s, axes_s = plt.subplots(1, num_dist, figsize=(20, 5), facecolor='white')
-    fig_s.suptitle(f"{model_name} {dataset_name} — SAME: I(X;T)/I(T;Y) Ratio",
+    fig_s.suptitle(f"{model_name} {dataset_name} — SAME: Joint(X;T)/I(T;Y) Ratio",
                    fontsize=14, fontweight='bold')
     
     for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
@@ -333,9 +342,11 @@ def plot_ratio_boxplot_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_d
             mi_xt = np.asarray(mi_xt_same[layer_idx][mask], dtype=float)
             mi_ty = np.asarray(mi_ty_same[layer_idx][mask], dtype=float)
             
-            ratio = mi_xt / (mi_ty + eps)
+            # NaN, inf 포함하지 않고 division by zero 방지하는 유효한 값만 필터링
+            valid_mask = np.isfinite(mi_xt) & np.isfinite(mi_ty) & (mi_ty != 0)
+            ratio = mi_xt[valid_mask] / mi_ty[valid_mask]
             same_ratios.append(ratio)
-            
+                        
             # Median 값 저장
             if len(ratio) > 0:
                 median_values.append(np.median(ratio))
@@ -388,7 +399,7 @@ def plot_ratio_boxplot_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_d
     # DIFF 그래프
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     fig_d, axes_d = plt.subplots(1, num_dist, figsize=(20, 5), facecolor='white')
-    fig_d.suptitle(f"{model_name} {dataset_name} — DIFF: I(X;T)/I(T;Y) Ratio",
+    fig_d.suptitle(f"{model_name} {dataset_name} — DIFF: Joint(X;T)/I(T;Y) Ratio",
                    fontsize=14, fontweight='bold')
     
     for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
@@ -405,7 +416,9 @@ def plot_ratio_boxplot_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_d
             mi_xt = np.asarray(mi_xt_diff[layer_idx][mask], dtype=float)
             mi_ty = np.asarray(mi_ty_diff[layer_idx][mask], dtype=float)
             
-            ratio = mi_xt / (mi_ty + eps)
+            # NaN, inf 포함하지 않고 division by zero 방지하는 유효한 값만 필터링
+            valid_mask = np.isfinite(mi_xt) & np.isfinite(mi_ty) & (mi_ty != 0)
+            ratio = mi_xt[valid_mask] / mi_ty[valid_mask]
             diff_ratios.append(ratio)
             
             # Median 값 저장
@@ -458,6 +471,7 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process
     """
     Matrix plot: Layer (y축) x Distance (x축) for DIFF mode
     4x4 grid (4 layers, 4 distance bins) - bin별 KDE 사용
+    전체 figure 오른쪽에 하나의 colorbar 표시
     """
     valid_str = 'valid' if valid_pascal else 'invalid'
     Xi = kde_data['Xi']
@@ -472,7 +486,9 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process
     cmap_d.set_bad('white')
     threshold = 1e-3
     
-    fig, axes = plt.subplots(layers, num_dist, figsize=(20, 18), facecolor='white')
+    fig, axes = plt.subplots(layers, num_dist, figsize=(22, 18), facecolor='white')
+    
+    last_cf = None  # 마지막 contourf를 저장할 변수
     
     for layer_idx in range(layers):
         for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
@@ -495,6 +511,7 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process
             Z_d_plot = Z_d
             Z_masked = np.ma.masked_less_equal(Z_d_plot, threshold)
             cf = ax.contourf(Xi, Yi, Z_masked, levels=levels, cmap=cmap_d, norm=norm)
+            last_cf = cf  # 마지막 contourf 저장
             
             # Median 포인트 표시 (bin 데이터에서)
             if len(mi_xt_d) > 0:
@@ -513,6 +530,24 @@ def plot_kde_matrix_diff(model_name, dataset_name, vmin, vmax, kde_data, process
             # X축 레이블 (상단만)
             if layer_idx == 0:
                 ax.set_title(f"Dist [{b_min:.0f}-{b_max:.0f})", fontsize=11, fontweight='bold')
+    
+    # 전체 figure에 하나의 colorbar 추가 (matrix 높이와 동일하게)
+    if last_cf is not None:
+        # Matrix 영역의 위치 정보 가져오기
+        left = axes[0, 0].get_position().x0
+        right = axes[0, -1].get_position().x1
+        top = axes[0, 0].get_position().y1
+        bottom = axes[-1, 0].get_position().y0
+        
+        # Colorbar axis를 matrix 높이와 동일하게 생성
+        cbar_left = right + 0.01
+        cbar_width = 0.015
+        cbar_height = top - bottom
+        cbar_bottom = bottom
+        
+        cax = fig.add_axes([cbar_left, cbar_bottom, cbar_width, cbar_height])
+        cbar = fig.colorbar(last_cf, cax=cax)
+        cbar.set_label('Density', fontsize=12, fontweight='bold')
     
     plt.suptitle(f"{model_name}_{dataset_name}_KDE Matrix - DIFF Mode", fontsize=14, fontweight='bold', y=0.995)
     plt.tight_layout()

@@ -56,7 +56,9 @@ def cal_mi_x_t(x, t):
         h_t_all[i] = _entropy_from_counts(counts_t, eps)
     
     # Calculate MI for all pixel pairs
-    mi_map_flat = np.zeros((num_pixels, num_pixels))
+    # mi_map_flat = np.zeros((num_pixels, num_pixels))
+    joint_map_flat = np.zeros((num_pixels, num_pixels))
+
     
     for i_t in trange(num_pixels, desc="MI(X;T) - Classification", leave=False):
         t_vec = t_flat[:, i_t]
@@ -71,7 +73,8 @@ def cal_mi_x_t(x, t):
             
             # MI = H(T) + H(X) - H(T, X)
             mi_val = h_t_all[i_t] + h_x_all[i_x] - h_joint
-            mi_map_flat[i_t, i_x] = float(mi_val)
+            # mi_map_flat[i_t, i_x] = float(mi_val)
+            joint_map_flat[i_t, i_x] = float(h_joint)
     
     # Compute Euclidean distance map
     grid = np.indices((H, W)).reshape(2, -1).T
@@ -79,9 +82,9 @@ def cal_mi_x_t(x, t):
     w_diff = grid[:, 1:2] - grid[:, 1:2].T
     euc_map = np.sqrt(h_diff**2 + w_diff**2).reshape(H, W, H, W)
     
-    mi_map = mi_map_flat.reshape(H, W, H, W)
+    joint_map = joint_map_flat.reshape(H, W, H, W)
     
-    return mi_map, euc_map
+    return joint_map, euc_map, # mi_map
 
 def cal_mi_t_y(t, y, eps=1e-12):
     """
@@ -113,7 +116,8 @@ def cal_mi_t_y(t, y, eps=1e-12):
         mi_map: (H, W) - MI[h,w] = I(T[h,w]; Y)
     """
     N, H, W = t.shape
-    mi_map = np.zeros((H, W))
+    # mi_map = np.zeros((H, W))
+    joint_map = np.zeros((H, W))
     
     # 1. Calculate H(Y) once (constant for all pixels)
     y_counts = np.bincount(y.astype(np.int32))
@@ -149,11 +153,12 @@ def cal_mi_t_y(t, y, eps=1e-12):
             
             # MI = H(T) + H(Y) - H(T, Y)
             pixel_idx = h * W + w
-            mi_map[h, w] = h_t_all[pixel_idx] + h_y - h_joint
-    
-    return mi_map
+            # mi_map[h, w] = h_t_all[pixel_idx] + h_y - h_joint
+            joint_map[h, w] = h_joint
 
-def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, dataset_name, process_type, group_name=None, cluster_num=None):
+    return joint_map
+
+def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, dataset_name, process_type, group_name=None, cluster_num=None, calcul_type=None):
     """
     Plot scatter map in Information Plane for classification task.
     X-axis: I(X; T), Y-axis: I(T; Y), Color: Euclidean Distance
@@ -172,18 +177,19 @@ def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, d
     ax.set_ylabel("I(T; Y)", fontsize=13, fontweight='bold')
     
     # Title and filename with group info if available
+    ct = f"_{calcul_type}" if calcul_type else ""
     if group_name:
         title = f"{model_name}_{dataset_name}_{group_name}_Layer {layer_idx} - Information Plane"
         if cluster_num:
-            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_{group_name}_layer{layer_idx}_cluster{cluster_num}.png"
+            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_{group_name}_layer{layer_idx}_cluster{cluster_num}.png"
         else:
-            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_{group_name}_layer{layer_idx}.png"
+            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_{group_name}_layer{layer_idx}.png"
     else:
         title = f"{model_name}_{dataset_name}_Layer {layer_idx} - Information Plane"
         if cluster_num:
-            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx}_cluster{cluster_num}.png"
+            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_layer{layer_idx}_cluster{cluster_num}.png"
         else:
-            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_layer{layer_idx}.png"
+            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_layer{layer_idx}.png"
     
     ax.set_title(title, fontsize=14, fontweight='bold')
     
@@ -193,7 +199,7 @@ def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, d
     print(f"Scatter plot saved: {fname}")
 
 
-def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_name, num, process_type, group_name=None, cluster_num=None):
+def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_name, num, process_type, group_name=None, cluster_num=None, calcul_type=None):
     """
     Plot scatter maps for all layers in a single figure with subplots.
     X-axis: I(X; T), Y-axis: I(T; Y), Color: Euclidean Distance
@@ -227,8 +233,8 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
     for idx, layer_data in enumerate(all_layers_data):
         ax = axes_flat[idx]
         layer_idx = layer_data['layer_idx']
-        mi_xt = layer_data['mi_xt']
-        mi_ty = layer_data['mi_ty']
+        mi_xt = layer_data[f'{args.calcul_type}_xt']
+        mi_ty = layer_data[f'{args.calcul_type}_ty']
         distance = layer_data['distance']
         group_name = layer_data.get('group', None)
         
@@ -266,20 +272,129 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
     
     plt.tight_layout(rect=[0, 0, 0.9, 0.96])
     
-    # Include group name, cluster_num and process type in filename if provided
+    # Include group name, cluster_num, calcul_type and process type in filename if provided
+    ct = f"_{calcul_type}" if calcul_type else ""
     if group_name:
         if cluster_num:
-            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers_{group_name}_cluster{cluster_num}.png"
+            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_all_layers_{group_name}_cluster{cluster_num}.png"
         else:
-            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers_{group_name}.png"
+            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_all_layers_{group_name}.png"
     else:
         if cluster_num:
-            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers_cluster{cluster_num}.png"
+            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_all_layers_cluster{cluster_num}.png"
         else:
-            fname = f"{model_name}_{dataset_name}_{process_type}_scatter_all_layers.png"
+            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_all_layers.png"
     plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"All layers combined scatter plot saved as: {fname}")
+
+
+def plot_ratio_boxplot_classification(all_layers_data, model_name, dataset_name, process_type,
+                                      calcul_type='MI', median_alpha=0.8):
+    """
+    Classification용 ratio boxplot (distance bin 없음).
+    모든 layer의 I(X;T)/I(T;Y) ratio를 하나의 boxplot으로 표시
+    + 각 layer의 median을 point로 표시하고 line으로 연결
+    + x, y limit을 가장 넓은 range로 자동 설정
+
+    Parameters:
+    -----------
+    all_layers_data: list of dicts, each with 'mi_xt', 'mi_ty', 'distance', 'layer_idx', [optional 'group']
+    """
+    if not all_layers_data:
+        print("No data to plot")
+        return
+    
+    n_layers = len(all_layers_data)
+    eps = 1e-8
+    layer_labels = [f"L{d['layer_idx']}" for d in all_layers_data]
+    x_positions = np.arange(1, n_layers + 1)
+    
+    # Calculate ratios and statistics for all layers
+    ratios = []
+    median_values = []
+    all_ratios_combined = []
+    
+    for layer_data in all_layers_data:
+        mi_xt = np.asarray(layer_data[f'{calcul_type}_xt'], dtype=float)
+        mi_ty = np.asarray(layer_data[f'{calcul_type}_ty'], dtype=float)
+        
+        # Filter out NaN, inf, and division by zero
+        valid_mask = np.isfinite(mi_xt) & np.isfinite(mi_ty) & (mi_ty != 0)
+        ratio = mi_xt[valid_mask] / mi_ty[valid_mask]
+        
+        ratios.append(ratio)
+        all_ratios_combined.extend(ratio.tolist())
+        median_values.append(np.median(ratio) if len(ratio) > 0 else np.nan)
+    
+    # Calculate y-axis limit based on maximum range across all layers
+    all_ratios_array = np.concatenate(ratios)
+    y_min = np.min(all_ratios_array)
+    y_max = np.max(all_ratios_array)
+    y_margin = (y_max - y_min) * 0.1
+    
+    # Get group name if available
+    group_name = all_layers_data[0].get('group', None) if all_layers_data else None
+    
+    # Create plot
+    fig, ax = plt.subplots(figsize=(10, 6), facecolor='white')
+    ax.set_facecolor('white')
+    
+    bp = ax.boxplot(ratios, positions=x_positions, patch_artist=True,
+                    showfliers=False, widths=0.5, labels=layer_labels)
+    
+    for patch in bp['boxes']:
+        patch.set_facecolor('mediumpurple')
+        patch.set_alpha(0.7)
+    
+    for median in bp['medians']:
+        median.set_color('indigo')
+        median.set_linewidth(2)
+    
+    # Plot median points and line
+    median_values = np.array(median_values)
+    valid_mask = ~np.isnan(median_values)
+    valid_x = x_positions[valid_mask]
+    valid_y = median_values[valid_mask]
+    
+    if len(valid_x) > 0:
+        ax.scatter(valid_x, valid_y, s=120, c='indigo', marker='o',
+                   zorder=5, alpha=median_alpha, edgecolors='darkviolet', linewidth=1.5)
+        if len(valid_x) > 1:
+            ax.plot(valid_x, valid_y, color='indigo', linewidth=2.5, alpha=0.6, zorder=4)
+    
+    # Set axis limits
+    ax.set_xlim(0.5, n_layers + 0.5)
+    ax.set_ylim(y_min - y_margin, y_max + y_margin)
+    
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(layer_labels)
+    ax.set_xlabel("Layer", fontsize=12, fontweight='bold')
+    ax.set_ylabel("Joint(X;T) / I(T;Y)", fontsize=12, fontweight='bold')
+    
+    # Title with group info if available
+    if group_name:
+        ax.set_title(f"{model_name} {dataset_name} — {group_name}: Joint(X;T)/I(T;Y) Ratio",
+                    fontsize=13, fontweight='bold')
+    else:
+        ax.set_title(f"{model_name} {dataset_name} — Joint(X;T)/I(T;Y) Ratio",
+                    fontsize=13, fontweight='bold')
+    
+    ax.grid(True, alpha=0.3, axis='y')
+    
+    plt.tight_layout()
+    folder_path = f"./{model_name}/{dataset_name}/{process_type}/ratio"
+    os.makedirs(folder_path, exist_ok=True)
+    
+    # Filename with group info if available
+    if group_name:
+        fname = f"{model_name}_{dataset_name}_{process_type}_{calcul_type}_ratio_boxplot_{group_name}.png"
+    else:
+        fname = f"{model_name}_{dataset_name}_{process_type}_{calcul_type}_ratio_boxplot.png"
+    
+    plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✓ Ratio boxplot saved: {fname}")
 
 
 if __name__ == "__main__":  # Classification Task
@@ -287,12 +402,14 @@ if __name__ == "__main__":  # Classification Task
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--dataset', type=str, default='CIFAR-10', 
                           help='Dataset name (e.g., Imagenet, CIFAR-100)')
-    argparser.add_argument('--process_type', type=str, default='layer', 
+    argparser.add_argument('--process_type', type=str, default='pixel', 
                           help='Process type (e.g., layer, pixel)')
     argparser.add_argument('--model', type=str, default='PIGNet_GSPonly_classification', 
                           help='Model name (e.g., Resnet, PIGNet_GSPonly_classification, vit)')
-    argparser.add_argument('--cluster_num', type=int, default=200,
+    argparser.add_argument('--cluster_num', type=int, default=50,
                           help='Number of clusters used in MI data generation (e.g., 50, 100)')
+    argparser.add_argument('--calcul_type', type=str, default='joint',
+                          help='Type of calculation for scatter plot (e.g., mi, joint)')
     args = argparser.parse_args()
     
     if args.model == "Resnet" or args.model == "vit":
@@ -303,9 +420,9 @@ if __name__ == "__main__":  # Classification Task
     # Setup data path
     data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/{args.process_type}_dataset/resnet101/pretrained/{args.model}/zoom/1'
     
-    mi_cache_file = os.path.join(data_path, f'mi_analysis_cache_classification_cluster{args.cluster_num}.pkl')
-    backbone_cache_file = os.path.join(data_path, f'mi_analysis_cache_backbone_classification_cluster{args.cluster_num}.pkl')
-    gsp_cache_file = os.path.join(data_path, f'mi_analysis_cache_gsp_classification_cluster{args.cluster_num}.pkl')
+    mi_cache_file = os.path.join(data_path, f'{args.calcul_type}_mi_analysis_cache_classification_cluster{args.cluster_num}.pkl')
+    backbone_cache_file = os.path.join(data_path, f'{args.calcul_type}_mi_analysis_cache_backbone_classification_cluster{args.cluster_num}.pkl')
+    gsp_cache_file = os.path.join(data_path, f'{args.calcul_type}_mi_analysis_cache_gsp_classification_cluster{args.cluster_num}.pkl')
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # Check MI Cache
@@ -328,17 +445,17 @@ if __name__ == "__main__":  # Classification Task
         print(f"Loading classification MI data from: {data_path}")
 
         if args.model != "PIGNet_GSPonly_classification":        
-            with open(os.path.join(data_path, 'y_labels.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'y_labels_{args.cluster_num}.pkl'), 'rb') as f:
                 y_in = pickle.load(f)  # (N,) - class labels
             print(f"Loaded labels: {y_in.shape}")
             
-            with open(os.path.join(data_path, 'layer_0.pkl'), 'rb') as f:
+            with open(os.path.join(data_path, f'layer_0_{args.cluster_num}.pkl'), 'rb') as f:
                 x_in = pickle.load(f)  # (N, H, W) - input features
             print(f"Loaded input features: {x_in.shape}")
             
             t_in = []
             for i in range(1, layer_num):
-                with open(os.path.join(data_path, f'layer_{i}.pkl'), 'rb') as f:
+                with open(os.path.join(data_path, f'layer_{i}_{args.cluster_num}.pkl'), 'rb') as f:
                     t_layer = pickle.load(f)
                     t_in.append(t_layer)  # (N, H, W) - layer features
                     print(f"Loaded layer {i}: {t_layer.shape}")
@@ -423,14 +540,14 @@ if __name__ == "__main__":  # Classification Task
                 
                 all_layers_data.append({
                     'layer_idx': layer_idx + 1,
-                    'mi_xt': layer_mi_xt,
-                    'mi_ty': layer_mi_ty,
+                    f'{args.calcul_type}_xt': layer_mi_xt,
+                    f'{args.calcul_type}_ty': layer_mi_ty,
                     'distance': layer_distance,
                 })
                 
                 print(f"Layer {layer_idx+1} statistics:")
                 print(f"  Data points: {len(layer_mi_xt)}")
-                print(f"  I(X;T) range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
+                print(f"  {args.calcul_type.upper()} range: [{layer_mi_xt.min():.4f}, {layer_mi_xt.max():.4f}]")
                 print(f"  I(T;Y) range: [{layer_mi_ty.min():.4f}, {layer_mi_ty.max():.4f}]")
                 print(f"  Distance range: [{layer_distance.min():.2f}, {layer_distance.max():.2f}]")
 
@@ -485,8 +602,8 @@ if __name__ == "__main__":  # Classification Task
                 
                 backbone_layers_data.append({
                     'layer_idx': layer_idx + 1,
-                    'mi_xt': layer_mi_xt,
-                    'mi_ty': layer_mi_ty,
+                    f'{args.calcul_type}_xt': layer_mi_xt,
+                    f'{args.calcul_type}_ty': layer_mi_ty,
                     'distance': layer_distance,
                     'group': 'Backbone',
                 })
@@ -535,8 +652,8 @@ if __name__ == "__main__":  # Classification Task
                 
                 gsp_layers_data.append({
                     'layer_idx': layer_idx + 1,
-                    'mi_xt': layer_mi_xt,
-                    'mi_ty': layer_mi_ty,
+                    f'{args.calcul_type}_xt': layer_mi_xt,
+                    f'{args.calcul_type}_ty': layer_mi_ty,
                     'distance': layer_distance,
                     'group': 'GSP',
                 })
@@ -572,26 +689,30 @@ if __name__ == "__main__":  # Classification Task
     if args.model != "PIGNet_GSPonly_classification":
         for layer_data in all_layers_data:
             layer_idx = layer_data['layer_idx']
-            mi_xt = layer_data['mi_xt']
-            mi_ty = layer_data['mi_ty']
+            mi_xt = layer_data[f'{args.calcul_type}_xt']
+            mi_ty = layer_data[f'{args.calcul_type}_ty']
             distance = layer_data['distance']
             group_name = layer_data.get('group', None)
             
             if group_name:
                 print(f"\n{group_name} - Layer {layer_idx}:")
                 print(f"  Generating individual scatter plot...")
-                plot_scatter_classification(mi_xt, mi_ty, distance, 
-                                        layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num)
+                plot_scatter_classification(mi_xt, mi_ty, distance,
+                                        layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num, calcul_type=args.calcul_type)
             else:
                 print(f"\nLayer {layer_idx}:")
                 print(f"  Generating individual scatter plot...")
-                plot_scatter_classification(mi_xt, mi_ty, distance, 
-                                        layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num)
-        
+                plot_scatter_classification(mi_xt, mi_ty, distance,
+                                        layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num, calcul_type=args.calcul_type)
+
         # Generate combined subplot plot for all layers
         print(f"\n=== Generating Combined Subplot Plot ===")
         total_layers = len(all_layers_data)
-        plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, args.process_type, group_name=None, cluster_num=args.cluster_num)
+        plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, args.process_type, group_name=None, cluster_num=args.cluster_num, calcul_type=args.calcul_type)
+        
+        # Generate ratio boxplot
+        print(f"\n=== Generating Ratio Boxplot ===")
+        plot_ratio_boxplot_classification(all_layers_data, args.model, args.dataset, args.process_type, calcul_type=args.calcul_type)
         
         print("\n=== All plots generated successfully! ===")
         
@@ -601,25 +722,29 @@ if __name__ == "__main__":  # Classification Task
             
             for layer_data in all_layers_data:
                 layer_idx = layer_data['layer_idx']
-                mi_xt = layer_data['mi_xt']
-                mi_ty = layer_data['mi_ty']
+                mi_xt = layer_data[f'{args.calcul_type}_xt']
+                mi_ty = layer_data[f'{args.calcul_type}_ty']
                 distance = layer_data['distance']
                 group_name = layer_data.get('group', None)
                 
                 if group_name:
                     print(f"\n{group_name} - Layer {layer_idx}:")
                     print(f"  Generating individual scatter plot...")
-                    plot_scatter_classification(mi_xt, mi_ty, distance, 
-                                            layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num)
+                    plot_scatter_classification(mi_xt, mi_ty, distance,
+                                            layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num, calcul_type=args.calcul_type)
                 else:
                     print(f"\nLayer {layer_idx}:")
                     print(f"  Generating individual scatter plot...")
-                    plot_scatter_classification(mi_xt, mi_ty, distance, 
-                                            layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num)
-        
+                    plot_scatter_classification(mi_xt, mi_ty, distance,
+                                            layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num, calcul_type=args.calcul_type)
+
             # Generate combined subplot plot for this group
             print(f"\n=== Generating Combined Subplot Plot ===")
             total_layers = len(all_layers_data)
-            plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, args.process_type, group_name=group_label, cluster_num=args.cluster_num)
+            plot_scatter_all_layers_classification(all_layers_data, args.model, args.dataset, total_layers, args.process_type, group_name=group_label, cluster_num=args.cluster_num, calcul_type=args.calcul_type)
             
-            print(f"\n=== All plots generated successfully! ===")
+            # Generate ratio boxplot for this group
+            print(f"\n=== Generating Ratio Boxplot for {group_label} ===")
+            plot_ratio_boxplot_classification(all_layers_data, args.model, args.dataset, args.process_type, calcul_type=args.calcul_type)
+            
+            print(f"\n=== All plots for {group_label} generated successfully! ===")
