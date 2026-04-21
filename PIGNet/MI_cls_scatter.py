@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import os
 import pickle
 import cv2
@@ -8,6 +9,10 @@ import torch
 import numpy as np
 from tqdm.auto import trange
 import argparse
+
+plt.rcParams['font.family'] = 'Arial'
+
+COLOR_MAP = {'PIGNet_GSPonly': '#D81B60', 'ResNet': '#5C6BC0', 'ViT': '#FF7043'}
 
 
 def _entropy_from_counts(counts: np.ndarray, eps: float = 1e-12) -> float:
@@ -158,121 +163,91 @@ def cal_mi_t_y(t, y, eps=1e-12):
 
     return joint_map
 
-def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, dataset_name, process_type, group_name=None, cluster_num=None, calcul_type=None):
-    """
-    Plot scatter map in Information Plane for classification task.
-    X-axis: I(X; T), Y-axis: I(T; Y), Color: Euclidean Distance
-    """
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    scatter = ax.scatter(mi_xt, mi_ty, c=distance, cmap='viridis', 
-                         s=20, alpha=0.6, edgecolors='none')
-    
-    cbar = plt.colorbar(scatter, ax=ax)
-    cbar.set_label('Euclidean Distance', fontsize=12)
-    
-    # ax.set_xlim(0, 2)
-    # ax.set_ylim(0, 2)
-    ax.set_xlabel("I(X; T)", fontsize=13, fontweight='bold')
-    ax.set_ylabel("I(T; Y)", fontsize=13, fontweight='bold')
-    
-    # Title and filename with group info if available
-    ct = f"_{calcul_type}" if calcul_type else ""
-    if group_name:
-        title = f"{model_name}_{dataset_name}_{group_name}_Layer {layer_idx} - Information Plane"
-        if cluster_num:
-            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_{group_name}_layer{layer_idx}_cluster{cluster_num}.png"
-        else:
-            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_{group_name}_layer{layer_idx}.png"
-    else:
-        title = f"{model_name}_{dataset_name}_Layer {layer_idx} - Information Plane"
-        if cluster_num:
-            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_layer{layer_idx}_cluster{cluster_num}.png"
-        else:
-            fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_layer{layer_idx}.png"
-    
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    plt.savefig(fname, dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"Scatter plot saved: {fname}")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 비활성화: 개별 layer scatter
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, dataset_name, process_type, group_name=None, cluster_num=None, calcul_type=None):
+#     fig, ax = plt.subplots(figsize=(10, 8))
+#     scatter = ax.scatter(mi_xt, mi_ty, c=distance, cmap='viridis', s=20, alpha=0.6, edgecolors='none')
+#     plt.colorbar(scatter, ax=ax)
+#     ax.set_xlabel("H(X,T)", fontsize=13); ax.set_ylabel("H(T,Y)", fontsize=13)
+#     ct = f"_{calcul_type}" if calcul_type else ""
+#     if group_name:
+#         fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_{group_name}_layer{layer_idx}.png"
+#     else:
+#         fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_layer{layer_idx}.png"
+#     plt.tight_layout(); plt.savefig(fname, dpi=150, bbox_inches='tight'); plt.close()
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 활성화: Scatter Matrix (1 × num_layers)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_name, num, process_type, group_name=None, cluster_num=None, calcul_type=None):
     """
-    Plot scatter maps for all layers in a single figure with subplots.
-    X-axis: I(X; T), Y-axis: I(T; Y), Color: Euclidean Distance
-    
-    Args:
-        all_layers_data: List of dictionaries containing layer MI data
-        model_name: Name of the model
-        dataset_name: Name of the dataset
-        num: Total number of layers
-        process_type: Process type (e.g., 'layer', 'pixel')
-        group_name: Optional group name (e.g., 'Backbone', 'GSP') for file naming
-        cluster_num: Optional cluster number for file naming
+    Plot scatter maps for all layers in a single figure (1 × num_layers matrix).
+    CLS에는 distance 없음 → H(X,T) 값으로 색상 표현
     """
     num_layers = len(all_layers_data)
-    
-    # Determine subplot dimensions (prefer wider layout)
+
+    model_color = next(
+        (color for key, color in COLOR_MAP.items() if key.lower() in model_name.lower()),
+        '#888888'
+    )
+    model_cmap = mcolors.LinearSegmentedColormap.from_list(
+        'model_cmap', ['#ffffff', model_color]
+    )
+
     ncols = max(4, num - 1)
     nrows = (num_layers + ncols - 1) // ncols
-    
-    fig, axes = plt.subplots(nrows, ncols, figsize=(16, 4*nrows))
-    
-    # Flatten axes array for easier iteration (handle single subplot case)
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 5 * nrows), facecolor='white')
+
     if isinstance(axes, np.ndarray):
         axes_flat = axes.flatten()
     else:
         axes_flat = [axes]
-    
-    # Track scatter objects for colorbar
-    scatter_objs = []
-    
+
+    last_sc = None
+
     for idx, layer_data in enumerate(all_layers_data):
         ax = axes_flat[idx]
+        ax.set_facecolor('white')
         layer_idx = layer_data['layer_idx']
-        mi_xt = layer_data[f'{args.calcul_type}_xt']
-        mi_ty = layer_data[f'{args.calcul_type}_ty']
-        distance = layer_data['distance']
-        group_name = layer_data.get('group', None)
-        
-        scatter = ax.scatter(mi_xt, mi_ty, c=distance, cmap='viridis', 
-                           s=20, alpha=0.6, edgecolors='none')
-        scatter_objs.append(scatter)
-        
-        # ax.set_xlim(0, 2)
-        # ax.set_ylim(0, 2)
-        ax.set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
-        ax.set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
-        
-        # Update title with group info if available
-        if group_name:
-            ax.set_title(f"{group_name} Layer {layer_idx}", fontsize=12, fontweight='bold')
-        else:
-            ax.set_title(f"Layer {layer_idx}", fontsize=12, fontweight='bold')
-        
-        # Remove tick labels to show clean subplot
+        ct = calcul_type if calcul_type else 'joint'
+        mi_xt = np.asarray(layer_data[f'{ct}_xt'], dtype=float)
+        mi_ty = np.asarray(layer_data[f'{ct}_ty'], dtype=float)
+        layer_group = layer_data.get('group', None)
+
+        sc = ax.scatter(mi_xt, mi_ty, c=mi_xt, cmap=model_cmap,
+                        s=20, alpha=0.6, edgecolors='none')
+        last_sc = sc
+
         ax.set_xticklabels([])
         ax.set_yticklabels([])
-    
-    # Remove empty subplots
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.grid(False)
+
+        if idx == 0:
+            ax.set_ylabel("H(T,Y)", fontsize=18)
+        ax.set_xlabel("H(X,T)", fontsize=18)
+
+        title = f"{layer_group} Layer {layer_idx}" if layer_group else f"Layer {layer_idx}"
+        ax.set_title(title, fontsize=18)
+
     for idx in range(num_layers, len(axes_flat)):
         fig.delaxes(axes_flat[idx])
-    
-    # Add shared colorbar
-    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-    cbar = fig.colorbar(scatter_objs[0], cax=cbar_ax)
-    cbar.set_label('Euclidean Distance', fontsize=11, fontweight='bold')
-    
-    # Overall title with model and dataset info
-    fig.suptitle(f"{model_name} - {dataset_name} - Information Plane (Classification)", 
-                fontsize=16, fontweight='bold', y=0.98)
-    
-    plt.tight_layout(rect=[0, 0, 0.9, 0.96])
-    
-    # Include group name, cluster_num, calcul_type and process type in filename if provided
+
+    plt.tight_layout(rect=[0, 0, 0.88, 1])
+
+    if last_sc is not None:
+        valid_axes = [ax for ax in axes_flat[:num_layers] if ax.get_visible()]
+        top    = valid_axes[0].get_position().y1
+        bottom = valid_axes[-1].get_position().y0
+        cbar_ax = fig.add_axes([0.90, bottom, 0.03, top - bottom])
+        cbar = fig.colorbar(last_sc, cax=cbar_ax)
+        cbar.ax.tick_params(labelsize=18)
+
     ct = f"_{calcul_type}" if calcul_type else ""
     if group_name:
         if cluster_num:
@@ -286,115 +261,57 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
             fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_all_layers.png"
     plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"All layers combined scatter plot saved as: {fname}")
+    print(f"All layers scatter matrix saved: {fname}")
 
 
-def plot_ratio_boxplot_classification(all_layers_data, model_name, dataset_name, process_type,
-                                      calcul_type='MI', median_alpha=0.8):
-    """
-    Classification용 ratio boxplot (distance bin 없음).
-    모든 layer의 I(X;T)/I(T;Y) ratio를 하나의 boxplot으로 표시
-    + 각 layer의 median을 point로 표시하고 line으로 연결
-    + x, y limit을 가장 넓은 range로 자동 설정
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 비활성화: ratio boxplot / lineplot (barplot 작업 예정)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# def plot_ratio_boxplot_classification(all_layers_data, model_name, dataset_name, process_type,
+#                                       calcul_type='MI', median_alpha=0.8):
+#     if not all_layers_data:
+#         return
+#     n_layers = len(all_layers_data)
+#     layer_labels = [f"L{d['layer_idx']}" for d in all_layers_data]
+#     x_positions = np.arange(1, n_layers + 1)
+#     ratios = []
+#     median_values = []
+#     for layer_data in all_layers_data:
+#         mi_xt = np.asarray(layer_data[f'{calcul_type}_xt'], dtype=float)
+#         mi_ty = np.asarray(layer_data[f'{calcul_type}_ty'], dtype=float)
+#         valid_mask = np.isfinite(mi_xt) & np.isfinite(mi_ty) & (mi_ty != 0)
+#         ratio = mi_xt[valid_mask] / mi_ty[valid_mask]
+#         ratios.append(ratio)
+#         median_values.append(np.median(ratio) if len(ratio) > 0 else np.nan)
+#     fig, ax = plt.subplots(figsize=(10, 6), facecolor='white')
+#     bp = ax.boxplot(ratios, positions=x_positions, patch_artist=True, showfliers=False, widths=0.5, labels=layer_labels)
+#     plt.tight_layout()
+#     folder_path = f"./{model_name}/{dataset_name}/{process_type}/ratio"
+#     os.makedirs(folder_path, exist_ok=True)
+#     fname = f"{model_name}_{dataset_name}_{process_type}_{calcul_type}_ratio_boxplot.png"
+#     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
+#     plt.close()
 
-    Parameters:
-    -----------
-    all_layers_data: list of dicts, each with 'mi_xt', 'mi_ty', 'distance', 'layer_idx', [optional 'group']
-    """
-    if not all_layers_data:
-        print("No data to plot")
-        return
-    
-    n_layers = len(all_layers_data)
-    eps = 1e-8
-    layer_labels = [f"L{d['layer_idx']}" for d in all_layers_data]
-    x_positions = np.arange(1, n_layers + 1)
-    
-    # Calculate ratios and statistics for all layers
-    ratios = []
-    median_values = []
-    all_ratios_combined = []
-    
-    for layer_data in all_layers_data:
-        mi_xt = np.asarray(layer_data[f'{calcul_type}_xt'], dtype=float)
-        mi_ty = np.asarray(layer_data[f'{calcul_type}_ty'], dtype=float)
-        
-        # Filter out NaN, inf, and division by zero
-        valid_mask = np.isfinite(mi_xt) & np.isfinite(mi_ty) & (mi_ty != 0)
-        ratio = mi_xt[valid_mask] / mi_ty[valid_mask]
-        
-        ratios.append(ratio)
-        all_ratios_combined.extend(ratio.tolist())
-        median_values.append(np.median(ratio) if len(ratio) > 0 else np.nan)
-    
-    # Calculate y-axis limit based on maximum range across all layers
-    all_ratios_array = np.concatenate(ratios)
-    y_min = np.min(all_ratios_array)
-    y_max = np.max(all_ratios_array)
-    y_margin = (y_max - y_min) * 0.1
-    
-    # Get group name if available
-    group_name = all_layers_data[0].get('group', None) if all_layers_data else None
-    
-    # Create plot
-    fig, ax = plt.subplots(figsize=(10, 6), facecolor='white')
-    ax.set_facecolor('white')
-    
-    bp = ax.boxplot(ratios, positions=x_positions, patch_artist=True,
-                    showfliers=False, widths=0.5, labels=layer_labels)
-    
-    for patch in bp['boxes']:
-        patch.set_facecolor('mediumpurple')
-        patch.set_alpha(0.7)
-    
-    for median in bp['medians']:
-        median.set_color('indigo')
-        median.set_linewidth(2)
-    
-    # Plot median points and line
-    median_values = np.array(median_values)
-    valid_mask = ~np.isnan(median_values)
-    valid_x = x_positions[valid_mask]
-    valid_y = median_values[valid_mask]
-    
-    if len(valid_x) > 0:
-        ax.scatter(valid_x, valid_y, s=120, c='indigo', marker='o',
-                   zorder=5, alpha=median_alpha, edgecolors='darkviolet', linewidth=1.5)
-        if len(valid_x) > 1:
-            ax.plot(valid_x, valid_y, color='indigo', linewidth=2.5, alpha=0.6, zorder=4)
-    
-    # Set axis limits
-    ax.set_xlim(0.5, n_layers + 0.5)
-    ax.set_ylim(y_min - y_margin, y_max + y_margin)
-    
-    ax.set_xticks(x_positions)
-    ax.set_xticklabels(layer_labels)
-    ax.set_xlabel("Layer", fontsize=12, fontweight='bold')
-    ax.set_ylabel("Joint(X;T) / I(T;Y)", fontsize=12, fontweight='bold')
-    
-    # Title with group info if available
-    if group_name:
-        ax.set_title(f"{model_name} {dataset_name} — {group_name}: Joint(X;T)/I(T;Y) Ratio",
-                    fontsize=13, fontweight='bold')
-    else:
-        ax.set_title(f"{model_name} {dataset_name} — Joint(X;T)/I(T;Y) Ratio",
-                    fontsize=13, fontweight='bold')
-    
-    ax.grid(True, alpha=0.3, axis='y')
-    
-    plt.tight_layout()
-    folder_path = f"./{model_name}/{dataset_name}/{process_type}/ratio"
-    os.makedirs(folder_path, exist_ok=True)
-    
-    # Filename with group info if available
-    if group_name:
-        fname = f"{model_name}_{dataset_name}_{process_type}_{calcul_type}_ratio_boxplot_{group_name}.png"
-    else:
-        fname = f"{model_name}_{dataset_name}_{process_type}_{calcul_type}_ratio_boxplot.png"
-    
-    plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"✓ Ratio boxplot saved: {fname}")
+
+# def plot_ratio_lineplot_all_models(models_data, dataset_name, process_type, calcul_type='MI'):
+#     model_list = list(models_data.keys())
+#     n_models = len(model_list)
+#     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+#     model_colors = {m: color_cycle[i % len(color_cycle)] for i, m in enumerate(model_list)}
+#     first_layers = models_data[model_list[0]]['all_layers_data']
+#     n_layers = len(first_layers)
+#     layer_labels = [f"L{d['layer_idx']}" for d in first_layers]
+#     x_base = np.arange(1, n_layers + 1)
+#     box_width = 0.12
+#     total_span = box_width * n_models * 1.5
+#     offsets = np.linspace(-total_span / 2, total_span / 2, n_models)
+#     folder_path = f"./ALL_MODELS/{dataset_name}/{process_type}/ratio"
+#     os.makedirs(folder_path, exist_ok=True)
+#     fig, ax = plt.subplots(figsize=(10, 6), facecolor='white')
+#     plt.tight_layout()
+#     fname = f"ALL_{dataset_name}_{process_type}_{calcul_type}_ratio_lineplot.png"
+#     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
+#     plt.close()
 
 
 if __name__ == "__main__":  # Classification Task
@@ -697,13 +614,13 @@ if __name__ == "__main__":  # Classification Task
             if group_name:
                 print(f"\n{group_name} - Layer {layer_idx}:")
                 print(f"  Generating individual scatter plot...")
-                plot_scatter_classification(mi_xt, mi_ty, distance,
-                                        layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num, calcul_type=args.calcul_type)
+                # plot_scatter_classification(mi_xt, mi_ty, distance,
+                #                         layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num, calcul_type=args.calcul_type)
             else:
                 print(f"\nLayer {layer_idx}:")
                 print(f"  Generating individual scatter plot...")
-                plot_scatter_classification(mi_xt, mi_ty, distance,
-                                        layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num, calcul_type=args.calcul_type)
+                # plot_scatter_classification(mi_xt, mi_ty, distance,
+                #                         layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num, calcul_type=args.calcul_type)
 
         # Generate combined subplot plot for all layers
         print(f"\n=== Generating Combined Subplot Plot ===")
@@ -712,7 +629,7 @@ if __name__ == "__main__":  # Classification Task
         
         # Generate ratio boxplot
         print(f"\n=== Generating Ratio Boxplot ===")
-        plot_ratio_boxplot_classification(all_layers_data, args.model, args.dataset, args.process_type, calcul_type=args.calcul_type)
+        # plot_ratio_boxplot_classification(all_layers_data, args.model, args.dataset, args.process_type, calcul_type=args.calcul_type)
         
         print("\n=== All plots generated successfully! ===")
         
@@ -730,13 +647,13 @@ if __name__ == "__main__":  # Classification Task
                 if group_name:
                     print(f"\n{group_name} - Layer {layer_idx}:")
                     print(f"  Generating individual scatter plot...")
-                    plot_scatter_classification(mi_xt, mi_ty, distance,
-                                            layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num, calcul_type=args.calcul_type)
+                    # plot_scatter_classification(mi_xt, mi_ty, distance,
+                    #                         layer_idx, args.model, args.dataset, args.process_type, group_name, args.cluster_num, calcul_type=args.calcul_type)
                 else:
                     print(f"\nLayer {layer_idx}:")
                     print(f"  Generating individual scatter plot...")
-                    plot_scatter_classification(mi_xt, mi_ty, distance,
-                                            layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num, calcul_type=args.calcul_type)
+                    # plot_scatter_classification(mi_xt, mi_ty, distance,
+                    #                         layer_idx, args.model, args.dataset, args.process_type, cluster_num=args.cluster_num, calcul_type=args.calcul_type)
 
             # Generate combined subplot plot for this group
             print(f"\n=== Generating Combined Subplot Plot ===")
@@ -745,6 +662,6 @@ if __name__ == "__main__":  # Classification Task
             
             # Generate ratio boxplot for this group
             print(f"\n=== Generating Ratio Boxplot for {group_label} ===")
-            plot_ratio_boxplot_classification(all_layers_data, args.model, args.dataset, args.process_type, calcul_type=args.calcul_type)
+            # plot_ratio_boxplot_classification(all_layers_data, args.model, args.dataset, args.process_type, calcul_type=args.calcul_type)
             
             print(f"\n=== All plots for {group_label} generated successfully! ===")

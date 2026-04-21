@@ -104,16 +104,16 @@ class blockSAGEsq(nn.Module):
 
     def forward(self, x, edge_index):
         x1 = self.sage1(x, edge_index)
-        x1 = F.gelu(x1)           # ← 활성화까지 포함
+        x1 = F.gelu(x1)           
         
         x2 = self.sage2(x1, edge_index)
-        x2 = F.gelu(x2)           # ← 활성화까지 포함
+        x2 = F.gelu(x2)           
         
         x3 = self.linear(x2)
-        x3 = F.gelu(x3)           # ← 활성화까지 포함
+        x3 = F.gelu(x3)           
         
         # layer 내부 outputs (활성화 후)
-        block_outputs = [x1, x2, x3]
+        block_outputs = [x1, x2, x3] 
         
         return x3, edge_index, block_outputs
     

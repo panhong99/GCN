@@ -7,6 +7,8 @@ import argparse
 from tqdm.auto import trange
 from matplotlib.colors import Normalize
 
+plt.rcParams['font.family'] = 'Arial'
+
 def _entropy_from_counts(counts: np.ndarray, eps: float = 1e-12) -> float:
     """Calculate entropy from count histogram."""
     p = counts / np.maximum(1, counts.sum())
@@ -111,26 +113,26 @@ def compute_kde_values(all_layers_data):
     
     for layer_data in all_layers_data:
         layer_idx = layer_data['layer_idx']
-        mi_xt = layer_data['mi_xt'].flatten()
-        mi_ty = layer_data['mi_ty'].flatten()
+        joint_xt = layer_data['joint_xt'].flatten()
+        joint_ty = layer_data['joint_ty'].flatten()
         
         print(f"Computing KDE for Layer {layer_idx}...", end=" ")
         
         # Data validation & jitter adjustment
         eps = 1e-8
         
-        xt_std = np.std(mi_xt)
-        ty_std = np.std(mi_ty)
+        xt_std = np.std(joint_xt)
+        ty_std = np.std(joint_ty)
         
         if xt_std < eps:
-            mi_xt = mi_xt + np.random.normal(0, eps * 10, mi_xt.shape)
-            print(f"[mi_xt jitter added]", end=" ")
+            joint_xt = joint_xt + np.random.normal(0, eps * 10, joint_xt.shape)
+            print(f"[joint_xt jitter added]", end=" ")
         if ty_std < eps:
-            mi_ty = mi_ty + np.random.normal(0, eps * 10, mi_ty.shape)
-            print(f"[mi_ty jitter added]", end=" ")
+            joint_ty = joint_ty + np.random.normal(0, eps * 10, joint_ty.shape)
+            print(f"[joint_ty jitter added]", end=" ")
         
         # Stack for KDE input
-        points = np.vstack([mi_xt, mi_ty])
+        points = np.vstack([joint_xt, joint_ty])
         
         # Compute KDE with covariance factor adjustment
         try:
@@ -140,8 +142,8 @@ def compute_kde_values(all_layers_data):
             kde = None
         
         # Evaluate on grid
-        x_min, x_max = mi_xt.min(), mi_xt.max()
-        y_min, y_max = mi_ty.min(), mi_ty.max()
+        x_min, x_max = joint_xt.min(), joint_xt.max()
+        y_min, y_max = joint_ty.min(), joint_ty.max()
         
         # Prevent zero-range grids
         x_range = x_max - x_min
@@ -161,126 +163,69 @@ def compute_kde_values(all_layers_data):
             Z = kde(positions).reshape(X.shape)
         else:
             Z = np.zeros_like(X)
-            for i in range(len(mi_xt)):
-                x_idx = np.argmin(np.abs(x_grid - mi_xt[i]))
-                y_idx = np.argmin(np.abs(y_grid - mi_ty[i]))
+            for i in range(len(joint_xt)):
+                x_idx = np.argmin(np.abs(x_grid - joint_xt[i]))
+                y_idx = np.argmin(np.abs(y_grid - joint_ty[i]))
                 Z[y_idx, x_idx] += 1
             Z = Z / (np.max(Z) + eps)
         
         # Store KDE data including original MI values for later processing
         kde_data[layer_idx] = {
             'X': X, 'Y': Y, 'Z': Z,
-            'mi_xt': mi_xt, 'mi_ty': mi_ty,
+            'joint_xt': joint_xt, 'joint_ty': joint_ty,
             'x_grid': x_grid, 'y_grid': y_grid,
-            'n_points': len(mi_xt),
+            'n_points': len(joint_xt),
         }
         
         print("done")
     
     return kde_data
 
-def plot_kde_contour(layer_idx, model_name, dataset_name, process_type, kde_data, group_name=None, cluster_num=None):
-    """
-    Plot KDE contour for a single layer.
-    """
-    layer_data = kde_data[layer_idx]
-    X = layer_data['X']
-    Y = layer_data['Y']
-    Z = layer_data['Z']
-    mi_xt = layer_data['mi_xt']
-    mi_ty = layer_data['mi_ty']
-    
-    vmin=-2
-    vmax=2
-
-    Z = np.clip(Z, vmin, vmax)
-    fig, ax = plt.subplots(figsize=(10, 8))
-        
-    # Normalize와 levels 설정
-    norm = plt.Normalize(vmin=vmin, vmax=vmax)
-    levels = np.linspace(vmin, vmax, 21)
-
-    # Contour plot with filled levels
-    cmap_s = plt.cm.get_cmap('Reds').copy()
-    cmap_s.set_bad('white')
-
-    # Threshold 적용하여 masked array 생성
-    threshold = 2e-1
-    Z_masked = np.ma.masked_less_equal(Z, threshold)
-
-    contour_filled = ax.contourf(
-        X, Y, 
-        Z_masked, 
-        levels=levels, 
-        cmap=cmap_s, 
-        norm=norm
-    )
-        
-    # Colorbar
-    cbar = plt.colorbar(contour_filled, ax=ax)
-    cbar.set_label('KDE Density', fontsize=12)
-    
-    # ax.set_xlim(0,2)
-    # ax.set_ylim(0,2)
-
-    ax.set_xlabel("I(X; T)", fontsize=13, fontweight='bold')
-    ax.set_ylabel("I(T; Y)", fontsize=13, fontweight='bold')
-    
-    # Title with group info if available
-    if group_name:
-        title = f"Layer {layer_idx} - {group_name} - KDE Contour (Classification)"
-    else:
-        title = f"Layer {layer_idx} - KDE Contour (Classification)"
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    
-    # Filename with group info and cluster_num if available
-    if group_name:
-        if cluster_num:
-            fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_{group_name}_layer{layer_idx}_cluster{cluster_num}.png"
-        else:
-            fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_{group_name}_layer{layer_idx}.png"
-    else:
-        if cluster_num:
-            fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_layer{layer_idx}_cluster{cluster_num}.png"
-        else:
-            fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_layer{layer_idx}.png"
-    
-    plt.savefig(fname, dpi=150, bbox_inches='tight')
-    plt.close()
-    print(f"Layer {layer_idx} KDE contour plot saved.")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 비활성화: 개별 layer KDE contour
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# def plot_kde_contour(layer_idx, model_name, dataset_name, process_type, kde_data, group_name=None, cluster_num=None):
+#     layer_data = kde_data[layer_idx]
+#     X = layer_data['X']; Y = layer_data['Y']; Z = layer_data['Z']
+#     vmin, vmax = -2, 2
+#     Z = np.clip(Z, vmin, vmax)
+#     fig, ax = plt.subplots(figsize=(10, 8))
+#     norm = plt.Normalize(vmin=vmin, vmax=vmax)
+#     levels = np.linspace(vmin, vmax, 21)
+#     cmap_s = plt.cm.get_cmap('Reds').copy(); cmap_s.set_bad('white')
+#     Z_masked = np.ma.masked_less_equal(Z, 2e-1)
+#     cf = ax.contourf(X, Y, Z_masked, levels=levels, cmap=cmap_s, norm=norm)
+#     plt.colorbar(cf, ax=ax)
+#     ax.set_xlabel("H(X,T)", fontsize=13); ax.set_ylabel("H(T,Y)", fontsize=13)
+#     title = f"Layer {layer_idx} - {group_name} - KDE" if group_name else f"Layer {layer_idx} - KDE"
+#     ax.set_title(title, fontsize=14)
+#     plt.tight_layout()
+#     if group_name:
+#         fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_{group_name}_layer{layer_idx}.png"
+#     else:
+#         fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_layer{layer_idx}.png"
+#     plt.savefig(fname, dpi=150, bbox_inches='tight'); plt.close()
 
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 활성화: KDE Matrix (1 × num_layers)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def plot_kde_contour_all_layers_classification(all_layers_data, model_name, dataset_name, kde_data, num, process_type, group_name=None, cluster_num=None):
     """
-    Plot KDE contours for all layers in a single figure with subplots.
-    
-    Args:
-        all_layers_data: List of dictionaries containing layer MI data
-        model_name: Name of the model
-        dataset_name: Name of the dataset
-        kde_data: Dictionary with KDE information for each layer
-        num: Total number of layers
-        process_type: Process type (e.g., 'layer', 'pixel')
-        group_name: Optional group name (e.g., 'Backbone', 'GSP') for file naming
-        cluster_num: Optional cluster number for file naming
+    Plot KDE contours for all layers in a single figure (1 × num_layers matrix).
     """
     num_layers = len(all_layers_data)
-    
-    # Determine subplot dimensions (prefer wider layout)
+
     ncols = max(4, num - 1)
     nrows = (num_layers + ncols - 1) // ncols
-    
-    fig, axes = plt.subplots(nrows, ncols, figsize=(16, 4*nrows))
-    
-    # Flatten axes array for easier iteration
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 5 * nrows), facecolor='white')
+
     if isinstance(axes, np.ndarray):
         axes_flat = axes.flatten()
     else:
         axes_flat = [axes]
-    
-    # KDE parameters (shared across all subplots)
+
     vmin = 0
     vmax = 2
     norm = Normalize(vmin=vmin, vmax=vmax)
@@ -288,51 +233,47 @@ def plot_kde_contour_all_layers_classification(all_layers_data, model_name, data
     threshold = 2e-1
     cmap_s = plt.cm.get_cmap('Reds').copy()
     cmap_s.set_bad('white')
-    
-    # Track contour objects for colorbar
-    contour_objs = []
-    
+
+    last_cf = None
+
     for idx, layer_data in enumerate(all_layers_data):
         ax = axes_flat[idx]
+        ax.set_facecolor('white')
         layer_idx = layer_data['layer_idx']
-        
-        # Get KDE data
+
         kde_layer = kde_data[layer_idx]
         X = kde_layer['X']
         Y = kde_layer['Y']
         Z = np.clip(kde_layer['Z'], vmin, vmax)
         Z_masked = np.ma.masked_less_equal(Z, threshold)
-        
-        # Plot contour
-        contour = ax.contourf(X, Y, Z_masked, levels=levels, cmap=cmap_s, norm=norm)
-        contour_objs.append(contour)
-        
-        # ax.set_xlim(0, 2)
-        # ax.set_ylim(0, 2)
-        ax.set_xlabel("I(X; T)", fontsize=11, fontweight='bold')
-        ax.set_ylabel("I(T; Y)", fontsize=11, fontweight='bold')
-        ax.set_title(f"Layer {layer_idx}", fontsize=12, fontweight='bold')
-        
-        # Remove tick labels to show clean subplot
+
+        cf = ax.contourf(X, Y, Z_masked, levels=levels, cmap=cmap_s, norm=norm)
+        last_cf = cf
+
         ax.set_xticklabels([])
         ax.set_yticklabels([])
-    
-    # Remove empty subplots
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.grid(False)
+
+        if idx == 0:
+            ax.set_ylabel("H(T,Y)", fontsize=18)
+        ax.set_xlabel("H(X,T)", fontsize=18)
+        ax.set_title(f"Layer {layer_idx}", fontsize=18)
+
     for idx in range(num_layers, len(axes_flat)):
         fig.delaxes(axes_flat[idx])
-    
-    # Add shared colorbar
-    cbar_ax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
-    cbar = fig.colorbar(contour_objs[0], cax=cbar_ax, norm=norm)
-    cbar.set_label('KDE Density', fontsize=11, fontweight='bold')
-    
-    # Overall title with model and dataset info
-    fig.suptitle(f"{model_name} - {dataset_name} - KDE Contour (Classification)", 
-                fontsize=16, fontweight='bold', y=0.98)
-    
-    plt.tight_layout(rect=[0, 0, 0.9, 0.96])
-    
-    # Include group name, cluster_num and process type in filename if provided
+
+    plt.tight_layout(rect=[0, 0, 0.88, 1])
+
+    if last_cf is not None:
+        valid_axes = [ax for ax in axes_flat[:num_layers] if ax.get_visible()]
+        top    = valid_axes[0].get_position().y1
+        bottom = valid_axes[-1].get_position().y0
+        cbar_ax = fig.add_axes([0.90, bottom, 0.03, top - bottom])
+        cbar = fig.colorbar(last_cf, cax=cbar_ax)
+        cbar.ax.tick_params(labelsize=18)
+
     if group_name:
         if cluster_num:
             fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_all_layers_{group_name}_cluster{cluster_num}.png"
@@ -345,7 +286,134 @@ def plot_kde_contour_all_layers_classification(all_layers_data, model_name, data
             fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_all_layers.png"
     plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"All layers combined KDE contour plot saved as: {fname}")
+    print(f"All layers KDE contour matrix saved: {fname}")
+
+
+def plot_ratio_lineplot_all_models(models_data, dataset_name, process_type,
+                                   calcul_type='MI'):
+    """
+    분류(classification) 태스크용 grouped bar + median line plot.
+    거리 bin 없이 단일 subplot. 모델 4개 (Resnet, GSP_backbone_Resnet,
+    vit, PIGNet_GSPonly_classification) 를 한 figure에 비교.
+
+    Parameters
+    ----------
+    models_data : dict
+        {
+            model_name: [
+                {'layer_idx': int, 'mi_xt': np.ndarray (1-D), 'mi_ty': np.ndarray (1-D)},
+                ...   # 레이어 수만큼
+            ]
+        }
+        all_layers_data 리스트를 그대로 넘기면 됩니다.
+    dataset_name : str   예) 'CIFAR-10'
+    process_type : str   예) 'pixel'
+    calcul_type  : str   예) 'MI'
+    """
+    color_map = {
+        'Resnet':              '#1E88E5',   # 파랑
+        'GSP_backbone_Resnet': '#FFC107',   # 노랑  (= PIGNet backbone)
+        'vit':                 '#43A047',   # 초록
+        'PIGNet_GSP':          '#D81B60',   # 빨강
+    }
+
+    model_list   = list(models_data.keys())
+    n_models     = len(model_list)
+    model_colors = {m: color_map.get(m, '#000000') for m in model_list}
+
+    # 모델별 레이어 수가 다를 수 있으므로 최대 레이어 수 기준으로 x축 구성
+    max_layers   = max(len(layers) for layers in models_data.values())
+    layer_labels = [f"L{i+1}" for i in range(max_layers)]
+    x_base       = np.arange(1, max_layers + 1)
+
+    bar_width = 0.15
+    offsets   = np.linspace(
+        -(n_models - 1) / 2 * bar_width,
+         (n_models - 1) / 2 * bar_width,
+        n_models
+    )
+
+    folder_path = f"./ALL_MODELS/{dataset_name}/{process_type}/ratio"
+    os.makedirs(folder_path, exist_ok=True)
+
+    fig, ax = plt.subplots(figsize=(max(6, max_layers * 1.8), 5), facecolor='white')
+    ax.set_facecolor('white')
+
+    for m_idx, model_name in enumerate(model_list):
+        layers_data  = models_data[model_name]
+        color        = model_colors[model_name]
+        n_layers     = len(layers_data)
+        x_pos        = x_base[:n_layers] + offsets[m_idx]
+
+        min_values    = []
+        max_values    = []
+        median_values = []
+
+        for layer_data in layers_data:
+            mi_xt = np.asarray(layer_data['joint_xt'], dtype=float).flatten()
+            mi_ty = np.asarray(layer_data['joint_ty'], dtype=float).flatten()
+
+            valid = np.isfinite(mi_xt) & np.isfinite(mi_ty) & (mi_ty != 0)
+            ratio = mi_xt[valid] / mi_ty[valid]
+
+            if len(ratio) > 0:
+                q1, q3 = np.percentile(ratio, [25, 75])
+                iqr          = q3 - q1
+                whisker_low  = max(float(np.min(ratio)), q1 - 1.5 * iqr)
+                whisker_high = min(float(np.max(ratio)), q3 + 1.5 * iqr)
+                min_values.append(whisker_low)
+                max_values.append(whisker_high)
+                median_values.append(float(np.median(ratio)))
+            else:
+                min_values.append(np.nan)
+                max_values.append(np.nan)
+                median_values.append(np.nan)
+
+        min_values    = np.array(min_values)
+        max_values    = np.array(max_values)
+        median_values = np.array(median_values)
+
+        # ── Bar: whisker low ~ whisker high 범위 ──────────────────────────
+        bar_heights = max_values - min_values
+        ax.bar(x_pos, bar_heights, bottom=min_values,
+               width=bar_width, color=color, alpha=0.5,
+               edgecolor=color, linewidth=0.8, label=model_name)
+
+        # ── Median dot + line ─────────────────────────────────────────────
+        valid_mask = ~np.isnan(median_values)
+        vx = x_pos[valid_mask]
+        vy = median_values[valid_mask]
+        if len(vx) > 0:
+            ax.plot(vx, vy, '-',  color=color, linewidth=2,   zorder=5)
+            ax.plot(vx, vy, 'o',  color=color, markersize=5,  zorder=6,
+                    markeredgecolor='white', markeredgewidth=0.8)
+
+    ax.set_xticks(x_base)
+    ax.set_xticklabels(layer_labels)
+    ax.set_xlim(x_base[0] - 0.5, x_base[-1] + 0.5)
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.grid(False)
+
+    ax.set_xlabel("Layer", fontsize=13)
+    ax.set_ylabel("H(X,T) / H(T,Y)", fontsize=13)
+    # ax.set_title(f"{dataset_name} — {process_type} ({calcul_type})", fontsize=13, fontweight='bold')
+
+    # 범례: 지정 순서 우선
+    desired_order = ['Resnet', 'GSP_backbone_Resnet', 'vit', 'PIGNet_GSP']
+    handles, labels = ax.get_legend_handles_labels()
+    order_map = {name: i for i, name in enumerate(desired_order)}
+    pairs = sorted(zip(labels, handles), key=lambda x: order_map.get(x[0], 999))
+    if pairs:
+        s_labels, s_handles = zip(*pairs)
+        ax.legend(s_handles, s_labels, fontsize=10, loc='upper left')
+
+    plt.tight_layout()
+    fname = f"ALL_{dataset_name}_{process_type}_{calcul_type}_ratio_lineplot.png"
+    plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"✓ ratio lineplot saved: {fname}")
 
 if __name__ == "__main__":
     
@@ -354,26 +422,76 @@ if __name__ == "__main__":
                        help='Dataset name (e.g., Imagenet, CIFAR-10, CIFAR-100)')
     parser.add_argument('--model', type=str, default='PIGNet_GSPonly_classification', 
                        help='Model name (e.g., vit, Resnet, PIGNet_GSPonly_classification)')
-    parser.add_argument('--process_type', type=str, default='layer', 
+    parser.add_argument('--process_type', type=str, default='pixel', 
                        help='Preprocessing type (e.g., pixel or layer)')
-    parser.add_argument('--cluster_num', type=int, default=200,
+    parser.add_argument('--cluster_num', type=int, default=50,
                        help='Number of clusters used in MI data generation (e.g., 50, 100, 200)')
+    parser.add_argument('--all_models', default=True, action='store_true',
+                       help='Load all 4 models and draw ratio lineplot (skip single-model KDE flow)')
     args = parser.parse_args()
     
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # --all_models 모드: 4개 모델 캐시 로드 후 ratio lineplot
+    # PIGNet backbone == GSP_backbone_Resnet 이므로 별도 로드 없음
+    # PIGNet_GSP 만 추가로 로드
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if args.all_models:
+        STANDARD_MODELS = ['Resnet', 'GSP_backbone_Resnet', 'vit']
+        PIGNET_MODEL    = 'PIGNet_GSPonly_classification'
+        models_data = {}
+        c = args.cluster_num
+
+        # ── 일반 모델 3개 ─────────────────────────────────────────
+        for model_name in STANDARD_MODELS:
+            base    = (f'/home/hail/pan/HDD/MI_dataset/{args.dataset}'
+                       f'/{args.process_type}_dataset/resnet101/pretrained/{model_name}/zoom/1')
+            cache_f = os.path.join(base, f'joint_mi_analysis_cache_classification_cluster{c}.pkl')
+            if os.path.exists(cache_f):
+                with open(cache_f, 'rb') as f:
+                    models_data[model_name] = pickle.load(f)
+                print(f"✓ {model_name}: {len(models_data[model_name])} layers loaded")
+            else:
+                print(f"✗ {model_name}: cache not found, skipping")
+
+        # ── PIGNet GSP 레이어만 추가 (backbone = GSP_backbone_Resnet) ─
+        pignet_base = (f'/home/hail/pan/HDD/MI_dataset/{args.dataset}'
+                       f'/{args.process_type}_dataset/resnet101/pretrained/{PIGNET_MODEL}/zoom/1')
+        gsp_f = os.path.join(pignet_base, f'joint_mi_analysis_cache_gsp_classification_cluster{c}.pkl')
+
+        if os.path.exists(gsp_f):
+            with open(gsp_f, 'rb') as f:
+                gsp_data = pickle.load(f)
+            models_data['PIGNet_GSP'] = gsp_data
+            print(f"✓ PIGNet_GSP: {len(gsp_data)} layers loaded")
+        else:
+            print(f"✗ PIGNet_GSP: cache not found, skipping")
+
+        if models_data:
+            plot_ratio_lineplot_all_models(
+                models_data,
+                dataset_name=args.dataset,
+                process_type=args.process_type,
+                calcul_type='MI',
+            )
+        else:
+            print("No model cache found. Run each model individually first.")
+        # import sys; sys.exit(0)
+
+    # ── 단일 모델 처리 ────────────────────────────────────────────
     if args.model == "Resnet" or args.model == "vit":
         layer_num = 5
     elif args.model == "PIGNet_GSPonly_classification":
         backbonenum, gsp_layer_num = 4, 5
-    
+
     # Define paths and parameters first
     data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/{args.process_type}_dataset/resnet101/pretrained/{args.model}/zoom/1'
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 1. Load or Compute MI
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    mi_cache_file = os.path.join(data_path, f'mi_analysis_cache_classification_cluster{args.cluster_num}.pkl')
-    backbone_cache_file = os.path.join(data_path, f'mi_analysis_cache_backbone_classification_cluster{args.cluster_num}.pkl')
-    gsp_cache_file = os.path.join(data_path, f'mi_analysis_cache_gsp_classification_cluster{args.cluster_num}.pkl')
+    mi_cache_file = os.path.join(data_path, f'joint_mi_analysis_cache_classification_cluster{args.cluster_num}.pkl')
+    backbone_cache_file = os.path.join(data_path, f'joint_mi_analysis_cache_backbone_classification_cluster{args.cluster_num}.pkl')
+    gsp_cache_file = os.path.join(data_path, f'joint_mi_analysis_cache_gsp_classification_cluster{args.cluster_num}.pkl')
     mi_cache_valid = False
     
     if os.path.exists(mi_cache_file):
@@ -778,7 +896,7 @@ if __name__ == "__main__":
             else:
                 print(f"Layer {layer_idx}:")
             
-            plot_kde_contour(layer_idx, args.model, args.dataset, args.process_type, kde_data, group_name, args.cluster_num)
+            # plot_kde_contour(layer_idx, args.model, args.dataset, args.process_type, kde_data, group_name, args.cluster_num)
         
         # Generate combined subplot plot for all layers
         print(f"\n=== Generating Combined Subplot Plot ===")
@@ -794,20 +912,20 @@ if __name__ == "__main__":
         
         # Plot backbone layers
         print("\n=== Backbone Layers ===")
-        for layer_data in backbone_layers_data:
-            layer_idx = layer_data['layer_idx']
-            print(f"Backbone - Layer {layer_idx}:")
-            plot_kde_contour(layer_idx, args.model, args.dataset, args.process_type, backbone_kde_data, 'Backbone', args.cluster_num)
+        # for layer_data in backbone_layers_data:
+        #     layer_idx = layer_data['layer_idx']
+        #     print(f"Backbone - Layer {layer_idx}:")
+        #     plot_kde_contour(layer_idx, args.model, args.dataset, args.process_type, backbone_kde_data, 'Backbone', args.cluster_num)
         
         print(f"\n--- Generating Backbone Combined Subplot Plot ---")
         plot_kde_contour_all_layers_classification(backbone_layers_data, args.model, args.dataset, backbone_kde_data, len(backbone_layers_data), args.process_type, group_name='Backbone', cluster_num=args.cluster_num)
         
         # Plot GSP layers
         print("\n=== GSP Layers ===")
-        for layer_data in gsp_layers_data:
-            layer_idx = layer_data['layer_idx']
-            print(f"GSP - Layer {layer_idx}:")
-            plot_kde_contour(layer_idx, args.model, args.dataset, args.process_type, gsp_kde_data, 'GSP', args.cluster_num)
+        # for layer_data in gsp_layers_data:
+        #     layer_idx = layer_data['layer_idx']
+        #     print(f"GSP - Layer {layer_idx}:")
+        #     plot_kde_contour(layer_idx, args.model, args.dataset, args.process_type, gsp_kde_data, 'GSP', args.cluster_num)
         
         print(f"\n--- Generating GSP Combined Subplot Plot ---")
         plot_kde_contour_all_layers_classification(gsp_layers_data, args.model, args.dataset, gsp_kde_data, len(gsp_layers_data), args.process_type, group_name='GSP', cluster_num=args.cluster_num)

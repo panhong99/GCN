@@ -78,3 +78,4 @@ __pycache__/
 /PIGNet/mi_imgs
 /PIGNet/junk_imgs
 /PIGNet/imgs
+*.png

@@ -9,16 +9,23 @@ import os
 import pickle
 import argparse
 from MI_seg_kde_compute import compute_kde_values
-from MI_seg_kde_plot import (plot_scatter_same_diff, plot_scatter_with_distance_bins,
-                             plot_kde_matrix_same, plot_kde_matrix_diff,
-                             plot_ratio_boxplot_distance_bins)
+from MI_seg_kde_plot import (plot_kde_matrix_same, plot_kde_matrix_diff, plot_ratio_barplot_all_models)
+
+# from MI_seg_kde_plot import (plot_scatter_same_diff, plot_scatter_with_distance_bins,
+#                              plot_kde_matrix_same, plot_kde_matrix_diff,
+#                              plot_ratio_boxplot_distance_bins,
+#                              plot_ratio_lineplot_all_models)
+
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset',         type=str, default='cityscape', help='pascal or cityscape')
+    parser.add_argument('--dataset',         type=str, default='pascal', help='pascal or cityscape')
     parser.add_argument('--preprocess_type', type=str, default='pixel', help='pixel or layer')
-    parser.add_argument('--model',           type=str, default='ASPP')
+    parser.add_argument('--model',           type=str, default='PIGNet_GSPonly')
+    parser.add_argument('--models',          type=str, default="ASPP, PIGNet_GSPonly, Mask2Former",
+                    help='comma-separated model list for lineplot (e.g. ASPP,DeepLab,PSP). '
+                         'If set, also generates all-model ratio lineplot.')
     parser.add_argument('--vmin',            type=int, default=0)
     parser.add_argument('--vmax',            type=int, default=25)
     parser.add_argument('--valid_pascal', action='store_true', default=True, 
@@ -32,7 +39,7 @@ if __name__ == "__main__":
     if args.dataset != "pascal":
         cache_path = os.path.join(seg_file_path, 'analysis_cache_same_diff_joint.pkl')
     else:
-        valid_dir = 'valid_0' if args.valid_pascal else 'invalid_0'
+        valid_dir = 'valid_0'
         cache_path = os.path.join(seg_file_path, f'{valid_dir}/analysis_cache_same_diff_joint.pkl')
     
     if not os.path.exists(cache_path):
@@ -126,16 +133,55 @@ if __name__ == "__main__":
     #                                     args.vmin, args.vmax, kde_data,
     #                                     args.valid_pascal, args.calcul_type)
 
-    # print("\n=== KDE Matrix Plots ===")
-    # plot_kde_matrix_same(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
-    #                      process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
-    # plot_kde_matrix_diff(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
-    #                      process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
+    print("\n=== KDE Matrix Plots ===")
+    plot_kde_matrix_same(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
+                         process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
+    plot_kde_matrix_diff(args.model, args.dataset, args.vmin, args.vmax, kde_data, 
+                         process_type=args.preprocess_type, valid_pascal=args.valid_pascal, calcul_type=args.calcul_type)
 
-    print("\n=== Ratio Boxplot ===")
-    plot_ratio_boxplot_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance,
-                                     args.model, args.dataset, args.preprocess_type,
-                                     valid_pascal=args.valid_pascal,
-                                     calcul_type=args.calcul_type)
+    # print("\n=== Ratio Boxplot ===")
+    # plot_ratio_boxplot_distance_bins(mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, distance,
+    #                                  args.model, args.dataset, args.preprocess_type,
+    #                                  valid_pascal=args.valid_pascal,
+    #                                  calcul_type=args.calcul_type)
 
-    print("\n=== Done! ===")
+
+
+    # # ── All-model ratio lineplot ──────────────────────────────────────────
+    # if args.models is not None:
+    #     model_list = [m.strip() for m in args.models.split(',')]
+    #     print(f"\n=== All-model Ratio Lineplot ({', '.join(model_list)}) ===")
+
+    #     models_data = {}
+    #     for model_name in model_list:
+    #         m_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
+    #                   f"/{args.dataset}/resnet101/pretrained/{model_name}/zoom/1")
+    #         if args.dataset != "pascal":
+    #             m_cache = os.path.join(m_path, 'analysis_cache_same_diff_joint.pkl')
+    #         else:
+    #             valid_dir = 'valid_0' if args.valid_pascal else 'invalid_0'
+    #             m_cache = os.path.join(m_path, f'{valid_dir}/analysis_cache_same_diff_joint.pkl')
+
+    #         if not os.path.exists(m_cache):
+    #             print(f"  ⚠ Cache not found for {model_name}: {m_cache} — skipped")
+    #             continue
+
+    #         print(f"  Loading {model_name}...")
+    #         with open(m_cache, 'rb') as f:
+    #             d = pickle.load(f)
+    #         models_data[model_name] = {
+    #             'mi_xt_same': d['mi_xt_same'],
+    #             'mi_ty_same': d['mi_ty_same'],
+    #             'mi_xt_diff': d['mi_xt_diff'],
+    #             'mi_ty_diff': d['mi_ty_diff'],
+    #             'distance':   d['distance'],
+    #         }
+
+    #     if len(models_data) >= 1:
+    #         plot_ratio_barplot_all_models(models_data, args.dataset, args.preprocess_type,
+    #                                        valid_pascal=args.valid_pascal,
+    #                                        calcul_type=args.calcul_type)
+    #     else:
+    #         print("  ⚠ No valid model data found. Skipping lineplot.")
+
+    # print("\n=== Done! ===")
