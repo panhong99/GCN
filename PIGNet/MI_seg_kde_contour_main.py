@@ -23,8 +23,7 @@ if __name__ == "__main__":
     parser.add_argument('--dataset',         type=str, default='pascal', help='pascal or cityscape')
     parser.add_argument('--preprocess_type', type=str, default='pixel', help='pixel or layer')
     parser.add_argument('--model',           type=str, default='PIGNet_GSPonly')
-    # parser.add_argument('--models',          type=str, default="ASPP, PIGNet_GSPonly, Mask2Former",
-    parser.add_argument('--models',          type=str, default="ASPP, PIGNet_GSPonly",
+    parser.add_argument('--models',          type=str, default="ASPP, PIGNet_GSPonly, Mask2Former",
                     help='comma-separated model list for lineplot (e.g. ASPP,DeepLab,PSP). '
                          'If set, also generates all-model ratio lineplot.')
     parser.add_argument('--vmin',            type=int, default=0)
