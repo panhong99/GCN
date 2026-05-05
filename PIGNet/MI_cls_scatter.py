@@ -10,7 +10,8 @@ import numpy as np
 from tqdm.auto import trange
 import argparse
 
-plt.rcParams['font.family'] = 'Arial'
+plt.rcParams['font.family'] = 'Times New Roman'
+plt.rcParams['font.weight'] = 'regular'
 
 COLOR_MAP = {'PIGNet_GSPonly': '#D81B60', 'ResNet': '#5C6BC0', 'ViT': '#FF7043'}
 
@@ -327,6 +328,9 @@ if __name__ == "__main__":  # Classification Task
                           help='Number of clusters used in MI data generation (e.g., 50, 100)')
     argparser.add_argument('--calcul_type', type=str, default='joint',
                           help='Type of calculation for scatter plot (e.g., mi, joint)')
+    argparser.add_argument('--model_type', type=str, default='scratch', 
+                          help='Type of model (e.g., pretrained, scratch)')
+
     args = argparser.parse_args()
     
     if args.model == "Resnet" or args.model == "vit":
@@ -335,7 +339,7 @@ if __name__ == "__main__":  # Classification Task
         backbonenum, gsp_layer_num = 4,5 # backbone 3 + GSP block 5    
 
     # Setup data path
-    data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/{args.process_type}_dataset/resnet101/pretrained/{args.model}/zoom/1'
+    data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/{args.process_type}_dataset/resnet101/{args.model_type}/{args.model}/zoom/1'
     
     mi_cache_file = os.path.join(data_path, f'{args.calcul_type}_mi_analysis_cache_classification_cluster{args.cluster_num}.pkl')
     backbone_cache_file = os.path.join(data_path, f'{args.calcul_type}_mi_analysis_cache_backbone_classification_cluster{args.cluster_num}.pkl')

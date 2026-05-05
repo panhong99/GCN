@@ -23,7 +23,8 @@ if __name__ == "__main__":
     parser.add_argument('--dataset',         type=str, default='pascal', help='pascal or cityscape')
     parser.add_argument('--preprocess_type', type=str, default='pixel', help='pixel or layer')
     parser.add_argument('--model',           type=str, default='PIGNet_GSPonly')
-    parser.add_argument('--models',          type=str, default="ASPP, PIGNet_GSPonly, Mask2Former",
+    # parser.add_argument('--models',          type=str, default="ASPP, PIGNet_GSPonly, Mask2Former",
+    parser.add_argument('--models',          type=str, default="ASPP, PIGNet_GSPonly",
                     help='comma-separated model list for lineplot (e.g. ASPP,DeepLab,PSP). '
                          'If set, also generates all-model ratio lineplot.')
     parser.add_argument('--vmin',            type=int, default=0)
@@ -31,16 +32,17 @@ if __name__ == "__main__":
     parser.add_argument('--valid_pascal', action='store_true', default=True, 
                     help='if specified, use valid_0; otherwise use invalid_0')
     parser.add_argument('--calcul_type', type=str, default='joint', help='MI or joint')
+    parser.add_argument('--backbone', type=str, default='101', help='50 or 101')
+    parser.add_argument('--model_type', type=str, default='scratch', help='scratch or pretrained')
     args = parser.parse_args()
 
     seg_file_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
-                     f"/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1")
+                     f"/{args.dataset}/resnet{args.backbone}/{args.model_type}/{args.model}/zoom/1")
 
     if args.dataset != "pascal":
         cache_path = os.path.join(seg_file_path, 'analysis_cache_same_diff_joint.pkl')
     else:
-        valid_dir = 'valid_0'
-        cache_path = os.path.join(seg_file_path, f'{valid_dir}/analysis_cache_same_diff_joint.pkl')
+        cache_path = os.path.join(seg_file_path, f'analysis_cache_same_diff_joint.pkl')
     
     if not os.path.exists(cache_path):
         print("\n" + "="*60)
@@ -155,7 +157,7 @@ if __name__ == "__main__":
         models_data = {}
         for model_name in model_list:
             m_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
-                      f"/{args.dataset}/resnet101/pretrained/{model_name}/zoom/1")
+                      f"/{args.dataset}/resnet{args.backbone}/pretrained/{model_name}/zoom/1")
             if args.dataset != "pascal":
                 m_cache = os.path.join(m_path, 'analysis_cache_same_diff_joint.pkl')
             else:

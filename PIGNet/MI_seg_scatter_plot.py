@@ -7,9 +7,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-plt.rcParams['font.family'] = 'Arial'
-
-
+plt.rcParams['font.family'] = 'Times New Roman'
+plt.rcParams['font.weight'] = 'regular'
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 비활성화: 개별 layer/distance scatter plot
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

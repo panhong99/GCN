@@ -16,7 +16,6 @@ from MI_seg_mi_compute import compute_and_cache_mi
 
 from MI_seg_scatter_plot import (plot_scatter_matrix_same,plot_scatter_matrix_diff)
 
-
 if __name__ == "__main__":
     
     argparser = argparse.ArgumentParser()
@@ -25,6 +24,8 @@ if __name__ == "__main__":
     argparser.add_argument('--model', type=str, default='PIGNet_GSPonly', help='ASPP or PIGNet_GSPonly')
     argparser.add_argument('--valid_pascal',default=True, action='store_true', help='Use valid Pascal subset')
     argparser.add_argument('--calcul_type', type=str, default='joint', help='joint or MI')
+    argparser.add_argument('--backbone', type=str, default='101', help='50 or 101')
+    argparser.add_argument('--model_type', type=str, default='scratch', help='scratch or pretrained')
     args = argparser.parse_args()
     
     # ============ Data Loading ============
@@ -33,9 +34,9 @@ if __name__ == "__main__":
     print("=" * 50)
     
     if args.dataset == "pascal":
-        seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1/{'valid_0'}"
+        seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet{args.backbone}/{args.model_type}/{args.model}/zoom/1/"
     else:
-        seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet101/pretrained/{args.model}/zoom/1"
+        seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet{args.backbone}/{args.model_type}/{args.model}/zoom/1"
     
     with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
         y_in = pickle.load(f)

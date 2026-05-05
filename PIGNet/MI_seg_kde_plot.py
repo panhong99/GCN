@@ -9,7 +9,8 @@ import os
 from matplotlib.colors import Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-plt.rcParams['font.family'] = 'Arial'
+plt.rcParams['font.family'] = 'Times New Roman'
+plt.rcParams['font.weight'] = 'regular'
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 비활성화: 개별 layer/distance plot
@@ -433,10 +434,14 @@ def plot_ratio_barplot_all_models(models_data, dataset_name, process_type,
     color_map  = {'PIGNet_GSPonly': '#D81B60', 'ASPP': '#1E88E5', 'Mask2Former': '#FFC107'}
     marker_map = {'SAME': 'o', 'DIFF': '^'}
 
-    dist_bins  = np.arange(0, 50, 10)
-    num_dist   = len(dist_bins) - 1
-    model_list = list(models_data.keys())
+    # draw order: Mask2Former (back) → ASPP → PIGNet_GSPonly (front)
+    draw_order   = ['Mask2Former', 'ASPP', 'PIGNet_GSPonly']
+    dist_bins    = np.arange(0, 50, 10)
+    num_dist     = len(dist_bins) - 1
+    model_list   = [m for m in draw_order if m in models_data] + \
+                   [m for m in models_data if m not in draw_order]
     model_colors = {m: color_map.get(m, '#000000') for m in model_list}
+    alpha_map    = {'PIGNet_GSPonly': 0.55, 'ASPP': 0.45, 'Mask2Former': 0.45}
 
     first        = models_data[model_list[0]]
     n_layers     = first['mi_xt_same'].shape[0]
@@ -446,14 +451,12 @@ def plot_ratio_barplot_all_models(models_data, dataset_name, process_type,
     folder_path = f"./ALL_MODELS/{dataset_name}/{process_type}/ratio"
     os.makedirs(folder_path, exist_ok=True)
 
-    import matplotlib.lines as mlines
-
     for mode in ('SAME', 'DIFF'):
         xt_key = 'mi_xt_same' if mode == 'SAME' else 'mi_xt_diff'
         ty_key = 'mi_ty_same' if mode == 'SAME' else 'mi_ty_diff'
         marker = marker_map[mode]
 
-        _, axes = plt.subplots(1, num_dist, figsize=(20, 5), facecolor='white')
+        _, axes = plt.subplots(num_dist, 1, figsize=(8, 22), facecolor='white')
 
         for dist_idx, (b_min, b_max) in enumerate(zip(dist_bins[:-1], dist_bins[1:])):
             ax = axes[dist_idx]
@@ -465,6 +468,7 @@ def plot_ratio_barplot_all_models(models_data, dataset_name, process_type,
                 mi_xt    = data[xt_key]
                 mi_ty    = data[ty_key]
                 color    = model_colors[model_name]
+                alpha    = alpha_map.get(model_name, 0.6)
 
                 mean_values = []
                 err_vals    = []
@@ -495,29 +499,33 @@ def plot_ratio_barplot_all_models(models_data, dataset_name, process_type,
                 if len(vx) == 0:
                     continue
 
+                # ── Bar (채워진 직사각형) ──────────────────────────────────
+                ax.bar(vx, vy, width=0.6, color=color, alpha=alpha,
+                       zorder=3, edgecolor='none')
+
                 # ── Mean line ────────────────────────────────────────────
-                ax.plot(vx, vy, '-', color=color, linewidth=2, zorder=5)
+                ax.plot(vx, vy, '-', color=color, linewidth=2,
+                        alpha=min(alpha + 0.15, 1.0), zorder=5)
 
                 # ── Mean dot ─────────────────────────────────────────────
                 ax.plot(vx, vy, marker, color=color, markersize=7,
-                        markeredgecolor='white', markeredgewidth=0.8, zorder=6)
+                        markeredgecolor='white', markeredgewidth=0.8,
+                        alpha=min(alpha + 0.15, 1.0), zorder=6)
 
-                # ── Error bar (± SD) ──────────────────────────────────────
+                # ── Error bar (± SD), color = model color ─────────────────
                 ax.errorbar(vx, vy,
                             yerr=ve,
                             fmt='none',
                             ecolor=color, elinewidth=1.2,
                             capsize=4, capthick=1.2,
-                            zorder=4)
+                            alpha=min(alpha + 0.15, 1.0), zorder=4)
 
             ax.set_xticks(x_base)
             ax.set_xticklabels(layer_labels)
             ax.set_xlim(x_base[0] - 0.5, x_base[-1] + 0.5)
 
-            if dataset_name == "pascal" and mode == "SAME":
+            if dataset_name == "pascal":
                 ax.set_ylim(0, 15)
-            elif dataset_name == "pascal" and mode == "DIFF":
-                ax.set_ylim(0, 5)
             else:
                 ax.set_ylim(0, 12)
 
@@ -525,27 +533,26 @@ def plot_ratio_barplot_all_models(models_data, dataset_name, process_type,
             ax.spines['right'].set_visible(False)
             ax.grid(False)
 
-            ax.set_xlabel("Layer", fontsize=13)
-            if dist_idx == 0:
-                ax.set_ylabel("H(X,T) / H(T,Y)", fontsize=13)
-            ax.set_title(f"Distance [{b_min:.0f}–{b_max:.0f})", fontsize=13, fontweight='bold')
+            if dist_idx == num_dist - 1:
+                ax.set_xlabel("Layer", fontsize=20)
+            ax.set_ylabel("H(X,T) / H(T,Y)", fontsize=20)
+            ax.set_title(f"Distance [{b_min:.0f}–{b_max:.0f})", fontsize=20, fontweight='bold')
 
             # ── Legend: 모델 색상 ─────────────────────────────────────────
             if dist_idx == 0:
-                desired_order = ['PIGNet_GSPonly', 'ASPP', 'Mask2Former']
+                import matplotlib.patches as mpatches
+                legend_order = ['PIGNet_GSPonly', 'ASPP', 'Mask2Former']
                 handles = []
-                for name in desired_order:
+                for name in legend_order:
                     if name in model_colors:
                         handles.append(
-                            mlines.Line2D([], [], color=model_colors[name],
-                                          marker=marker, linestyle='-',
-                                          markersize=7, markeredgecolor='white',
-                                          markeredgewidth=0.8, linewidth=2,
-                                          label=name))
-                ax.legend(handles=handles, fontsize=10, loc='upper left')
+                            mpatches.Patch(color=model_colors[name],
+                                           alpha=alpha_map.get(name, 0.6),
+                                           label=name))
+                ax.legend(handles=handles, fontsize=20, loc='upper left', frameon=False)
 
         plt.tight_layout()
-        fname = f"ALL_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_ratio_errorbar_{mode}.png"
+        fname = f"ALL_{dataset_name}_{process_type}_{valid_str}_{calcul_type}_ratio_errorbar_{mode}.pdf"
         plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
         plt.close()
         print(f"✓ {mode} errorbar plot saved: {fname}")

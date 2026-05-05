@@ -6,8 +6,8 @@ factor: ""
 model: "" # PIGNet_GSPonly ASPP Mask2Former
 exp: "bn_lr7e-3"
 backbone: "resnet101"
-dataset: "pascal" # pascal, cityscape
-model_type: "pretrained"
+dataset: "cityscape" # pascal, cityscape
+model_type: "scratch"
 model_number: 3 # 1=PIGNet, 2=ASPP, 3=Mask2Former
 gpu: 0
 workers: 4
@@ -16,7 +16,7 @@ infer: True
 n_layer: 12
 n_skip_l: 3
 embedding_size: 21
-batch_size: 16
+batch_size: 50
 epochs: 50
 crop_size: 513 #if model not M2F = 513 else 512
 groups: null

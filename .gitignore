@@ -79,3 +79,6 @@ __pycache__/
 /PIGNet/junk_imgs
 /PIGNet/imgs
 *.png
+/PIGNet/ALL_MODELS/
+/PIGNet/experiment_logs/
+/PIGNet/run_mi_experiment.sh

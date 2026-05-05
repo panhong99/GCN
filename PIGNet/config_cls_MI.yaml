@@ -5,10 +5,10 @@ MI : True
 factor: ""
 model: ""
 exp: "bn_lr7e-3"
-gpu: 0 
+gpu: 0
 backbone: "resnet101"
-dataset: "CIFAR-10" # CIFAR-10, CIFAR-100, imagenet
-model_type: "pretrained"
+dataset: "imagenet" # CIFAR-10, CIFAR-100, imagenet
+model_type: "scratch"
 model_number: 3 # 1 PIGNet_GSPonly 2 Resnet 3 ViT
 workers: 4
 resume: null

@@ -7,7 +7,8 @@ import argparse
 from tqdm.auto import trange
 from matplotlib.colors import Normalize
 
-plt.rcParams['font.family'] = 'Arial'
+plt.rcParams['font.family'] = 'Times New Roman'
+plt.rcParams['font.weight'] = 'regular'
 
 def _entropy_from_counts(counts: np.ndarray, eps: float = 1e-12) -> float:
     """Calculate entropy from count histogram."""
@@ -289,49 +290,38 @@ def plot_kde_contour_all_layers_classification(all_layers_data, model_name, data
     print(f"All layers KDE contour matrix saved: {fname}")
 
 
-def plot_ratio_lineplot_all_models(models_data, dataset_name, process_type,
-                                   calcul_type='MI'):
+def plot_ratio_barplot_all_models_classification(models_data, dataset_name, process_type,
+                                                 calcul_type='MI'):
     """
-    분류(classification) 태스크용 grouped bar + median line plot.
-    거리 bin 없이 단일 subplot. 모델 4개 (Resnet, GSP_backbone_Resnet,
-    vit, PIGNet_GSPonly_classification) 를 한 figure에 비교.
+    분류(classification) 태스크용 mean ± SD errorbar plot (seg barplot과 동일 스타일).
+    거리 bin 없이 단일 figure. 모델별 레이어 수가 달라도 자연스럽게 처리.
+    """
+    import matplotlib.patches as mpatches
 
-    Parameters
-    ----------
-    models_data : dict
-        {
-            model_name: [
-                {'layer_idx': int, 'mi_xt': np.ndarray (1-D), 'mi_ty': np.ndarray (1-D)},
-                ...   # 레이어 수만큼
-            ]
-        }
-        all_layers_data 리스트를 그대로 넘기면 됩니다.
-    dataset_name : str   예) 'CIFAR-10'
-    process_type : str   예) 'pixel'
-    calcul_type  : str   예) 'MI'
-    """
     color_map = {
-        'Resnet':              '#1E88E5',   # 파랑
-        'GSP_backbone_Resnet': '#FFC107',   # 노랑  (= PIGNet backbone)
-        'vit':                 '#43A047',   # 초록
-        'PIGNet_GSP':          '#D81B60',   # 빨강
+        'Resnet':          '#5C6BC0',
+        'vit':             '#FF7043',
+        'PIGNet_Backbone': '#8E24AA',
+        'PIGNet_GSP':      '#D81B60',
+    }
+    alpha_map = {
+        'Resnet':          0.45,
+        'vit':             0.45,
+        'PIGNet_Backbone': 0.55,
+        'PIGNet_GSP':      0.55,
     }
 
     model_list   = list(models_data.keys())
-    n_models     = len(model_list)
     model_colors = {m: color_map.get(m, '#000000') for m in model_list}
 
-    # 모델별 레이어 수가 다를 수 있으므로 최대 레이어 수 기준으로 x축 구성
     max_layers   = max(len(layers) for layers in models_data.values())
-    layer_labels = [f"L{i+1}" for i in range(max_layers)]
     x_base       = np.arange(1, max_layers + 1)
+    layer_labels = [f"L{i+1}" for i in range(max_layers)]
 
-    bar_width = 0.15
-    offsets   = np.linspace(
-        -(n_models - 1) / 2 * bar_width,
-         (n_models - 1) / 2 * bar_width,
-        n_models
-    )
+    # PIGNet을 맨 앞(위)에 그리기 위해 background 모델부터 그림
+    back_first = ['Resnet', 'vit', 'PIGNet_Backbone', 'PIGNet_GSP']
+    draw_order = [m for m in back_first if m in model_list] + \
+                 [m for m in model_list if m not in back_first]
 
     folder_path = f"./ALL_MODELS/{dataset_name}/{process_type}/ratio"
     os.makedirs(folder_path, exist_ok=True)
@@ -339,54 +329,43 @@ def plot_ratio_lineplot_all_models(models_data, dataset_name, process_type,
     fig, ax = plt.subplots(figsize=(max(6, max_layers * 1.8), 5), facecolor='white')
     ax.set_facecolor('white')
 
-    for m_idx, model_name in enumerate(model_list):
-        layers_data  = models_data[model_name]
-        color        = model_colors[model_name]
-        n_layers     = len(layers_data)
-        x_pos        = x_base[:n_layers] + offsets[m_idx]
+    for model_name in draw_order:
+        layers_data = models_data[model_name]
+        color       = model_colors[model_name]
+        alpha       = alpha_map.get(model_name, 0.5)
+        n_layers    = len(layers_data)
+        x_pos       = x_base[:n_layers]
 
-        min_values    = []
-        max_values    = []
-        median_values = []
+        mean_values = []
+        err_vals    = []
 
         for layer_data in layers_data:
             mi_xt = np.asarray(layer_data['joint_xt'], dtype=float).flatten()
             mi_ty = np.asarray(layer_data['joint_ty'], dtype=float).flatten()
+            ratio = mi_xt / mi_ty
 
-            valid = np.isfinite(mi_xt) & np.isfinite(mi_ty) & (mi_ty != 0)
-            ratio = mi_xt[valid] / mi_ty[valid]
+            mean_values.append(np.mean(ratio))
+            err_vals.append(np.std(ratio, ddof=1))
 
-            if len(ratio) > 0:
-                q1, q3 = np.percentile(ratio, [25, 75])
-                iqr          = q3 - q1
-                whisker_low  = max(float(np.min(ratio)), q1 - 1.5 * iqr)
-                whisker_high = min(float(np.max(ratio)), q3 + 1.5 * iqr)
-                min_values.append(whisker_low)
-                max_values.append(whisker_high)
-                median_values.append(float(np.median(ratio)))
-            else:
-                min_values.append(np.nan)
-                max_values.append(np.nan)
-                median_values.append(np.nan)
+        mean_values = np.array(mean_values)
+        err_vals    = np.array(err_vals)
 
-        min_values    = np.array(min_values)
-        max_values    = np.array(max_values)
-        median_values = np.array(median_values)
+        ax.bar(x_pos, mean_values, width=0.6, color=color, alpha=alpha,
+               zorder=3, edgecolor='none')
 
-        # ── Bar: whisker low ~ whisker high 범위 ──────────────────────────
-        bar_heights = max_values - min_values
-        ax.bar(x_pos, bar_heights, bottom=min_values,
-               width=bar_width, color=color, alpha=0.5,
-               edgecolor=color, linewidth=0.8, label=model_name)
+        ax.plot(x_pos, mean_values, '-', color=color, linewidth=2,
+                alpha=min(alpha + 0.15, 1.0), zorder=5)
 
-        # ── Median dot + line ─────────────────────────────────────────────
-        valid_mask = ~np.isnan(median_values)
-        vx = x_pos[valid_mask]
-        vy = median_values[valid_mask]
-        if len(vx) > 0:
-            ax.plot(vx, vy, '-',  color=color, linewidth=2,   zorder=5)
-            ax.plot(vx, vy, 'o',  color=color, markersize=5,  zorder=6,
-                    markeredgecolor='white', markeredgewidth=0.8)
+        ax.plot(x_pos, mean_values, 'o', color=color, markersize=7,
+                markeredgecolor='white', markeredgewidth=0.8,
+                alpha=min(alpha + 0.15, 1.0), zorder=6)
+
+        ax.errorbar(x_pos, mean_values,
+                    yerr=err_vals,
+                    fmt='none',
+                    ecolor=color, elinewidth=1.2,
+                    capsize=4, capthick=1.2,
+                    alpha=min(alpha + 0.15, 1.0), zorder=4)
 
     ax.set_xticks(x_base)
     ax.set_xticklabels(layer_labels)
@@ -396,24 +375,26 @@ def plot_ratio_lineplot_all_models(models_data, dataset_name, process_type,
     ax.spines['right'].set_visible(False)
     ax.grid(False)
 
-    ax.set_xlabel("Layer", fontsize=13)
-    ax.set_ylabel("H(X,T) / H(T,Y)", fontsize=13)
-    # ax.set_title(f"{dataset_name} — {process_type} ({calcul_type})", fontsize=13, fontweight='bold')
+    ax.set_xlabel("Layer", fontsize=20)
+    ax.set_ylabel("H(X,T) / H(T,Y)", fontsize=20)
 
-    # 범례: 지정 순서 우선
-    desired_order = ['Resnet', 'GSP_backbone_Resnet', 'vit', 'PIGNet_GSP']
-    handles, labels = ax.get_legend_handles_labels()
-    order_map = {name: i for i, name in enumerate(desired_order)}
-    pairs = sorted(zip(labels, handles), key=lambda x: order_map.get(x[0], 999))
-    if pairs:
-        s_labels, s_handles = zip(*pairs)
-        ax.legend(s_handles, s_labels, fontsize=10, loc='upper left')
+    desired_order = ['PIGNet_GSP', 'PIGNet_Backbone', 'Resnet', 'vit']
+    legend_handles = []
+    for name in desired_order:
+        if name in model_colors and name in model_list:
+            legend_handles.append(
+                mpatches.Patch(color=model_colors[name],
+                               alpha=alpha_map.get(name, 0.5),
+                               label=name))
+    if legend_handles:
+        ax.legend(handles=legend_handles, fontsize=14, loc='upper left',
+                  bbox_to_anchor=(0, 1.12), frameon=False)
 
     plt.tight_layout()
-    fname = f"ALL_{dataset_name}_{process_type}_{calcul_type}_ratio_lineplot.png"
+    fname = f"ALL_{dataset_name}_{process_type}_{calcul_type}_ratio_barplot.pdf"
     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
     plt.close()
-    print(f"✓ ratio lineplot saved: {fname}")
+    print(f"✓ ratio barplot saved: {fname}")
 
 if __name__ == "__main__":
     
@@ -428,15 +409,16 @@ if __name__ == "__main__":
                        help='Number of clusters used in MI data generation (e.g., 50, 100, 200)')
     parser.add_argument('--all_models', default=True, action='store_true',
                        help='Load all 4 models and draw ratio lineplot (skip single-model KDE flow)')
+    parser.add_argument('--model_type', default= "scratch",
+                       help='scratch or pretrained')
+
     args = parser.parse_args()
     
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # --all_models 모드: 4개 모델 캐시 로드 후 ratio lineplot
-    # PIGNet backbone == GSP_backbone_Resnet 이므로 별도 로드 없음
-    # PIGNet_GSP 만 추가로 로드
+    # --all_models 모드: 모델 캐시 로드 후 ratio lineplot / barplot
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     if args.all_models:
-        STANDARD_MODELS = ['Resnet', 'GSP_backbone_Resnet', 'vit']
+        STANDARD_MODELS = ['Resnet', 'vit']
         PIGNET_MODEL    = 'PIGNet_GSPonly_classification'
         models_data = {}
         c = args.cluster_num
@@ -444,7 +426,7 @@ if __name__ == "__main__":
         # ── 일반 모델 3개 ─────────────────────────────────────────
         for model_name in STANDARD_MODELS:
             base    = (f'/home/hail/pan/HDD/MI_dataset/{args.dataset}'
-                       f'/{args.process_type}_dataset/resnet101/pretrained/{model_name}/zoom/1')
+                       f'/{args.process_type}_dataset/resnet101/{args.model_type}/{model_name}/zoom/1')
             cache_f = os.path.join(base, f'joint_mi_analysis_cache_classification_cluster{c}.pkl')
             if os.path.exists(cache_f):
                 with open(cache_f, 'rb') as f:
@@ -453,11 +435,21 @@ if __name__ == "__main__":
             else:
                 print(f"✗ {model_name}: cache not found, skipping")
 
-        # ── PIGNet GSP 레이어만 추가 (backbone = GSP_backbone_Resnet) ─
         pignet_base = (f'/home/hail/pan/HDD/MI_dataset/{args.dataset}'
-                       f'/{args.process_type}_dataset/resnet101/pretrained/{PIGNET_MODEL}/zoom/1')
-        gsp_f = os.path.join(pignet_base, f'joint_mi_analysis_cache_gsp_classification_cluster{c}.pkl')
+                       f'/{args.process_type}_dataset/resnet101/{args.model_type}/{PIGNET_MODEL}/zoom/1')
 
+        # ── PIGNet backbone (3 layers) ────────────────────────────
+        backbone_f = os.path.join(pignet_base, f'joint_mi_analysis_cache_backbone_classification_cluster{c}.pkl')
+        if os.path.exists(backbone_f):
+            with open(backbone_f, 'rb') as f:
+                backbone_data = pickle.load(f)
+            models_data['PIGNet_Backbone'] = backbone_data
+            print(f"✓ PIGNet_Backbone: {len(backbone_data)} layers loaded")
+        else:
+            print(f"✗ PIGNet_Backbone: cache not found, skipping")
+
+        # ── PIGNet GSP (4 layers) ─────────────────────────────────
+        gsp_f = os.path.join(pignet_base, f'joint_mi_analysis_cache_gsp_classification_cluster{c}.pkl')
         if os.path.exists(gsp_f):
             with open(gsp_f, 'rb') as f:
                 gsp_data = pickle.load(f)
@@ -467,7 +459,7 @@ if __name__ == "__main__":
             print(f"✗ PIGNet_GSP: cache not found, skipping")
 
         if models_data:
-            plot_ratio_lineplot_all_models(
+            plot_ratio_barplot_all_models_classification(
                 models_data,
                 dataset_name=args.dataset,
                 process_type=args.process_type,
@@ -484,11 +476,11 @@ if __name__ == "__main__":
         backbonenum, gsp_layer_num = 4, 5
 
     # Define paths and parameters first
-    data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/{args.process_type}_dataset/resnet101/pretrained/{args.model}/zoom/1'
+    data_path = f'/home/hail/pan/HDD/MI_dataset/{args.dataset}/{args.process_type}_dataset/resnet101/{args.model_type}/{args.model}/zoom/1'
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # ━━━━━━━━━━━━━━━━━═══════════════════════════════════════════════════════════════════════════════════════
     # 1. Load or Compute MI
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # ━━━━━━━━━━━━━━━━━═══════════════════════════════════════════════════════════════════════════════════════
     mi_cache_file = os.path.join(data_path, f'joint_mi_analysis_cache_classification_cluster{args.cluster_num}.pkl')
     backbone_cache_file = os.path.join(data_path, f'joint_mi_analysis_cache_backbone_classification_cluster{args.cluster_num}.pkl')
     gsp_cache_file = os.path.join(data_path, f'joint_mi_analysis_cache_gsp_classification_cluster{args.cluster_num}.pkl')
