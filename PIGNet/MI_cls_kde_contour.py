@@ -183,32 +183,6 @@ def compute_kde_values(all_layers_data):
     return kde_data
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 비활성화: 개별 layer KDE contour
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# def plot_kde_contour(layer_idx, model_name, dataset_name, process_type, kde_data, group_name=None, cluster_num=None):
-#     layer_data = kde_data[layer_idx]
-#     X = layer_data['X']; Y = layer_data['Y']; Z = layer_data['Z']
-#     vmin, vmax = -2, 2
-#     Z = np.clip(Z, vmin, vmax)
-#     fig, ax = plt.subplots(figsize=(10, 8))
-#     norm = plt.Normalize(vmin=vmin, vmax=vmax)
-#     levels = np.linspace(vmin, vmax, 21)
-#     cmap_s = plt.cm.get_cmap('Reds').copy(); cmap_s.set_bad('white')
-#     Z_masked = np.ma.masked_less_equal(Z, 2e-1)
-#     cf = ax.contourf(X, Y, Z_masked, levels=levels, cmap=cmap_s, norm=norm)
-#     plt.colorbar(cf, ax=ax)
-#     ax.set_xlabel("H(X,T)", fontsize=13); ax.set_ylabel("H(T,Y)", fontsize=13)
-#     title = f"Layer {layer_idx} - {group_name} - KDE" if group_name else f"Layer {layer_idx} - KDE"
-#     ax.set_title(title, fontsize=14)
-#     plt.tight_layout()
-#     if group_name:
-#         fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_{group_name}_layer{layer_idx}.png"
-#     else:
-#         fname = f"{model_name}_{dataset_name}_{process_type}_kde_contour_layer{layer_idx}.png"
-#     plt.savefig(fname, dpi=150, bbox_inches='tight'); plt.close()
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 활성화: KDE Matrix (1 × num_layers)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def plot_kde_contour_all_layers_classification(all_layers_data, model_name, dataset_name, kde_data, num, process_type, group_name=None, cluster_num=None):
@@ -258,9 +232,9 @@ def plot_kde_contour_all_layers_classification(all_layers_data, model_name, data
         ax.grid(False)
 
         if idx == 0:
-            ax.set_ylabel("H(T,Y)", fontsize=18)
-        ax.set_xlabel("H(X,T)", fontsize=18)
-        ax.set_title(f"Layer {layer_idx}", fontsize=18)
+            ax.set_ylabel("H(T,Y)", fontsize=25)
+        ax.set_xlabel("H(X,T)", fontsize=25)
+        ax.set_title(f"Layer {layer_idx}", fontsize=25)
 
     for idx in range(num_layers, len(axes_flat)):
         fig.delaxes(axes_flat[idx])
@@ -273,7 +247,7 @@ def plot_kde_contour_all_layers_classification(all_layers_data, model_name, data
         bottom = valid_axes[-1].get_position().y0
         cbar_ax = fig.add_axes([0.90, bottom, 0.03, top - bottom])
         cbar = fig.colorbar(last_cf, cax=cbar_ax)
-        cbar.ax.tick_params(labelsize=18)
+        cbar.ax.tick_params(labelsize=25)
 
     if group_name:
         if cluster_num:
@@ -375,8 +349,8 @@ def plot_ratio_barplot_all_models_classification(models_data, dataset_name, proc
     ax.spines['right'].set_visible(False)
     ax.grid(False)
 
-    ax.set_xlabel("Layer", fontsize=20)
-    ax.set_ylabel("H(X,T) / H(T,Y)", fontsize=20)
+    ax.set_xlabel("Layer", fontsize=25)
+    ax.set_ylabel("H(X,T) / H(T,Y)", fontsize=25)
 
     desired_order = ['PIGNet_GSP', 'PIGNet_Backbone', 'Resnet', 'vit']
     legend_handles = []
@@ -387,7 +361,7 @@ def plot_ratio_barplot_all_models_classification(models_data, dataset_name, proc
                                alpha=alpha_map.get(name, 0.5),
                                label=name))
     if legend_handles:
-        ax.legend(handles=legend_handles, fontsize=14, loc='upper left',
+        ax.legend(handles=legend_handles, fontsize=25, loc='upper left',
                   bbox_to_anchor=(0, 1.12), frameon=False)
 
     plt.tight_layout()

@@ -153,35 +153,40 @@ if __name__ == "__main__":
         model_list = [m.strip() for m in args.models.split(',')]
         print(f"\n=== All-model Ratio Lineplot ({', '.join(model_list)}) ===")
 
-        models_data = {}
-        for model_name in model_list:
-            m_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
-                      f"/{args.dataset}/resnet{args.backbone}/pretrained/{model_name}/zoom/1")
-            if args.dataset != "pascal":
-                m_cache = os.path.join(m_path, 'analysis_cache_same_diff_joint.pkl')
-            else:
-                valid_dir = 'valid_0' if args.valid_pascal else 'invalid_0'
-                m_cache = os.path.join(m_path, f'{valid_dir}/analysis_cache_same_diff_joint.pkl')
+        def load_models_data(dataset_name):
+            data = {}
+            valid_dir = 'valid_0' if args.valid_pascal else 'invalid_0'
+            for model_name in model_list:
+                m_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
+                          f"/{dataset_name}/resnet{args.backbone}/pretrained/{model_name}/zoom/1")
+                if dataset_name != "pascal":
+                    m_cache = os.path.join(m_path, 'analysis_cache_same_diff_joint.pkl')
+                else:
+                    m_cache = os.path.join(m_path, f'{valid_dir}/analysis_cache_same_diff_joint.pkl')
 
-            if not os.path.exists(m_cache):
-                print(f"  ⚠ Cache not found for {model_name}: {m_cache} — skipped")
-                continue
+                if not os.path.exists(m_cache):
+                    print(f"  ⚠ Cache not found for {model_name} ({dataset_name}): {m_cache} — skipped")
+                    continue
 
-            print(f"  Loading {model_name}...")
-            with open(m_cache, 'rb') as f:
-                d = pickle.load(f)
-            models_data[model_name] = {
-                'mi_xt_same': d['mi_xt_same'],
-                'mi_ty_same': d['mi_ty_same'],
-                'mi_xt_diff': d['mi_xt_diff'],
-                'mi_ty_diff': d['mi_ty_diff'],
-                'distance':   d['distance'],
-            }
+                print(f"  Loading {model_name} ({dataset_name})...")
+                with open(m_cache, 'rb') as f:
+                    d = pickle.load(f)
+                data[model_name] = {
+                    'mi_xt_same': d['mi_xt_same'],
+                    'mi_ty_same': d['mi_ty_same'],
+                    'mi_xt_diff': d['mi_xt_diff'],
+                    'mi_ty_diff': d['mi_ty_diff'],
+                    'distance':   d['distance'],
+                }
+            return data
 
-        if len(models_data) >= 1:
-            plot_ratio_barplot_all_models(models_data, args.dataset, args.preprocess_type,
-                                           valid_pascal=args.valid_pascal,
-                                           calcul_type=args.calcul_type)
+        models_data_pascal    = load_models_data('pascal')
+        models_data_cityscape = load_models_data('cityscape')
+
+        if len(models_data_pascal) >= 1 and len(models_data_cityscape) >= 1:
+            plot_ratio_barplot_all_models(models_data_pascal, models_data_cityscape,
+                                          args.preprocess_type,
+                                          calcul_type=args.calcul_type)
         else:
             print("  ⚠ No valid model data found. Skipping lineplot.")
 

@@ -165,22 +165,6 @@ def cal_mi_t_y(t, y, eps=1e-12):
     return joint_map
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 비활성화: 개별 layer scatter
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# def plot_scatter_classification(mi_xt, mi_ty, distance, layer_idx, model_name, dataset_name, process_type, group_name=None, cluster_num=None, calcul_type=None):
-#     fig, ax = plt.subplots(figsize=(10, 8))
-#     scatter = ax.scatter(mi_xt, mi_ty, c=distance, cmap='viridis', s=20, alpha=0.6, edgecolors='none')
-#     plt.colorbar(scatter, ax=ax)
-#     ax.set_xlabel("H(X,T)", fontsize=13); ax.set_ylabel("H(T,Y)", fontsize=13)
-#     ct = f"_{calcul_type}" if calcul_type else ""
-#     if group_name:
-#         fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_{group_name}_layer{layer_idx}.png"
-#     else:
-#         fname = f"{model_name}_{dataset_name}_{process_type}{ct}_scatter_layer{layer_idx}.png"
-#     plt.tight_layout(); plt.savefig(fname, dpi=150, bbox_inches='tight'); plt.close()
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # 활성화: Scatter Matrix (1 × num_layers)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_name, num, process_type, group_name=None, cluster_num=None, calcul_type=None):
@@ -230,11 +214,11 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
         ax.grid(False)
 
         if idx == 0:
-            ax.set_ylabel("H(T,Y)", fontsize=18)
-        ax.set_xlabel("H(X,T)", fontsize=18)
+            ax.set_ylabel("H(T,Y)", fontsize=25)
+        ax.set_xlabel("H(X,T)", fontsize=25)
 
         title = f"{layer_group} Layer {layer_idx}" if layer_group else f"Layer {layer_idx}"
-        ax.set_title(title, fontsize=18)
+        ax.set_title(title, fontsize=25)
 
     for idx in range(num_layers, len(axes_flat)):
         fig.delaxes(axes_flat[idx])
@@ -247,7 +231,7 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
         bottom = valid_axes[-1].get_position().y0
         cbar_ax = fig.add_axes([0.90, bottom, 0.03, top - bottom])
         cbar = fig.colorbar(last_sc, cax=cbar_ax)
-        cbar.ax.tick_params(labelsize=18)
+        cbar.ax.tick_params(labelsize=25)
 
     ct = f"_{calcul_type}" if calcul_type else ""
     if group_name:
@@ -263,57 +247,6 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
     plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"All layers scatter matrix saved: {fname}")
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 비활성화: ratio boxplot / lineplot (barplot 작업 예정)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# def plot_ratio_boxplot_classification(all_layers_data, model_name, dataset_name, process_type,
-#                                       calcul_type='MI', median_alpha=0.8):
-#     if not all_layers_data:
-#         return
-#     n_layers = len(all_layers_data)
-#     layer_labels = [f"L{d['layer_idx']}" for d in all_layers_data]
-#     x_positions = np.arange(1, n_layers + 1)
-#     ratios = []
-#     median_values = []
-#     for layer_data in all_layers_data:
-#         mi_xt = np.asarray(layer_data[f'{calcul_type}_xt'], dtype=float)
-#         mi_ty = np.asarray(layer_data[f'{calcul_type}_ty'], dtype=float)
-#         valid_mask = np.isfinite(mi_xt) & np.isfinite(mi_ty) & (mi_ty != 0)
-#         ratio = mi_xt[valid_mask] / mi_ty[valid_mask]
-#         ratios.append(ratio)
-#         median_values.append(np.median(ratio) if len(ratio) > 0 else np.nan)
-#     fig, ax = plt.subplots(figsize=(10, 6), facecolor='white')
-#     bp = ax.boxplot(ratios, positions=x_positions, patch_artist=True, showfliers=False, widths=0.5, labels=layer_labels)
-#     plt.tight_layout()
-#     folder_path = f"./{model_name}/{dataset_name}/{process_type}/ratio"
-#     os.makedirs(folder_path, exist_ok=True)
-#     fname = f"{model_name}_{dataset_name}_{process_type}_{calcul_type}_ratio_boxplot.png"
-#     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
-#     plt.close()
-
-
-# def plot_ratio_lineplot_all_models(models_data, dataset_name, process_type, calcul_type='MI'):
-#     model_list = list(models_data.keys())
-#     n_models = len(model_list)
-#     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-#     model_colors = {m: color_cycle[i % len(color_cycle)] for i, m in enumerate(model_list)}
-#     first_layers = models_data[model_list[0]]['all_layers_data']
-#     n_layers = len(first_layers)
-#     layer_labels = [f"L{d['layer_idx']}" for d in first_layers]
-#     x_base = np.arange(1, n_layers + 1)
-#     box_width = 0.12
-#     total_span = box_width * n_models * 1.5
-#     offsets = np.linspace(-total_span / 2, total_span / 2, n_models)
-#     folder_path = f"./ALL_MODELS/{dataset_name}/{process_type}/ratio"
-#     os.makedirs(folder_path, exist_ok=True)
-#     fig, ax = plt.subplots(figsize=(10, 6), facecolor='white')
-#     plt.tight_layout()
-#     fname = f"ALL_{dataset_name}_{process_type}_{calcul_type}_ratio_lineplot.png"
-#     plt.savefig(os.path.join(folder_path, fname), dpi=150, bbox_inches='tight')
-#     plt.close()
-
 
 if __name__ == "__main__":  # Classification Task
     
@@ -597,13 +530,13 @@ if __name__ == "__main__":  # Classification Task
             print("Cache saved successfully!")
     
     # Plot styling
-    plt.rcParams['font.size'] = 12
-    plt.rcParams['axes.labelsize'] = 13
-    plt.rcParams['axes.titlesize'] = 14
-    plt.rcParams['legend.fontsize'] = 11
-    plt.rcParams['xtick.labelsize'] = 11
-    plt.rcParams['ytick.labelsize'] = 11
-    
+    plt.rcParams['font.size'] = 25
+    plt.rcParams['axes.labelsize'] = 25
+    plt.rcParams['axes.titlesize'] = 25
+    plt.rcParams['legend.fontsize'] = 25
+    plt.rcParams['xtick.labelsize'] = 25
+    plt.rcParams['ytick.labelsize'] = 25
+
     print("\n=== Generating Scatter Plots ===")
     
     # Generate individual plots for each layer
