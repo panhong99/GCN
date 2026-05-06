@@ -666,6 +666,9 @@ class Mask2Former(nn.Module):
             align_corners=False,
         )
 
+        predictions_mask = [predictions_mask[i] for i in [2, 5, 8, 9]]
+        predictions_mask.insert(0, features['res5'].numpy())
+
         return mask_pred_results, predictions_mask
     
 class ResNet(nn.Module):

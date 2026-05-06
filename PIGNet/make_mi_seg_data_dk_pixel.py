@@ -152,7 +152,7 @@ def main(config, model_file, model_path):
 
         if config.model == "Mask2Former":
             # 특정 인덱스만 선택 [0, 2, 5, 8, 9]
-            layers_output = [layers_output[i] for i in [0, 2, 5, 8, 9]]
+            # layers_output = [layers_output[i] for i in [2, 5, 8, 9]]
             # 각 layer를 (bs, Q, H, W) → (bs, Q, 33, 33)으로 리사이즈
             layers_output_resized = []
             for layer in layers_output:

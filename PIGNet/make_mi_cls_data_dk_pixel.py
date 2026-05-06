@@ -158,16 +158,22 @@ def main(config, model_file, model_path):
         
         if config.model == "Resnet":
             _, layers_output_ = model(inputs)
+            layers_output_.insert(0, inputs.detach().cpu().numpy())
             layers_output = resize_layers_shape(layers_output_, grid_size)
 
         elif config.model == "vit":
-            _, intermidiate = model.forward_intermediates(inputs, indices=[0,2,5,8,11])
+            _, intermidiate = model.forward_intermediates(inputs, indices=[2,5,8,11])
+            intermidiate.insert(0, inputs.detach().cpu().numpy())
             layers_output = resize_layers_shape(intermidiate, grid_size)
 
         elif config.model == "PIGNet_GSPonly_classification":
             _, layers_output_, gsp_layers_output = model(inputs)
+
+            layers_output_.insert(0, inputs.detach().cpu().numpy())
             backbone_layers_output = resize_layers_shape(layers_output_, grid_size)
+
             # ★ GSP layers도 resize
+            gsp_layers_output.insert(0, inputs.detach().cpu().numpy())
             gsp_layers_output_resized = resize_layers_shape(gsp_layers_output, grid_size)
             
         # layers_output return할 때 최소한 detach는 되야함 
@@ -243,16 +249,22 @@ def main(config, model_file, model_path):
             
         if config.model == "Resnet":
             _, layers_output_ = model(inputs)
+            layers_output_.insert(0, inputs.detach().cpu().numpy())
             layers_output = resize_layers_shape(layers_output_, grid_size)
 
         elif config.model == "vit":
-            _, intermidiate = model.forward_intermediates(inputs, indices=[0,2,5,8,11])
+            _, intermidiate = model.forward_intermediates(inputs, indices=[2,5,8,11])
+            intermidiate.insert(0, inputs.detach().cpu().numpy())
             layers_output = resize_layers_shape(intermidiate, grid_size)
 
         elif config.model == "PIGNet_GSPonly_classification":
             _, layers_output_, gsp_layers_output = model(inputs)
+
+            layers_output_.insert(0, inputs.detach().cpu().numpy())
             backbone_layers_output = resize_layers_shape(layers_output_, grid_size)
+
             # ★ GSP layers도 resize
+            gsp_layers_output.insert(0, inputs.detach().cpu().numpy())
             gsp_layers_output_resized = resize_layers_shape(gsp_layers_output, grid_size)
 
         if config.model != "PIGNet_GSPonly_classification":

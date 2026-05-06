@@ -458,7 +458,7 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-        backbone_layers_output.append(x.detach().cpu())
+        # backbone_layers_output.append(x.detach().cpu())
 
         x = self.layer1(x) #block1
         backbone_layers_output.append(x.detach().cpu())
@@ -473,7 +473,7 @@ class ResNet(nn.Module):
 
         x, gsp_layer_outputs = self.pyramid_gnn(x)
 
-        gsp_layer_outputs.insert(0, backbone_layers_output[0].numpy())
+        # gsp_layer_outputs.insert(0, backbone_layers_output[0].numpy())
 
         return_gsp_output= x
 

@@ -304,7 +304,7 @@ class GSP(nn.Module):
                 x_s_f.append(self.graph2feature(x, num_nodes=(self.grid_size ** 2),
                                                 feature_shape=(self.embedding_size, 33, 33)))
 
-        gsp_layers_output = [t.detach().cpu() for t in x_s_f]
+        gsp_layers_output = [t.detach().cpu() for t in x_s_f[1:]]
 
         output = torch.cat(x_s_f, dim=1)
 
@@ -435,23 +435,27 @@ class ResNet(nn.Module):
         x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
-
+        
+        backbone_layers_output = []
+        
         x = self.layer1(x)  # block1
-        # backbone_layers_output.append(x)
+        
+        backbone_layers_output.append(x)
 
         x = self.layer2(x)  # block2
-        # backbone_layers_output.append(x)
+        backbone_layers_output.append(x)
     
         x = self.layer3(x)  # block3
-        # backbone_layers_output.append(x)
+        backbone_layers_output.append(x)
     
         x = self.layer4(x)  # block4
-        # backbone_layers_output.append(x)
+        backbone_layers_output.append(x)
 
         x, gsp_layers_outputs = self.pyramid_gnn(x)
 
         return_gsp_output = x
 
+        gsp_layers_outputs.insert(0, backbone_layers_output[-1].numpy())
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
         return x, gsp_layers_outputs #return_gsp_output

@@ -329,6 +329,7 @@ class ResNet(nn.Module):
         x, aspp_layers_output = self.aspp(x)
         # x = self.aspp(x)
 
+        aspp_layers_output.insert(0, backbone_layers_output[-1].numpy())
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
         return x, aspp_layers_output
@@ -458,7 +459,7 @@ class ASPP(nn.Module):
         for conv in self.convs:
             res.append(conv(x))
         
-        aspp_layers_output = [t.detach().cpu() for t in res]
+        aspp_layers_output = [t.detach().cpu() for t in res[:-1]]
         res = torch.cat(res, dim=1)
 
         return self.project(res), aspp_layers_output
