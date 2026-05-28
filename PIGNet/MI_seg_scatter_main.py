@@ -9,7 +9,7 @@ import os
 import pickle
 import argparse
 from MI_seg_mi_compute import compute_and_cache_mi
-# from MI_seg_scatter_plot import (plot_scatter_same_diff, 
+# from MI_seg_scatter_plot import (plot_scatter_same_diff,
 #                          plot_scatter_with_distance_bins,
 #                          plot_scatter_matrix_same,
 #                          plot_scatter_matrix_diff)
@@ -17,7 +17,7 @@ from MI_seg_mi_compute import compute_and_cache_mi
 from MI_seg_scatter_plot import (plot_scatter_matrix_same,plot_scatter_matrix_diff)
 
 if __name__ == "__main__":
-    
+
     argparser = argparse.ArgumentParser()
     argparser.add_argument('--dataset', type=str, default='pascal', help='pascal or cityscape')
     argparser.add_argument('--preprocess_type', type=str, default='pixel', help='layer or pixel')
@@ -27,40 +27,40 @@ if __name__ == "__main__":
     argparser.add_argument('--backbone', type=str, default='101', help='50 or 101')
     argparser.add_argument('--model_type', type=str, default='scratch', help='scratch or pretrained')
     args = argparser.parse_args()
-    
+
     # ============ Data Loading ============
     print("=" * 50)
     print("Loading data...")
     print("=" * 50)
-    
+
     if args.dataset == "pascal":
         seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet{args.backbone}/{args.model_type}/{args.model}/zoom/1/"
     else:
         seg_file_path = f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset/{args.dataset}/resnet{args.backbone}/{args.model_type}/{args.model}/zoom/1"
-    
+
     with open(os.path.join(seg_file_path, 'gt_labels.pkl'), 'rb') as f:
         y_in = pickle.load(f)
-    
+
     with open(os.path.join(seg_file_path, 'layer_0.pkl'), 'rb') as f:
         x_in = pickle.load(f)
-    
+
     t_in = []
     for i in range(1, 5):
         with open(os.path.join(seg_file_path, f'layer_{i}.pkl'), 'rb') as f:
             t_in.append(pickle.load(f))
-    
+
     print(f"Data loaded: x_in={x_in.shape}, y_in={y_in.shape}, t_in={len(t_in)}")
     print()
-    
+
     # ============ MI Computation ============
     print("=" * 50)
     print("Computing MI values...")
     print("=" * 50)
-    
+
     ignore_label = -1
     distance, mi_xt_same, mi_ty_same, mi_xt_diff, mi_ty_diff, ignore_label = \
         compute_and_cache_mi(seg_file_path, x_in, t_in, y_in, ignore_label, args.calcul_type)
-    
+
     # ============ Plot Setup ============
     plt.rcParams['font.size'] = 13
     plt.rcParams['axes.labelsize'] = 15
@@ -68,12 +68,12 @@ if __name__ == "__main__":
     plt.rcParams['legend.fontsize'] = 13
     plt.rcParams['xtick.labelsize'] = 12
     plt.rcParams['ytick.labelsize'] = 12
-    
+
     # ============ Plotting ============
     print("\n" + "=" * 50)
     print("Generating plots...")
     print("=" * 50)
-    
+
     # # Plot per layer: SAME and DIFF separately
     # print("\n=== Generating Separate SAME/DIFF Scatter Plots ===")
     # for layer_idx in range(distance.shape[0]):
@@ -92,10 +92,10 @@ if __name__ == "__main__":
 
     # Plot matrix: Layer x Distance bins
     print("\n=== Generating Scatter Matrix Plots ===")
-    plot_scatter_matrix_same(mi_xt_same, mi_ty_same, distance, 
+    plot_scatter_matrix_same(mi_xt_same, mi_ty_same, distance,
                             args.model, args.dataset, args.preprocess_type,
                             args.valid_pascal, args.calcul_type)
-    plot_scatter_matrix_diff(mi_xt_diff, mi_ty_diff, distance, 
+    plot_scatter_matrix_diff(mi_xt_diff, mi_ty_diff, distance,
                             args.model, args.dataset, args.preprocess_type,
                             args.valid_pascal, args.calcul_type)
 

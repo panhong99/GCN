@@ -81,6 +81,7 @@ def plot_ratio_barplot_all_models(models_data_pascal, models_data_cityscape, pro
 
                     valid = np.isfinite(xt) & np.isfinite(ty) & (ty != 0)
                     ratio = xt[valid] / ty[valid]
+                    # ratio =  ty[valid]/xt[valid]
 
                     if len(ratio) > 0:
                         mean_values.append(np.mean(ratio))

@@ -82,3 +82,5 @@ __pycache__/
 /PIGNet/ALL_MODELS/
 /PIGNet/experiment_logs/
 /PIGNet/run_mi_experiment.sh
+/PIGNet/.claude/
+/PIGNet/model_101_0506.zip

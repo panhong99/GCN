@@ -158,11 +158,8 @@ if __name__ == "__main__":
             valid_dir = 'valid_0' if args.valid_pascal else 'invalid_0'
             for model_name in model_list:
                 m_path = (f"/home/hail/pan/HDD/MI_dataset/{args.preprocess_type}_dataset"
-                          f"/{dataset_name}/resnet{args.backbone}/pretrained/{model_name}/zoom/1")
-                if dataset_name != "pascal":
-                    m_cache = os.path.join(m_path, 'analysis_cache_same_diff_joint.pkl')
-                else:
-                    m_cache = os.path.join(m_path, f'{valid_dir}/analysis_cache_same_diff_joint.pkl')
+                          f"/{dataset_name}/resnet{args.backbone}/{args.model_type}/{model_name}/zoom/1")
+                m_cache = os.path.join(m_path, 'analysis_cache_same_diff_joint.pkl')
 
                 if not os.path.exists(m_cache):
                     print(f"  ⚠ Cache not found for {model_name} ({dataset_name}): {m_cache} — skipped")

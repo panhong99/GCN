@@ -15,6 +15,26 @@ plt.rcParams['font.weight'] = 'regular'
 
 COLOR_MAP = {'PIGNet_GSPonly': '#D81B60', 'ResNet': '#5C6BC0', 'ViT': '#FF7043'}
 
+COMBINED_COLOR_MAP = {
+    'PIGNet_Backbone': '#7B1FA2',
+    'PIGNet_GSP':      '#D81B60',
+    'Resnet':          '#5C6BC0',
+    'ViT':             '#FF7043',
+}
+
+# ─── Dataset display name mapping ────────────────────────────────────────────
+DATASET_DISPLAY_NAMES = {
+    'imagenet':  'ImageNet-100K',
+    'CIFAR-10':  'CIFAR-10',
+    'CIFAR-100': 'CIFAR-100',
+}
+
+# ─── Font size constants — edit here to resize all text in combined plots ────
+FS_TITLE    = 60   # subplot titles  ("Backbone Layer 1", "Layer 2", …)
+FS_LABEL    = 60   # axis labels     (H(X,T), H(T,Y))
+FS_CBAR     = 60   # colorbar tick labels
+FS_LEGEND   = 60   # legend text
+FS_SUBTITLE = 60   # dataset name subtitle above each panel
 
 def _entropy_from_counts(counts: np.ndarray, eps: float = 1e-12) -> float:
     """Calculate entropy from count histogram."""
@@ -248,23 +268,416 @@ def plot_scatter_all_layers_classification(all_layers_data, model_name, dataset_
     plt.close()
     print(f"All layers scatter matrix saved: {fname}")
 
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# All-models combined scatter (single dataset, vertical stack)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+def plot_scatter_combined_all_models(models_list, dataset_name, process_type, num,
+                                     calcul_type=None, fname=None):
+    """
+    Stack scatter plots for all models vertically into one figure (single dataset).
+
+    Args:
+        models_list: list of dicts, each with:
+            - 'display_name': str  (e.g. 'PIGNet_Backbone', 'PIGNet_GSP', 'Resnet', 'ViT')
+            - 'all_layers_data': list
+        dataset_name: str
+        process_type: str
+        num: int  (ncols = max(4, num-1))
+        calcul_type: str
+        fname: optional save path
+    """
+    import matplotlib.gridspec as gridspec
+    import matplotlib.patches as mpatches
+
+    ct = calcul_type if calcul_type else 'joint'
+    ncols_scatter = max(4, num - 1)
+    num_models = len(models_list)
+
+    fig_width = 5 * ncols_scatter + 1.5
+    fig_height = 5 * num_models + 1.2
+
+    fig = plt.figure(figsize=(fig_width, fig_height), facecolor='white')
+
+    gs = gridspec.GridSpec(
+        num_models, ncols_scatter + 1,
+        figure=fig,
+        width_ratios=[1.0] * ncols_scatter + [0.06],
+        hspace=0.45,
+        wspace=0.08,
+    )
+
+    for row_idx, model_info in enumerate(models_list):
+        display_name = model_info['display_name']
+        all_layers_data = model_info['all_layers_data']
+        num_layers = len(all_layers_data)
+
+        color = COMBINED_COLOR_MAP.get(display_name, '#888888')
+        model_cmap = mcolors.LinearSegmentedColormap.from_list('model_cmap', ['#ffffff', color])
+
+        last_sc = None
+
+        for idx, layer_data in enumerate(all_layers_data):
+            ax = fig.add_subplot(gs[row_idx, idx])
+            ax.set_facecolor('white')
+
+            layer_idx = layer_data['layer_idx']
+            mi_xt = np.asarray(layer_data[f'{ct}_xt'], dtype=float)
+            mi_ty = np.asarray(layer_data[f'{ct}_ty'], dtype=float)
+            layer_group = layer_data.get('group', None)
+
+            jitter_std = (mi_ty.max() - mi_ty.min()) * 0.015 if mi_ty.max() > mi_ty.min() else 1e-3
+            mi_ty_plot = mi_ty + np.random.default_rng(seed=42).normal(0, jitter_std, size=mi_ty.shape)
+
+            sc = ax.scatter(mi_xt, mi_ty_plot, c=mi_xt, cmap=model_cmap,
+                            s=20, alpha=0.6, edgecolors='none')
+            last_sc = sc
+
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.grid(False)
+
+            if idx == 0:
+                ax.set_ylabel("H(T,Y)", fontsize=FS_LABEL)
+            ax.set_xlabel("H(X,T)", fontsize=FS_LABEL)
+
+            title = f"{layer_group} Layer {layer_idx}" if layer_group else f"Layer {layer_idx}"
+            ax.set_title(title, fontsize=FS_TITLE)
+
+        for idx in range(num_layers, ncols_scatter):
+            ax_empty = fig.add_subplot(gs[row_idx, idx])
+            fig.delaxes(ax_empty)
+
+        if last_sc is not None:
+            cbar_ax = fig.add_subplot(gs[row_idx, ncols_scatter])
+            cbar = fig.colorbar(last_sc, cax=cbar_ax)
+            cbar.ax.tick_params(labelsize=FS_CBAR)
+
+    legend_handles = [
+        mpatches.Patch(color=COMBINED_COLOR_MAP.get(m['display_name'], '#888888'),
+                       label=m['display_name'])
+        for m in models_list
+    ]
+    fig.legend(handles=legend_handles, loc='upper center', ncol=num_models,
+               fontsize=FS_LEGEND, frameon=False, bbox_to_anchor=(0.5, 1.5))
+
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+
+    if fname is None:
+        ct_str = f"_{calcul_type}" if calcul_type else ""
+        fname = f"ALL_MODELS_{dataset_name}_{process_type}{ct_str}_scatter_combined.png"
+
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Combined scatter plot saved: {fname}")
+    return fig
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Multi-dataset horizontal stack
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+def plot_scatter_combined_all_models_datasets(datasets_list, process_type, num,
+                                              calcul_type=None, fname=None):
+    """
+    Stack each dataset's combined-model figure horizontally in a single figure.
+    Y-axis labels and legend appear only on the leftmost dataset panel.
+
+    Args:
+        datasets_list: list of dicts, each with:
+            - 'dataset_name': str
+            - 'models_list': list of model dicts (same format as
+              plot_scatter_combined_all_models)
+        process_type: str
+        num: int  (ncols = max(4, num-1))
+        calcul_type: str
+        fname: optional save path
+    """
+    import matplotlib.gridspec as gridspec
+    import matplotlib.patches as mpatches
+
+    ct = calcul_type if calcul_type else 'joint'
+    ncols_scatter = max(4, num - 1)
+    num_datasets = len(datasets_list)
+    num_models = max(len(d['models_list']) for d in datasets_list)
+
+    # Each dataset block: ncols_scatter scatter cols + 1 colorbar col
+    # Between consecutive dataset blocks: 1 narrow gap col
+    cols_per_ds = ncols_scatter + 1  # scatter + colorbar
+    GAP_RATIO = 0.30
+
+    width_ratios = []
+    for ds_idx in range(num_datasets):
+        width_ratios.extend([1.0] * ncols_scatter + [0.06])
+        if ds_idx < num_datasets - 1:
+            width_ratios.append(GAP_RATIO)
+
+    total_cols = len(width_ratios)
+
+    # col_offset(ds_idx): first column of that dataset block
+    def col_offset(ds_idx):
+        return ds_idx * (cols_per_ds + 1)  # +1 accounts for the gap col
+
+    fig_width = (5 * ncols_scatter + 1.5) * num_datasets
+    fig_height = 5 * num_models + 1.5
+
+    fig = plt.figure(figsize=(fig_width, fig_height), facecolor='white')
+
+    gs = gridspec.GridSpec(
+        num_models, total_cols,
+        figure=fig,
+        width_ratios=width_ratios,
+        hspace=0.65,
+        wspace=0.25,
+    )
+ 
+    # ── spacing knobs (figure coords, 0~1) ──────────────────────────────────
+    SUBTITLE_Y_OFFSET = 0.055  # ← gap: top of plots → dataset name label
+    LEGEND_Y_OFFSET   = 0.075  # ← gap: top of plots → legend  (must > SUBTITLE)
+    # ────────────────────────────────────────────────────────────────────────
+
+    first_plot_ax = None          # leftmost top-row ax → legend x-anchor
+    row0_first_ax  = {}           # ds_idx → first scatter ax of row 0
+    row0_cbar_ax   = {}           # ds_idx → colorbar ax of row 0
+
+    for ds_idx, dataset_info in enumerate(datasets_list):
+        models_list_ds = dataset_info['models_list']
+        c_off = col_offset(ds_idx)
+        is_leftmost = (ds_idx == 0)
+
+        for row_idx, model_info in enumerate(models_list_ds):
+            display_name = model_info['display_name']
+            all_layers_data = model_info['all_layers_data']
+            num_layers = len(all_layers_data)
+
+            color = COMBINED_COLOR_MAP.get(display_name, '#888888')
+            model_cmap = mcolors.LinearSegmentedColormap.from_list(
+                'model_cmap', ['#ffffff', color])
+
+            last_sc = None
+
+            for idx, layer_data in enumerate(all_layers_data):
+                ax = fig.add_subplot(gs[row_idx, c_off + idx])
+                ax.set_facecolor('white')
+
+                if first_plot_ax is None:
+                    first_plot_ax = ax
+                if row_idx == 0 and idx == 0 and ds_idx not in row0_first_ax:
+                    row0_first_ax[ds_idx] = ax
+
+                layer_idx = layer_data['layer_idx']
+                mi_xt = np.asarray(layer_data[f'{ct}_xt'], dtype=float)
+                mi_ty = np.asarray(layer_data[f'{ct}_ty'], dtype=float)
+                layer_group = layer_data.get('group', None)
+
+                jitter_std = (mi_ty.max() - mi_ty.min()) * 0.015 if mi_ty.max() > mi_ty.min() else 1e-3
+                mi_ty_plot = mi_ty + np.random.default_rng(seed=42).normal(0, jitter_std, size=mi_ty.shape)
+
+                sc = ax.scatter(mi_xt, mi_ty_plot, c=mi_xt, cmap=model_cmap,
+                                s=20, alpha=0.6, edgecolors='none')
+                last_sc = sc
+
+                ax.set_xticklabels([])
+                ax.set_yticklabels([])
+                ax.spines['top'].set_visible(False)
+                ax.spines['right'].set_visible(False)
+                ax.grid(False)
+
+                if is_leftmost and idx == 0:
+                    ax.set_ylabel("H(T,Y)", fontsize=FS_LABEL)
+                ax.set_xlabel("H(X,T)", fontsize=FS_LABEL)
+
+                ax.set_title(f"Block {layer_idx}", fontsize=FS_TITLE)
+
+            for idx in range(num_layers, ncols_scatter):
+                ax_empty = fig.add_subplot(gs[row_idx, c_off + idx])
+                fig.delaxes(ax_empty)
+
+            if last_sc is not None:
+                cbar_ax = fig.add_subplot(gs[row_idx, c_off + ncols_scatter])
+                cbar = fig.colorbar(last_sc, cax=cbar_ax)
+                cbar.ax.tick_params(labelsize=FS_CBAR)
+                if row_idx == 0:
+                    row0_cbar_ax[ds_idx] = cbar_ax
+
+    # tight_layout 먼저 → 실제 figure 좌표 확정
+    plt.tight_layout(rect=[0, 0, 1, 0.85])
+
+    # ── dataset name subtitle (각 패널 위, 가운데 정렬) ──────────────────────
+    for ds_idx, dataset_info in enumerate(datasets_list):
+        fa = row0_first_ax.get(ds_idx)
+        ca = row0_cbar_ax.get(ds_idx)
+        if fa is None:
+            continue
+        pos_l = fa.get_position()
+        pos_r = ca.get_position() if ca is not None else pos_l
+        center_x = (pos_l.x0 + pos_r.x1) / 2
+        subtitle_y = pos_l.y1 + SUBTITLE_Y_OFFSET
+        raw_name = dataset_info['dataset_name']
+        display_name = DATASET_DISPLAY_NAMES.get(raw_name, raw_name)
+        fig.text(center_x, subtitle_y, display_name,
+                 ha='center', va='bottom',
+                 fontsize=FS_SUBTITLE, fontweight='regular',
+                 transform=fig.transFigure)
+
+    # ── legend (가장 왼쪽 패널 왼쪽 끝에 정렬, subtitle보다 위) ─────────────
+    first_models = datasets_list[0]['models_list']
+    legend_handles = [
+        mpatches.Patch(color=COMBINED_COLOR_MAP.get(m['display_name'], '#888888'),
+                       label=m['display_name'])
+        for m in first_models
+    ]
+    if first_plot_ax is not None:
+        pos = first_plot_ax.get_position()
+        fig.legend(
+            handles=legend_handles,
+            loc='lower center',
+            bbox_to_anchor=(0.5, pos.y1 + LEGEND_Y_OFFSET),
+            bbox_transform=fig.transFigure,
+            ncol=len(first_models),
+            fontsize=FS_LEGEND,
+            frameon=False,
+        )
+
+    if fname is None:
+        ct_str = f"_{calcul_type}" if calcul_type else ""
+        ds_str = "_".join(d['dataset_name'] for d in datasets_list)
+        fname = f"ALL_MODELS_{ds_str}_{process_type}{ct_str}_scatter_combined_datasets.png"
+
+    plt.savefig(fname, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Multi-dataset combined scatter plot saved: {fname}")
+    return fig
+
+
+def _load_models_cache_for_dataset(dataset_name, process_type, model_type, calcul_type, cluster_num):
+    """Load all model caches for a single dataset. Returns models_list or []."""
+    STANDARD_MODELS = ['Resnet', 'vit']
+    PIGNET_MODEL    = 'PIGNet_GSPonly_classification'
+    ct, c = calcul_type, cluster_num
+    display_names = {'PIGNet_Backbone': 'PIGNet_Backbone', 'PIGNet_GSP': 'PIGNet_GSP',
+                     'Resnet': 'Resnet', 'vit': 'ViT'}
+
+    models_cache = {}
+    base_root = f'/home/hail/pan/HDD/MI_dataset/{dataset_name}/{process_type}_dataset/resnet101/{model_type}'
+
+    for model_name in STANDARD_MODELS:
+        cache_f = os.path.join(base_root, model_name, 'zoom/1',
+                               f'{ct}_mi_analysis_cache_classification_cluster{c}.pkl')
+        if os.path.exists(cache_f):
+            with open(cache_f, 'rb') as f:
+                models_cache[model_name] = pickle.load(f)
+            print(f"  [OK] {dataset_name}/{model_name}: {len(models_cache[model_name])} layers")
+        else:
+            print(f"  [--] {dataset_name}/{model_name}: cache not found, skipping")
+
+    pignet_base = os.path.join(base_root, PIGNET_MODEL, 'zoom/1')
+    for key, cache_name in [('PIGNet_Backbone', f'{ct}_mi_analysis_cache_backbone_classification_cluster{c}.pkl'),
+                             ('PIGNet_GSP',      f'{ct}_mi_analysis_cache_gsp_classification_cluster{c}.pkl')]:
+        cache_f = os.path.join(pignet_base, cache_name)
+        if os.path.exists(cache_f):
+            with open(cache_f, 'rb') as f:
+                models_cache[key] = pickle.load(f)
+            print(f"  [OK] {dataset_name}/{key}: {len(models_cache[key])} layers")
+        else:
+            print(f"  [--] {dataset_name}/{key}: cache not found, skipping")
+
+    order = ['PIGNet_Backbone', 'PIGNet_GSP', 'Resnet', 'vit']
+    return [{'display_name': display_names[m], 'all_layers_data': models_cache[m]}
+            for m in order if m in models_cache]
+
+
 if __name__ == "__main__":  # Classification Task
-    
+
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('--dataset', type=str, default='CIFAR-10', 
+    argparser.add_argument('--dataset', type=str, default='CIFAR-10',
                           help='Dataset name (e.g., Imagenet, CIFAR-100)')
-    argparser.add_argument('--process_type', type=str, default='pixel', 
+    argparser.add_argument('--datasets', type=str, nargs='+', default=None,
+                          help='Multiple dataset names for horizontal stacking '
+                               '(e.g., --datasets CIFAR-10 CIFAR-100 ImageNet-100K)')
+    argparser.add_argument('--process_type', type=str, default='pixel',
                           help='Process type (e.g., layer, pixel)')
-    argparser.add_argument('--model', type=str, default='PIGNet_GSPonly_classification', 
+    argparser.add_argument('--model', type=str, default='PIGNet_GSPonly_classification',
                           help='Model name (e.g., Resnet, PIGNet_GSPonly_classification, vit)')
     argparser.add_argument('--cluster_num', type=int, default=50,
                           help='Number of clusters used in MI data generation (e.g., 50, 100)')
     argparser.add_argument('--calcul_type', type=str, default='joint',
                           help='Type of calculation for scatter plot (e.g., mi, joint)')
-    argparser.add_argument('--model_type', type=str, default='scratch', 
+    argparser.add_argument('--model_type', type=str, default='scratch',
                           help='Type of model (e.g., pretrained, scratch)')
+    argparser.add_argument('--all_models', action='store_true', default=False,
+                          help='Load all models and draw combined scatter plot')
 
     args = argparser.parse_args()
+
+    plt.rcParams.update({'font.size': 22, 'axes.labelsize': 22, 'axes.titlesize': 22,
+                         'xtick.labelsize': 20, 'ytick.labelsize': 20})
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # --datasets mode: horizontal stack across multiple datasets
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if args.datasets is not None:
+        import sys
+        datasets_list = []
+        for ds_name in args.datasets:
+            print(f"\nLoading caches for dataset: {ds_name}")
+            models_list = _load_models_cache_for_dataset(
+                ds_name, args.process_type, args.model_type, args.calcul_type, args.cluster_num)
+            if models_list:
+                datasets_list.append({'dataset_name': ds_name, 'models_list': models_list})
+            else:
+                print(f"  WARNING: no caches found for {ds_name}, skipping")
+
+        if not datasets_list:
+            print("No dataset caches found. Exiting.")
+            sys.exit(1)
+
+        max_layers = max(len(m['all_layers_data'])
+                         for d in datasets_list for m in d['models_list'])
+        ds_str = "_".join(d['dataset_name'] for d in datasets_list)
+        ct_str = f"_{args.calcul_type}" if args.calcul_type else ""
+        folder = f"./ALL_MODELS/multi_dataset/{args.process_type}/scatter"
+        os.makedirs(folder, exist_ok=True)
+        fname = os.path.join(folder,
+                             f"ALL_{ds_str}_{args.process_type}{ct_str}_scatter_combined_datasets.png")
+
+        plot_scatter_combined_all_models_datasets(
+            datasets_list,
+            process_type=args.process_type,
+            num=max_layers + 1,
+            calcul_type=args.calcul_type,
+            fname=fname,
+        )
+        sys.exit(0)
+
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # --all_models mode: all models, single dataset
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if args.all_models:
+        import sys
+        print(f"\nLoading caches for dataset: {args.dataset}")
+        models_list = _load_models_cache_for_dataset(
+            args.dataset, args.process_type, args.model_type, args.calcul_type, args.cluster_num)
+
+        if models_list:
+            max_layers = max(len(m['all_layers_data']) for m in models_list)
+            ct_str = f"_{args.calcul_type}" if args.calcul_type else ""
+            folder = f"./ALL_MODELS/{args.dataset}/{args.process_type}/scatter"
+            os.makedirs(folder, exist_ok=True)
+            fname = os.path.join(folder,
+                                 f"ALL_{args.dataset}_{args.process_type}{ct_str}_scatter_combined.png")
+            plot_scatter_combined_all_models(
+                models_list,
+                dataset_name=args.dataset,
+                process_type=args.process_type,
+                num=max_layers + 1,
+                calcul_type=args.calcul_type,
+                fname=fname,
+            )
+        else:
+            print("No model cache found. Run each model individually first.")
+        sys.exit(0)
     
     if args.model == "Resnet" or args.model == "vit":
         layer_num = 5
@@ -567,9 +980,20 @@ if __name__ == "__main__":  # Classification Task
         # Generate ratio boxplot
         print(f"\n=== Generating Ratio Boxplot ===")
         # plot_ratio_boxplot_classification(all_layers_data, args.model, args.dataset, args.process_type, calcul_type=args.calcul_type)
-        
+
+        print(f"\n=== Generating Combined Datasets Scatter Plot ===")
+        combined_datasets = [{'dataset_name': args.dataset, 'models_list': [
+            {'display_name': args.model, 'all_layers_data': all_layers_data}
+        ]}]
+        plot_scatter_combined_all_models_datasets(
+            combined_datasets,
+            process_type=args.process_type,
+            num=total_layers + 1,
+            calcul_type=args.calcul_type,
+        )
+
         print("\n=== All plots generated successfully! ===")
-        
+
     else:
         for all_layers_data in [backbone_layers_data, gsp_layers_data]:
             group_label = [d.get('group') for d in all_layers_data][0] if all_layers_data else None
@@ -600,5 +1024,17 @@ if __name__ == "__main__":  # Classification Task
             # Generate ratio boxplot for this group
             print(f"\n=== Generating Ratio Boxplot for {group_label} ===")
             # plot_ratio_boxplot_classification(all_layers_data, args.model, args.dataset, args.process_type, calcul_type=args.calcul_type)
-            
+
             print(f"\n=== All plots for {group_label} generated successfully! ===")
+
+        print(f"\n=== Generating Combined Datasets Scatter Plot ===")
+        combined_datasets = [{'dataset_name': args.dataset, 'models_list': [
+            {'display_name': 'PIGNet_Backbone', 'all_layers_data': backbone_layers_data},
+            {'display_name': 'PIGNet_GSP',      'all_layers_data': gsp_layers_data},
+        ]}]
+        plot_scatter_combined_all_models_datasets(
+            combined_datasets,
+            process_type=args.process_type,
+            num=max(len(backbone_layers_data), len(gsp_layers_data)) + 1,
+            calcul_type=args.calcul_type,
+        )

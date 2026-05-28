@@ -10,6 +10,13 @@ from matplotlib.colors import Normalize
 plt.rcParams['font.family'] = 'Times New Roman'
 plt.rcParams['font.weight'] = 'regular'
 
+# ─── Font size constants ──────────────────────────────────────────────────────
+FS_TITLE  = 40   # subplot / axis titles
+FS_LABEL  = 40   # axis labels
+FS_LEGEND = 40   # legend text
+FS_CBAR   = 40   # colorbar tick labels
+# ─────────────────────────────────────────────────────────────────────────────
+
 def _entropy_from_counts(counts: np.ndarray, eps: float = 1e-12) -> float:
     """Calculate entropy from count histogram."""
     p = counts / np.maximum(1, counts.sum())
@@ -275,25 +282,22 @@ def plot_ratio_barplot_all_models_classification(models_data, dataset_name, proc
     color_map = {
         'Resnet':          '#5C6BC0',
         'vit':             '#FF7043',
-        'PIGNet_Backbone': '#8E24AA',
-        'PIGNet_GSP':      '#D81B60',
+        'PIGNet_Backbone': '#D81B60',
     }
     alpha_map = {
         'Resnet':          0.45,
         'vit':             0.45,
         'PIGNet_Backbone': 0.55,
-        'PIGNet_GSP':      0.55,
     }
 
-    model_list   = list(models_data.keys())
+    model_list   = [m for m in models_data.keys() if m != 'PIGNet_GSP']
     model_colors = {m: color_map.get(m, '#000000') for m in model_list}
 
     max_layers   = max(len(layers) for layers in models_data.values())
     x_base       = np.arange(1, max_layers + 1)
-    layer_labels = [f"L{i+1}" for i in range(max_layers)]
+    layer_labels = [f"B{i+1}" for i in range(max_layers)]
 
-    # PIGNet을 맨 앞(위)에 그리기 위해 background 모델부터 그림
-    back_first = ['Resnet', 'vit', 'PIGNet_Backbone', 'PIGNet_GSP']
+    back_first = ['Resnet', 'vit', 'PIGNet_Backbone']
     draw_order = [m for m in back_first if m in model_list] + \
                  [m for m in model_list if m not in back_first]
 
@@ -316,7 +320,7 @@ def plot_ratio_barplot_all_models_classification(models_data, dataset_name, proc
         for layer_data in layers_data:
             mi_xt = np.asarray(layer_data['joint_xt'], dtype=float).flatten()
             mi_ty = np.asarray(layer_data['joint_ty'], dtype=float).flatten()
-            ratio = mi_xt / mi_ty
+            ratio = mi_xt/mi_ty
 
             mean_values.append(np.mean(ratio))
             err_vals.append(np.std(ratio, ddof=1))
@@ -344,15 +348,16 @@ def plot_ratio_barplot_all_models_classification(models_data, dataset_name, proc
     ax.set_xticks(x_base)
     ax.set_xticklabels(layer_labels)
     ax.set_xlim(x_base[0] - 0.5, x_base[-1] + 0.5)
-
+    ax.set_ylim(0,2)
+    
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.grid(False)
 
-    ax.set_xlabel("Layer", fontsize=25)
-    ax.set_ylabel("H(X,T) / H(T,Y)", fontsize=25)
+    ax.set_xlabel("Block", fontsize=FS_LABEL)
+    ax.set_ylabel("H(X,T) / H(T,Y)", fontsize=FS_LABEL)
 
-    desired_order = ['PIGNet_GSP', 'PIGNet_Backbone', 'Resnet', 'vit']
+    desired_order = ['PIGNet_Backbone', 'Resnet', 'vit']
     legend_handles = []
     for name in desired_order:
         if name in model_colors and name in model_list:
@@ -361,7 +366,7 @@ def plot_ratio_barplot_all_models_classification(models_data, dataset_name, proc
                                alpha=alpha_map.get(name, 0.5),
                                label=name))
     if legend_handles:
-        ax.legend(handles=legend_handles, fontsize=25, loc='upper left',
+        ax.legend(handles=legend_handles, fontsize=FS_LABEL, loc='upper left',
                   bbox_to_anchor=(0, 1.12), frameon=False)
 
     plt.tight_layout()
@@ -373,9 +378,9 @@ def plot_ratio_barplot_all_models_classification(models_data, dataset_name, proc
 if __name__ == "__main__":
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--dataset', type=str, default='CIFAR-10', 
+    parser.add_argument('--dataset', type=str, default='imagenet', 
                        help='Dataset name (e.g., Imagenet, CIFAR-10, CIFAR-100)')
-    parser.add_argument('--model', type=str, default='PIGNet_GSPonly_classification', 
+    parser.add_argument('--model', type=str, default='vit', 
                        help='Model name (e.g., vit, Resnet, PIGNet_GSPonly_classification)')
     parser.add_argument('--process_type', type=str, default='pixel', 
                        help='Preprocessing type (e.g., pixel or layer)')
