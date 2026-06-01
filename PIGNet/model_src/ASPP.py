@@ -329,7 +329,7 @@ class ResNet(nn.Module):
         x, aspp_layers_output = self.aspp(x)
         # x = self.aspp(x)
 
-        aspp_layers_output.insert(0, backbone_layers_output[-1].numpy())
+        aspp_layers_output.insert(0, backbone_layers_output[-1].detach().cpu().numpy())
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
         return x, aspp_layers_output

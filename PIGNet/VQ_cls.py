@@ -9,13 +9,13 @@ import pickle
 import copy
 from tqdm.auto import tqdm
 from sklearn.cluster import MiniBatchKMeans
-from make_classification_dataset import get_dataset
-from make_classification_model import get_model
+from cls_dataset import get_dataset
+from cls_models import get_model
 from torch.autograd import Variable
 from sklearn.cluster import KMeans
 import random
 import pickle
-import utils_classification as utils_classification
+import cls_utils as utils_classification
 from gc import collect
 from functools import partial
 import cv2
@@ -51,12 +51,8 @@ def resize_layers_shape(layers_output, grid_size):
                 
         B, C, H, W = layer_tensor.shape
         
-        # Shape 확인 및 로깅
-        # print(f"Layer {layer_idx}: Input shape (B, C, H, W) = ({B}, {C}, {H}, {W})", end="")
-        
         # H와 W가 grid_size와 다르면 interpolate (크기 상관없이 grid_size로 변환)
         if H != grid_size or W != grid_size:
-            # print(f" -> Resizing to ({B}, {C}, {grid_size}, {grid_size})")
             
             # interpolate 수행
             layer_resized = F.interpolate(
@@ -65,11 +61,8 @@ def resize_layers_shape(layers_output, grid_size):
                 mode='bilinear', 
                 align_corners=True
             )
-            # torch tensor → numpy로 변환해서 저장
             resized_layers.append(layer_resized.detach().cpu().numpy())
         else:
-            # print(f" -> Already target size")
-            # torch tensor → numpy로 변환해서 저장
             resized_layers.append(layer_tensor.detach().cpu().numpy())
     
     return resized_layers
@@ -175,9 +168,6 @@ def main(config, model_file, model_path):
             # ★ GSP layers도 resize
             gsp_layers_output.insert(0, inputs.detach().cpu().numpy())
             gsp_layers_output_resized = resize_layers_shape(gsp_layers_output, grid_size)
-            
-        # layers_output return할 때 최소한 detach는 되야함 
-        # detach 안되있으면 근데 return도 안될 듯 -> check해보기
 
         if config.model != "PIGNet_GSPonly_classification":
             # ★ PIXEL별 처리: 각 픽셀마다 해당 모델에만 fit
@@ -332,7 +322,6 @@ def main(config, model_file, model_path):
                 gsp_vq_preds[gsp_layer_idx].append(layer_result)
     
     # ===== Step 5: 결과 저장 =====
-    # all_vq_preds의 shape을 봐야함 -> 3차원으로 형성이 되있어야함 -> all_batch, H, W 이렇게
     print(f"\nSaving results...")
 
     if config.model != "PIGNet_GSPonly_classification":    
@@ -381,13 +370,6 @@ if __name__ == "__main__":
     
     config = dict_to_namespace(config_dict)
 
-    # 가공 조건 및 이름 매핑
-    # process_dict = {
-    #     "zoom": [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2],
-    #     "overlap": [0, 0.1, 0.2, 0.3, 0.5],
-    #     "repeat": [1, 3, 6, 9, 12]
-    # }
-
     process_dict = {
         "zoom": [1],
     }
@@ -418,9 +400,8 @@ if __name__ == "__main__":
                 f_name = zoom_name_map.get(f_val, str(f_val)) if p_key == "zoom" else str(f_val)
                 
                 output_folder = os.path.join(
-                    "/home/hail/pan/HDD/MI_dataset", 
+                    "/home/hail/pan/HDD/IB_dataset", 
                     config.dataset, 
-                    "pixel_dataset",  # ★ layer_dataset에서 pixel_dataset으로 변경
                     config.backbone, 
                     config.model_type, 
                     model_key, 

@@ -1,38 +1,9 @@
-import argparse
-import cv2
-import numpy as np
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import pdb
-from PIL import Image
-from torch.autograd import Variable
-from tqdm.auto import tqdm
-import pandas as pd
-import os
-from torchvision import transforms
-import math
-from model_src import Classification_resnet, PIGNet_GSPonly_classification, swin,PIGNet_classification
-# from model_src.cvnets.models.classification import mobilevit_v3
-import torch.nn.functional as F
-from utils import AverageMeter
-from torchvision.datasets import ImageFolder
-from functools import partial
-import torchvision
-import subprocess
-from torch.nn.functional import cosine_similarity
-import matplotlib.pyplot as plt
-import wandb
-from vit_pytorch import ViT
-from efficientnet_pytorch import EfficientNet
 import warnings
 import timm
-import torchvision.transforms.functional as TF
-import re
-import yaml
-import copy
-import utils_classification as utils_classification
-import make_classification_dataset as make_classification_dataset
+import cls_utils as utils_classification
+from model_src import Classification_resnet, PIGNet_GSPonly_classification, PIGNet_classification
 
 warnings.filterwarnings("ignore")
 
@@ -42,7 +13,6 @@ def get_model(config, dataset):
 
             if config.model_type == "pretrained":
                 config.pretrain = True
-
             else:
                 config.pretrain = False
                 

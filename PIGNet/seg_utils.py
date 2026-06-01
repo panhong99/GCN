@@ -1,30 +1,10 @@
-import argparse
 import math
-import os
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import pdb
 import cv2
-from PIL import Image
 import torch.nn.functional as F
-from scipy.io import loadmat
-from torch.autograd import Variable
-from tqdm.auto import tqdm
-from torchvision import transforms
-from torch.utils.data import RandomSampler
-import pandas as pd
-from model_src import PIGNet_GSPonly, ASPP, PIGNet
-from model_src.Mask2Former import Mask2Former
-from pascal import VOCSegmentation
-from cityscapes import Cityscapes
-from utils import AverageMeter, inter_and_union
-from functools import partial
 import subprocess
-import wandb
-import warnings
-import re
+from PIL import Image
 
 def tensor_to_image(tensor_image):
     

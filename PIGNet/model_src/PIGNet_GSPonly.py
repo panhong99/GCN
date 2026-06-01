@@ -455,7 +455,7 @@ class ResNet(nn.Module):
 
         return_gsp_output = x
 
-        gsp_layers_outputs.insert(0, backbone_layers_output[-1].numpy())
+        gsp_layers_outputs.insert(0, backbone_layers_output[-1].detach().cpu().numpy())
         x = nn.Upsample(size, mode='bilinear', align_corners=True)(x)
 
         return x, gsp_layers_outputs #return_gsp_output

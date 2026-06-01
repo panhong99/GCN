@@ -1,15 +1,13 @@
-mode: "infer"
 MI: False
 
 # shared setting
 factor: ""
-model: ""
 exp: "bn_lr7e-3"
-gpu: 0 
+gpu: 1
 backbone: "resnet101"
-dataset: "imagenet"
-model_type: "pretrained"
-model_number: 1
+dataset: "CIFAR-10"
+model_type: "scratch"
+model_number: 3 # 1:PIGNet_GSPonly_classification, 2:Resnet, 3:vit
 workers: 4
 resume: null
 infer: True

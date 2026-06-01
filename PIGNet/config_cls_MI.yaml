@@ -1,35 +1,29 @@
-mode: "infer"
-MI : True
-
-# shared setting
-factor: ""
-model: ""
-exp: "bn_lr7e-3"
+MI: true
+backbone: resnet50
+base_lr: 0.007
+batch_size: 16
+beta: false
+crop_size: 513
+dataset: CIFAR-100
+embedding_size: 256
+epochs: 50
+exp: bn_lr7e-3
+factor: ''
+freeze_bn: false
 gpu: 0
-backbone: "resnet101"
-dataset: "imagenet" # CIFAR-10, CIFAR-100, imagenet
-model_type: "scratch"
-model_number: 3 # 1 PIGNet_GSPonly 2 Resnet 3 ViT
-workers: 4
-resume: null
-infer: True
+groups: null
+infer: true
+infer_params:
+  model_filename: ''
+  model_name: ''
+  process_type: ''
+last_mult: 1.0
+mode: infer
+model: ''
+model_number: 1
+model_type: scratch
 n_layer: 12
 n_skip_l: 3
-embedding_size: 256 
-batch_size: 16
-epochs: 50
-crop_size: 513
-groups: null
-base_lr: 0.007
-last_mult: 1.0
-freeze_bn: False
-weight_std: False
-beta: False
-
-# params for infer
-infer_params:
-  process_type: ""
-  model_name: ""
-  model_filename: ""
-
-
+resume: null
+weight_std: false
+workers: 4

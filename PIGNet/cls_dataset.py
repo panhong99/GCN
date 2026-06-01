@@ -1,37 +1,11 @@
-import argparse
-import cv2
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import pdb
-from PIL import Image
-from torch.autograd import Variable
-from tqdm.auto import tqdm
-import pandas as pd
-import os
-from torchvision import transforms
-import math
-from model_src import Classification_resnet, PIGNet_GSPonly_classification, swin,PIGNet_classification
-# from model_src.cvnets.models.classification import mobilevit_v3
-import torch.nn.functional as F
-from utils import AverageMeter
-from torchvision.datasets import ImageFolder
-from functools import partial
 import torchvision
-import subprocess
-from torch.nn.functional import cosine_similarity
-import matplotlib.pyplot as plt
-import wandb
-from vit_pytorch import ViT
-from efficientnet_pytorch import EfficientNet
 import warnings
-import timm
 import torchvision.transforms.functional as TF
-import re
-import yaml
-import copy
-import utils_classification as utils_classification
+import cls_utils as utils_classification
+from torchvision import transforms
+from torchvision.datasets import ImageFolder
 
 warnings.filterwarnings("ignore")
 
@@ -100,9 +74,6 @@ def get_dataset(config):
             idx2label = list(class_idx.values())
 
             cla2label = class_idx
-
-            # idx2label = [class_idx[str(k)][1] for k in range(len(class_idx))]
-            # cls2label = {class_idx[str(k)][0]: class_idx[str(k)][1] for k in range(len(class_idx))}
 
         dataset.CLASSES = idx2label
 
@@ -273,5 +244,5 @@ def get_dataset(config):
     elif not config.MI and config.mode != "train":
         return dataset , dataset_loader, MI_dataset_loader
 
-    elif config.MI == None and config.mode == "train":
+    elif config.MI == False and config.mode == "train":
         return dataset , dataset_loader, valid_dataset
