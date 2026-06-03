@@ -12,8 +12,8 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from tqdm.auto import tqdm
 from utils import AverageMeter
-from cls_dataset import get_dataset
-from cls_models import get_model
+from GCN.PIGNet.CLS_family.cls_dataset import get_dataset
+from GCN.PIGNet.CLS_family.cls_models import get_model
 
 warnings.filterwarnings("ignore")
 

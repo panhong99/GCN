@@ -1,5 +1,5 @@
-from pascal import VOCSegmentation
-from cityscapes import Cityscapes
+from GCN.PIGNet.SEG_family.pascal import VOCSegmentation
+from GCN.PIGNet.SEG_family.cityscapes import Cityscapes
 
 def get_dataset(config):
 

@@ -666,8 +666,8 @@ class Mask2Former(nn.Module):
             align_corners=False,
         )
 
-        predictions_mask = [predictions_mask[i] for i in [2, 5, 8, 9]]
-        predictions_mask.insert(0, features['res5'].detach().cpu().numpy())
+        predictions_mask = [predictions_mask[i].detach() for i in [2, 5, 8, 9]]
+        predictions_mask.insert(0, features['res5'].detach())
 
         return mask_pred_results, predictions_mask
     

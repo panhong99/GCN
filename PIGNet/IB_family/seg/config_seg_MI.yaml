@@ -1,11 +1,12 @@
-MI: true
-backbone: resnet50
+MI: false
+backbone: resnet101
 base_lr: 0.007
-batch_size: 16
+batch_size: 50
 beta: false
+binary: false
 crop_size: 513
-dataset: CIFAR-100
-embedding_size: 256
+dataset: cityscape
+embedding_size: 21
 epochs: 50
 exp: bn_lr7e-3
 factor: ''
@@ -21,7 +22,7 @@ last_mult: 1.0
 mode: infer
 model: ''
 model_number: 1
-model_type: scratch
+model_type: pretrained
 n_layer: 12
 n_skip_l: 3
 resume: null

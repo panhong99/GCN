@@ -11,14 +11,14 @@ import pickle
 import copy
 from tqdm.auto import trange
 from sklearn.cluster import MiniBatchKMeans
-from seg_dataset import get_dataset
-from seg_models import get_model
+from GCN.PIGNet.SEG_family.seg_dataset import get_dataset
+from GCN.PIGNet.SEG_family.seg_models import get_model
 from torch.autograd import Variable
 from sklearn.cluster import KMeans
 import random
 import pickle
 import cv2
-import seg_utils as utils_segmentation
+import GCN.PIGNet.SEG_family.seg_utils as utils_segmentation
 from gc import collect
 from functools import partial
 
@@ -219,7 +219,7 @@ def main(config, model_file, model_path):
         # Mask2Former 레이어 선택 및 리사이즈
         if config.model == "Mask2Former":
             # 특정 인덱스만 선택 [0, 2, 5, 8, 9]
-            layers_output = [layers_output[i] for i in [0, 2, 5, 8, 9]]
+            # layers_output = [layers_output[i] for i in [0, 2, 5, 8, 9]]
             # 각 layer를 (bs, Q, H, W) → (bs, Q, 33, 33)으로 리사이즈
             layers_output_resized = []
             for layer in layers_output:

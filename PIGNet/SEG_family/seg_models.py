@@ -1,4 +1,4 @@
-import seg_utils as utils_segmentation 
+import GCN.PIGNet.SEG_family.seg_utils as utils_segmentation 
 from model_src import PIGNet_GSPonly, ASPP, PIGNet
 from model_src.Mask2Former import Mask2Former
 

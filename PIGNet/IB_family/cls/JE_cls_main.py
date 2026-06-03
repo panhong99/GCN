@@ -2,8 +2,8 @@ import numpy as np
 import os
 import pickle
 import argparse
-from JE_calcul_cls import calcul_JE, calcul_JE_kde
-from JE_figure_cls import (
+from GCN.PIGNet.IB_family.cls.JE_calcul_cls import calcul_JE, calcul_JE_kde
+from GCN.PIGNet.IB_family.cls.JE_figure_cls import (
     plot_scatter_combined_all_models_datasets,
     plot_ratio_barplot_all_models_classification,
 )
@@ -14,7 +14,7 @@ BACKBONE_NUM  = 4
 GSP_LAYER_NUM = 5
 
 BASE_DATA_ROOT  = '/home/hail/pan/HDD/IB_dataset'
-SCATTER_MODEL_ORDER = ['PIGNet_Backbone', 'PIGNet_GSP', 'Resnet', 'vit']
+SCATTER_MODEL_ORDER = ['PIGNet_Backbone','Resnet', 'vit']
 
 # ── private I/O helpers ───────────────────────────────────────────────────────
 def _cache_path(base, tag, calcul_type, cluster_num):
@@ -30,10 +30,11 @@ def _save_pkl(obj, path):
 
 # ── path builder ──────────────────────────────────────────────────────────────
 def build_data_path(args, dataset, model_name):
+    backbone_dir = f'resnet{args.backbone}' if args.backbone.isdigit() else args.backbone
     return os.path.join(
         BASE_DATA_ROOT,
         dataset,
-        args.backbone,
+        backbone_dir,
         args.model_type,
         model_name,
         'zoom', '1',

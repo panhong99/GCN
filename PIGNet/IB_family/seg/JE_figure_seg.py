@@ -24,7 +24,7 @@ FS_LABEL = 50
 FS_CBAR  = 50
 FS_BAR   = 35
 
-FIGURE_DIR = 'seg_final_figures'
+FIGURE_DIR = '/home/hail/pan/GCN/PIGNet/seg_final_figures'
 
 COLOR_MAP = {'PIGNet_GSPonly': '#D81B60', 'ASPP': '#1E88E5', 'Mask2Former': '#FFC107'}
 ALPHA_MAP = {'PIGNet_GSPonly': 0.55,      'ASPP': 0.45,      'Mask2Former': 0.45}
@@ -270,7 +270,7 @@ def plot_kde_matrix(mode, model_name, dataset_name, vmin, vmax, kde_data,
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Ratio barplot — all models, pascal + cityscape, all distance bins
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def plot_ratio_barplot_all_models(models_data_pascal, models_data_cityscape,
+def plot_ratio_barplot_all_models(args, models_data_pascal, models_data_cityscape,
                                    calcul_type='joint'):
     """
     4-column figure: Pascal-SAME, Pascal-DIFF, Cityscape-SAME, Cityscape-DIFF
@@ -365,5 +365,5 @@ def plot_ratio_barplot_all_models(models_data_pascal, models_data_cityscape,
 
     plt.tight_layout()
     folder = os.path.join(FIGURE_DIR, 'ALL_MODELS', 'combined', 'ratio')
-    fname  = f"ALL_combined_{calcul_type}_ratio_barplot.pdf"
+    fname  = f"ALL_combined_{args.calcul_type}_{args.model_type}_{args.backbone}_ratio_barplot.pdf"
     _save(fig, folder, fname)

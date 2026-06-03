@@ -2,8 +2,8 @@ import numpy as np
 import os
 import pickle
 import argparse
-from JE_calcul_seg import compute_and_cache_je, compute_kde_values
-from JE_figure_seg import (
+from GCN.PIGNet.IB_family.seg.JE_calcul_seg import compute_and_cache_je, compute_kde_values
+from GCN.PIGNet.IB_family.seg.JE_figure_seg import (
     plot_scatter_matrix,
     plot_kde_matrix,
     plot_ratio_barplot_all_models,
@@ -18,7 +18,7 @@ def build_data_path(args, dataset_name=None, model_name=None):
     return os.path.join(
         BASE_DATA_ROOT,
         ds,
-        args.backbone,
+        "resnet"+args.backbone,
         args.model_type,
         model,
         'zoom', '1',
@@ -115,30 +115,30 @@ if __name__ == "__main__":
     je_xt_diff = je_cache['je_xt_diff']
     je_ty_diff = je_cache['je_ty_diff']
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 2. Scatter Plot
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    print("\n=== Scatter Plot ===")
-    for mode, je_xt, je_ty in [('SAME', je_xt_same, je_ty_same),
-                                ('DIFF', je_xt_diff, je_ty_diff)]:
-        plot_scatter_matrix(mode, je_xt, je_ty, distance,
-                            args.model, args.dataset,
-                            args.valid_pascal, args.calcul_type)
+    # # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # # 2. Scatter Plot
+    # # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # print("\n=== Scatter Plot ===")
+    # for mode, je_xt, je_ty in [('SAME', je_xt_same, je_ty_same),
+    #                             ('DIFF', je_xt_diff, je_ty_diff)]:
+    #     plot_scatter_matrix(mode, je_xt, je_ty, distance,
+    #                         args.model, args.dataset,
+    #                         args.valid_pascal, args.calcul_type)
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 3. KDE
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    print("\n=== KDE ===")
-    kde_data = load_or_calcul_kde(seg_path, je_cache)
+    # # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # # 3. KDE
+    # # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # print("\n=== KDE ===")
+    # kde_data = load_or_calcul_kde(seg_path, je_cache)
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 4. KDE Matrix Plot
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    print("\n=== KDE Matrix Plot ===")
-    for mode in ('SAME', 'DIFF'):
-        plot_kde_matrix(mode, args.model, args.dataset,
-                        args.vmin, args.vmax, kde_data,
-                        args.valid_pascal, args.calcul_type)
+    # # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # # 4. KDE Matrix Plot
+    # # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # print("\n=== KDE Matrix Plot ===")
+    # for mode in ('SAME', 'DIFF'):
+    #     plot_kde_matrix(mode, args.model, args.dataset,
+    #                     args.vmin, args.vmax, kde_data,
+    #                     args.valid_pascal, args.calcul_type)
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 5. All-Models Barplot  (--all_models)
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     data_cityscape = load_models_data('cityscape')
 
     if data_pascal and data_cityscape:
-        plot_ratio_barplot_all_models(data_pascal, data_cityscape, args.calcul_type)
+        plot_ratio_barplot_all_models(args, data_pascal, data_cityscape, args.calcul_type)
     else:
         print("  Not enough model data for barplot. Run each model first.")
 

@@ -9,13 +9,13 @@ import pickle
 import copy
 from tqdm.auto import tqdm
 from sklearn.cluster import MiniBatchKMeans
-from cls_dataset import get_dataset
-from cls_models import get_model
+from GCN.PIGNet.CLS_family.cls_dataset import get_dataset
+from GCN.PIGNet.CLS_family.cls_models import get_model
 from torch.autograd import Variable
 from sklearn.cluster import KMeans
 import random
 import pickle
-import cls_utils as utils_classification
+import GCN.PIGNet.CLS_family.cls_utils as utils_classification
 from gc import collect
 from functools import partial
 import cv2
@@ -132,8 +132,21 @@ def main(config, model_file, model_path):
                         verbose=0
                     )
 
-    state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
-    model.load_state_dict(state_dict)
+    raw = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+    for strip_module in (True, False):
+        try:
+            state_dict = {k[7:] if strip_module else k: v for k, v in raw.items()}
+            model.load_state_dict(state_dict)
+            print(f"  ✓ state_dict loaded ({'module. stripped' if strip_module else 'as-is'})")
+            break
+        except RuntimeError:
+            continue
+    else:
+        raise RuntimeError(
+            f"❌ Failed to load state_dict for {model_file}. "
+            "Neither multi-GPU nor single-GPU format matched."
+        )
+
     model = model.to(device).eval()
     
     # ===== 레이어 전 공통 데이터셋 로더 생성 =====
@@ -421,5 +434,24 @@ if __name__ == "__main__":
                 iter_config.crop_size= 512 if iter_config.model == "vit" else 513
                 iter_config.batch_size = args.cluster_num
                 iter_config.cluster_num = args.cluster_num
+
+                # 이미 완료된 경우 스킵
+                if iter_config.model == "PIGNet_GSPonly_classification":
+                    backbone_num_, gsp_layer_num_ = 4, 5
+                    expected_files = (
+                        [output_folder + f'/backbone_layer_{i}_{args.cluster_num}.pkl' for i in range(backbone_num_)]
+                        + [output_folder + f'/gsp_layer_{i}_{args.cluster_num}.pkl' for i in range(gsp_layer_num_)]
+                        + [output_folder + f'/y_labels_{args.cluster_num}.pkl']
+                    )
+                else:
+                    layer_num_ = 5
+                    expected_files = (
+                        [output_folder + f'/layer_{i}_{args.cluster_num}.pkl' for i in range(layer_num_)]
+                        + [output_folder + f'/y_labels_{args.cluster_num}.pkl']
+                    )
+
+                if all(os.path.exists(fp) for fp in expected_files):
+                    print(f"  ✓ Already done, skipping: {output_folder}")
+                    continue
 
                 main(iter_config, model_file, model_path)

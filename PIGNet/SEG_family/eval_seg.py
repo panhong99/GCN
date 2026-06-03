@@ -5,7 +5,7 @@ import torch
 import pandas as pd
 import pickle
 import warnings
-import seg_utils as utils_segmentation
+import GCN.PIGNet.SEG_family.seg_utils as utils_segmentation
 import yaml
 import re
 import copy
@@ -15,8 +15,8 @@ from torch.autograd import Variable
 from tqdm.auto import tqdm
 from utils import AverageMeter, inter_and_union
 from functools import partial
-from seg_dataset import get_dataset
-from seg_models import get_model
+from GCN.PIGNet.SEG_family.seg_dataset import get_dataset
+from GCN.PIGNet.SEG_family.seg_models import get_model
 
 warnings.filterwarnings("ignore")
 
