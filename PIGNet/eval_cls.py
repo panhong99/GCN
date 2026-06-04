@@ -8,8 +8,8 @@ import torchvision.transforms.functional as TF
 import re
 import yaml
 from tqdm.auto import tqdm
-from GCN.PIGNet.CLS_family.cls_dataset import get_dataset
-from GCN.PIGNet.CLS_family.cls_models import get_model
+from cls_dataset import get_dataset
+from cls_models import get_model
 warnings.filterwarnings("ignore")
 
 def main(config):

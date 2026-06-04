@@ -2,8 +2,8 @@ import numpy as np
 import os
 import pickle
 import argparse
-from GCN.PIGNet.IB_family.cls.JE_calcul_cls import calcul_JE, calcul_JE_kde
-from GCN.PIGNet.IB_family.cls.JE_figure_cls import (
+from JE_calcul_cls import calcul_JE, calcul_JE_kde
+from JE_figure_cls import (
     plot_scatter_combined_all_models_datasets,
     plot_ratio_barplot_all_models_classification,
 )
@@ -192,25 +192,26 @@ if __name__ == "__main__":
 
     if datasets_list:
         plot_scatter_combined_all_models_datasets(
+            args,
             datasets_list,
             num=max_num + 1,
             calcul_type=ct,
         )
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # 3. KDE
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    print("\n=== KDE ===")
-    for ds in datasets:
-        if args.model not in dataset_model_layers[ds]:
-            continue
-        print(f"  [{ds}/{args.model}]")
-        load_or_calcul_kde(
-            dataset_paths[ds][args.model],
-            dataset_model_layers[ds][args.model],
-            is_pignet=(args.model == PIGNET_MODEL),
-            ct=ct, c=c,
-        )
+    # # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # # 3. KDE
+    # # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # print("\n=== KDE ===")
+    # for ds in datasets:
+    #     if args.model not in dataset_model_layers[ds]:
+    #         continue
+    #     print(f"  [{ds}/{args.model}]")
+    #     load_or_calcul_kde(
+    #         dataset_paths[ds][args.model],
+    #         dataset_model_layers[ds][args.model],
+    #         is_pignet=(args.model == PIGNET_MODEL),
+    #         ct=ct, c=c,
+    #     )
 
     # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # 4. All-Models Barplot  (--all_models)
@@ -234,6 +235,7 @@ if __name__ == "__main__":
 
     if barplot_datasets:
         plot_ratio_barplot_all_models_classification(
+            args,
             barplot_datasets,
             calcul_type=ct,
         )

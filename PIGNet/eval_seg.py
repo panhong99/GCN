@@ -5,18 +5,19 @@ import torch
 import pandas as pd
 import pickle
 import warnings
-import GCN.PIGNet.SEG_family.seg_utils as utils_segmentation
+import seg_utils as utils_segmentation
 import yaml
 import re
 import copy
 
+from PIL import Image
 from scipy.io import loadmat
 from torch.autograd import Variable
 from tqdm.auto import tqdm
 from utils import AverageMeter, inter_and_union
 from functools import partial
-from GCN.PIGNet.SEG_family.seg_dataset import get_dataset
-from GCN.PIGNet.SEG_family.seg_models import get_model
+from seg_dataset import get_dataset
+from seg_models import get_model
 
 warnings.filterwarnings("ignore")
 
@@ -77,14 +78,21 @@ def main(config):
     model = get_model(config, dataset)
     model.to(device)
     model.eval()
-    model_fname = f'model_{num}/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_{config.n_layer}.pth'
+    model_fname = f'model_{num}/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{config.model}_{config.backbone}_{config.model_type}_{config.dataset}_v3.pth'
 
     checkpoint = torch.load(f'/home/hail/pan/GCN/PIGNet/model_{num}/{config.model_number}/segmentation/{config.dataset}/{config.model_type}/{model_filename}'
                             , map_location = device)
-
-    state_dict = {k[7:]: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
     print(model_fname)
-    model.load_state_dict(state_dict)
+    raw = {k: v for k, v in checkpoint['state_dict'].items() if 'tracked' not in k}
+    for strip_module in (True, False):
+        try:
+            state_dict = {k[7:] if strip_module else k: v for k, v in raw.items()}
+            model.load_state_dict(state_dict)
+            break
+        except RuntimeError:
+            continue
+    else:
+        raise RuntimeError(f"Failed to load state_dict for {model_filename}.")
     
     if config.dataset == "pascal":
         cmap = loadmat('/home/hail/pan/GCN/PIGNet/data/pascal_seg_colormap.mat')['colormap']
@@ -109,6 +117,8 @@ def main(config):
         inputs = Variable(inputs.to(device))
         if config.model == "Mask2Former":
             outputs = model(inputs.unsqueeze(0))
+            if isinstance(outputs, tuple):
+                outputs = outputs[0]
         else:
             outputs, _ = model(inputs.unsqueeze(0))
 
@@ -117,31 +127,29 @@ def main(config):
         mask = target.numpy().astype(np.uint8)
         inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
         iou_score = inter.sum() / union.sum()
-        
-        if config.dataset == "pascal":
-            thredhold = 0.1
-        elif config.dataset == "cityscape":
-            thredhold = 0.1
-        
-        if iou_score > thredhold:
-            # 각각 별도의 리스트에 저장
-            pred_img.append(pred)
-            iou_list.append(iou_score)
-            img_name.append(dataset.images[i].split('/')[-1])
-                    
+
+        pred_img.append(pred)
+        iou_list.append(iou_score)
+        img_name.append(dataset.images[i].split('/')[-1])
+
         inter_meter.update(inter)
         union_meter.update(union)
                                 
     print('eval: {0}/{1}'.format(i + 1, len(dataset)))
+
+    iou = inter_meter.sum / (union_meter.sum + 1e-10)
+    for i, val in enumerate(iou):
+        print('IoU {0}: {1:.2f}'.format(dataset.CLASSES[i], val * 100))
+    print('Mean IoU: {0:.2f}'.format(iou.mean() * 100))
 
     output_data = {
         'pred_img': np.stack([np.asarray(x, dtype=np.uint8) for x in pred_img]),
         'iou': np.array([float(x.cpu()) if isinstance(x, torch.Tensor) else float(x) for x in iou_list]),
         'img_name': np.array(img_name, dtype=object)
     }
-    
+
     # Pickle 파일로 저장 (단일 파일)
-    base_path = f'/home/hail/pan/GCN/PIGNet/infer_output'
+    base_path = f'/home/hail/pan/GCN/PIGNet/infer_output/{config.backbone}/{config.model_type}'
     os.makedirs(base_path, exist_ok=True)
     
     if config.factor == np.sqrt(0.1):
@@ -156,11 +164,6 @@ def main(config):
     with open(pkl_path, 'wb') as f:
         pickle.dump(output_data, f)
 
-    iou = inter_meter.sum / (union_meter.sum + 1e-10)
-
-    for i, val in enumerate(iou):
-        print('IoU {0}: {1:.2f}'.format(dataset.CLASSES[i], val * 100))
-    print('Mean IoU: {0:.2f}'.format(iou.mean() * 100))
     return iou.mean() * 100
 
 if __name__ == "__main__":    
@@ -197,9 +200,9 @@ if __name__ == "__main__":
         num=50
     elif config.backbone == "resnet101":
         num=101
-                
+
     path = f"/home/hail/pan/GCN/PIGNet/model_{num}/{config.model_number}/segmentation/{config.dataset}/{config.model_type}"
-            
+
     try:
         model_list = sorted(os.listdir(path))
         print(f"[INFO] Found {len(model_list)} models in '{path}'")
@@ -207,28 +210,28 @@ if __name__ == "__main__":
         print(f"[ERROR] Model directory not found at '{path}'")
         exit()
 
-    zoom_factor = [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2] # zoom in, out value 양수면 줌 음수면 줌아웃
-    overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5] #겹치는 비율 0~1 사이 값으로 0.8 이상이면 shape 이 안맞음
-    pattern_repeat_count = [1, 3, 6, 9, 12] # 반복 횟수 2이면 2*2
+    zoom_factor = [0.1, np.sqrt(0.1), 0.5, np.sqrt(0.5), 1, 1.5, np.sqrt(2.75), 2]
+    overlap_percentage = [0, 0.1 , 0.2 , 0.3 , 0.5]
+    pattern_repeat_count = [1, 3, 6, 9, 12]
     output_dict = {model_name : {"zoom" : [] , "overlap" : [] , "repeat" : []} for model_name in model_list}
 
     process_dict = {
-        "zoom" : zoom_factor , 
+        "zoom" : zoom_factor ,
         "overlap" : overlap_percentage ,
         "repeat" : pattern_repeat_count
     }
-            
+
     for name in model_list:
         for process_key , factor_list in process_dict.items():
             for factor_value in factor_list:
-                
+
                 iter_config = copy.deepcopy(config)
                 if "Mask2Former" in name:
                     iter_config.crop_size = 512
                 iter_config.infer_params.model_filename = name
                 iter_config.infer_params.process_type = process_key
                 iter_config.factor = factor_value
-                
+
 
                 print("-" * 60)
                 print(f"Testing model: {name} | Process: {process_key} | Factor: {factor_value}")
@@ -238,7 +241,7 @@ if __name__ == "__main__":
 
                 if accuracy is not None:
                     output_dict[name][process_key].append(accuracy)
-                        
+
     print("\n--- Inference Results Summary ---")
 
     records = []
@@ -253,15 +256,15 @@ if __name__ == "__main__":
                     "accuracy": val
                 })
     df_long = pd.DataFrame(records)
-    
-    df_wide = df_long.pivot_table(index=['model', 'task'], 
-                                    columns='factor', 
+
+    df_wide = df_long.pivot_table(index=['model', 'task'],
+                                    columns='factor',
                                     values='accuracy').reset_index()
-    
+
     df_wide.rename_axis(columns=None, inplace=True)
 
     output_filename = f"output_{num}_{config.model_number}_{config.model_type}_{config.dataset}.csv"
     df_wide.to_csv(output_filename, index=False)
-    
+
     print(f"\n[SUCCESS] Reshaped results saved to '{output_filename}'")
     print(df_wide)

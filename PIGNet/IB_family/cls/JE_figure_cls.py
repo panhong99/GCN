@@ -46,12 +46,12 @@ DATASET_DISPLAY_NAMES = {
 }
 # ─────────────────────────────────────────────────────────────────────────────
 
-FIGURE_DIR = '/home/hail/pan/GCN/PIGNet/cls_final_figures'
+FIGURE_DIR = '/home/hail/pan/GCN/PIGNet/IB_family/cls/IB_cls_figures'
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Scatter plot — multi-dataset horizontal stack
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def plot_scatter_combined_all_models_datasets(datasets_list, num,
+def plot_scatter_combined_all_models_datasets(args, datasets_list, num,
                                               calcul_type=None, fname=None):
     """
     Stack each dataset's combined-model scatter figure horizontally.
@@ -203,7 +203,7 @@ def plot_scatter_combined_all_models_datasets(datasets_list, num,
         ct_str = f"_{ct}" if ct else ""
         ds_str = "_".join(d['dataset_name'] for d in datasets_list)
         os.makedirs(FIGURE_DIR, exist_ok=True)
-        fname  = os.path.join(FIGURE_DIR, f"ALL_MODELS_{ds_str}_{ct_str}_scatter.png")
+        fname  = os.path.join(FIGURE_DIR, f"ALL_MODELS_{args.backbone}_{args.model_type}_{ds_str}_{ct_str}_scatter.png")
 
     plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
@@ -214,7 +214,7 @@ def plot_scatter_combined_all_models_datasets(datasets_list, num,
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Barplot — H(X,T)/H(T,Y) ratio, all models × all datasets
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def plot_ratio_barplot_all_models_classification(datasets_list,
+def plot_ratio_barplot_all_models_classification(args, datasets_list,
                                                  calcul_type='joint'):
     """
     Mean ± SD ratio errorbar plot — one subplot per dataset, all in one figure.
@@ -315,7 +315,7 @@ def plot_ratio_barplot_all_models_classification(datasets_list,
     plt.tight_layout()
     os.makedirs(FIGURE_DIR, exist_ok=True)
     ds_str = "_".join(ds['dataset_name'] for ds in datasets_list)
-    fname  = os.path.join(FIGURE_DIR, f"{ds_str}_{calcul_type}_ratio_barplot.pdf")
+    fname  = os.path.join(FIGURE_DIR, f"{ds_str}_{args.backbone}_{args.model_type}_{calcul_type}_ratio_barplot.pdf")
     plt.savefig(fname, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Ratio barplot saved: {fname}")

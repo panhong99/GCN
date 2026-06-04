@@ -24,7 +24,7 @@ FS_LABEL = 50
 FS_CBAR  = 50
 FS_BAR   = 35
 
-FIGURE_DIR = '/home/hail/pan/GCN/PIGNet/seg_final_figures'
+FIGURE_DIR = '/home/hail/pan/GCN/PIGNet/IB_family/seg/IB_seg_figures'
 
 COLOR_MAP = {'PIGNet_GSPonly': '#D81B60', 'ASPP': '#1E88E5', 'Mask2Former': '#FFC107'}
 ALPHA_MAP = {'PIGNet_GSPonly': 0.55,      'ASPP': 0.45,      'Mask2Former': 0.45}
@@ -51,7 +51,7 @@ def _save(fig, folder, fname):
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Scatter matrix — single dataset, SAME or DIFF
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def plot_scatter_matrix(mode, je_xt, je_ty, distance,
+def plot_scatter_matrix(args, mode, je_xt, je_ty, distance,
                         model_name, dataset_name,
                         valid_pascal=False, calcul_type='joint'):
     """
@@ -99,14 +99,14 @@ def plot_scatter_matrix(mode, je_xt, je_ty, distance,
         cbar.ax.tick_params(labelsize=FS_CBAR)
 
     folder = os.path.join(FIGURE_DIR, model_name, dataset_name, 'all')
-    fname  = f"{model_name}_{dataset_name}_{valid_str}_{calcul_type}_scatter_{mode}.png"
+    fname  = f"{model_name}_{dataset_name}_{valid_str}_{calcul_type}_{args.model_type}_{args.backbone}_scatter_{mode}.png"
     _save(fig, folder, fname)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━══
 # Scatter matrix — multi-dataset combined (SAME top row / DIFF bottom row)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def plot_scatter_matrix_combined(datasets_list, model_name, 
+def plot_scatter_matrix_combined(args, datasets_list, model_name, 
                                  valid_pascal=False, calcul_type='joint', fname=None):
     """
     2 × num_datasets combined scatter.  Top row = SAME, bottom row = DIFF.
@@ -194,14 +194,14 @@ def plot_scatter_matrix_combined(datasets_list, model_name,
     if fname is None:
         ct_str = f"_{calcul_type}" if calcul_type else ""
         ds_str = "_".join(d['name'] for d in datasets_list)
-        fname  = f"{model_name}_{ds_str}_{valid_str}_{calcul_type}_scatter_combined.png"
+        fname  = f"{model_name}_{ds_str}_{valid_str}_{calcul_type}__{args.model_type}_{args.backbone}_scatter_combined.png"
     _save(fig, FIGURE_DIR, fname)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━══
 # KDE matrix — single dataset, SAME or DIFF
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-def plot_kde_matrix(mode, model_name, dataset_name, vmin, vmax, kde_data,
+def plot_kde_matrix(args, mode, model_name, dataset_name, vmin, vmax, kde_data,
                     process_type, valid_pascal=False, calcul_type='joint'):
     """
     mode: 'SAME' (Reds colormap) or 'DIFF' (Blues colormap)

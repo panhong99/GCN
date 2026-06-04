@@ -11,14 +11,14 @@ import pickle
 import copy
 from tqdm.auto import trange
 from sklearn.cluster import MiniBatchKMeans
-from GCN.PIGNet.SEG_family.seg_dataset import get_dataset
-from GCN.PIGNet.SEG_family.seg_models import get_model
+from seg_dataset import get_dataset
+from seg_models import get_model
 from torch.autograd import Variable
 from sklearn.cluster import KMeans
 import random
 import pickle
 import cv2
-import GCN.PIGNet.SEG_family.seg_utils as utils_segmentation
+import seg_utils as utils_segmentation
 from gc import collect
 from functools import partial
 

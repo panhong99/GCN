@@ -6,7 +6,7 @@ model: "" # if train have to set the model -> PIGNet_GSPonly ASPP Mask2Former
 exp: "bn_lr7e-3"
 backbone: "resnet101" # resnet50 or resnet101
 dataset: "pascal" # pascal or cityscape
-model_type: "pretrained" # scratch or pretrained
+model_type: "scratch" # scratch or pretrained
 model_number: 1 # 1: PIGNet_GSPonly, 2:ASPP, 3:Mask2Former
 gpu: 0
 workers: 4

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import warnings
 import timm
-import GCN.PIGNet.CLS_family.cls_utils as utils_classification
+import cls_utils as utils_classification
 from model_src import Classification_resnet, PIGNet_GSPonly_classification, PIGNet_classification
 
 warnings.filterwarnings("ignore")

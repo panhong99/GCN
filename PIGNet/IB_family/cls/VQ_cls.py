@@ -9,13 +9,13 @@ import pickle
 import copy
 from tqdm.auto import tqdm
 from sklearn.cluster import MiniBatchKMeans
-from GCN.PIGNet.CLS_family.cls_dataset import get_dataset
-from GCN.PIGNet.CLS_family.cls_models import get_model
+from cls_dataset import get_dataset
+from cls_models import get_model
 from torch.autograd import Variable
 from sklearn.cluster import KMeans
 import random
 import pickle
-import GCN.PIGNet.CLS_family.cls_utils as utils_classification
+import cls_utils as utils_classification
 from gc import collect
 from functools import partial
 import cv2

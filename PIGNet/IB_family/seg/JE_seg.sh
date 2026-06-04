@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e  # 에러 발생 시 즉시 중단
 
-SCRIPT="/home/hail/pan/GCN/PIGNet/JE_seg_main.py"
-MODEL="Mask2Former"
+SCRIPT="/home/hail/pan/GCN/PIGNet/IB_family/seg/JE_seg_main.py"
+MODEL="PIGNet_GSPonly"
 
 TOTAL=8
 COUNT=0

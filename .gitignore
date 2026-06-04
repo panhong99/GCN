@@ -85,3 +85,7 @@ __pycache__/
 /PIGNet/.claude/
 /PIGNet/model_101_0506.zip
 /PIGNet/old_code
+/PIGNet/_junk_imgs/
+/PIGNet/_junk_things
+/PIGNet/_old_code
+/PIGNet/IB_family/cls/IB_cls_figures/*

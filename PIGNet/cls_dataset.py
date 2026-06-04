@@ -3,7 +3,7 @@ import torch
 import torchvision
 import warnings
 import torchvision.transforms.functional as TF
-import GCN.PIGNet.CLS_family.cls_utils as utils_classification
+import cls_utils as utils_classification
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 
