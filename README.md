@@ -11,7 +11,7 @@ A research codebase for classification and segmentation experiments using PIGNet
 - [Training](#training)
 - [Evaluation](#evaluation)
 - [IB Analysis](#ib-analysis)
-- [Data Storage Structure](#data-storage-structure)
+- [IB data structure](#data-storage-structure)
 
 ---
 
@@ -175,7 +175,7 @@ Output figures are saved to `IB_family/{cls,seg}/IB_{cls,seg}_figures/`.
 
 ---
 
-## Data Storage Structure
+## IB data structure
 
 IB intermediate data (VQ, JE, KDE) is stored on external storage at `pan/HDD/IB_dataset/`.
 
