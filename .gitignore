@@ -89,3 +89,8 @@ __pycache__/
 /PIGNet/_junk_things
 /PIGNet/_old_code
 /PIGNet/IB_family/cls/IB_cls_figures/*
+/PIGNet/*.csv
+/PIGNet/csvs/*.csv
+/PIGNet/surplus
+/PIGNet/eval_imgs
+/PIGNet/appendix_imgs

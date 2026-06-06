@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-check_model.py - Compare all checkpoint versions for each architecture.
+check_model.py - Run inference with every checkpoint version and save individual images.
 
-Scans model_{num}/ directories for .pth files and builds one comparison
-matrix per architecture:
-  rows    = representative eval images
-  columns = [Image | GT | ckpt_version_1 | ckpt_version_2 | ...]
+Scans model_{num}/ directories for .pth files. For each checkpoint a
+separate output folder is created:
 
-Column labels show {sub_dir}/{version} (e.g. model_1/v3).
-A legend .txt file records the full path for every column.
+    eval_imgs/check/{arch}/{R50|R101}/{dataset}/{model_type}/{sub_dir}__{version}/
+        {img_stem}.png          ← prediction
+        {img_stem}_orig.png     ← original image
+        {img_stem}_gt.png       ← ground-truth
+
+A legend.txt at the arch level maps every folder name to its full .pth path.
 
 Usage:
     python check_model.py --backbone resnet101 --dataset pascal --model_type pretrained
@@ -20,7 +22,7 @@ Usage:
 import os, sys, copy, warnings, argparse, yaml, glob, re
 import numpy as np
 import torch
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 from scipy.io import loadmat
 from torch.autograd import Variable
 
@@ -53,9 +55,6 @@ CITY_EVAL = [
 ]
 
 IMG_W, IMG_H = 513, 256
-GAP     = 8
-LABEL_H = 20
-FONT_SZ = 11
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -148,23 +147,41 @@ ARCH_PATTERNS = {
     'Mask2Former':   ('Mask2Former_',),
 }
 
-# Common prefixes to strip when building the version label
-# e.g. "PIGNet_GSPonly_resnet101_pretrained_pascal_" → strip → "v3"
+# Strip only arch+backbone+dataset, keep model_type → "pretrained_v3" / "scratch_v3"
 _STRIP_RE = re.compile(
+    r'^(?:PIGNet_GSPonly|ASPP|Mask2Former)_resnet(?:50|101)_(?:pascal|cityscape)_?|'
+    r'^(?:PIGNet_GSPonly|ASPP|Mask2Former)_resnet(?:50|101)_'
+)
+
+# Full prefix including dataset (for stripping arch+backbone+type+dataset)
+_STRIP_FULL_RE = re.compile(
     r'^(?:PIGNet_GSPonly|ASPP|Mask2Former)_resnet(?:50|101)_(?:pretrained|pretrain|scratch)_(?:pascal|cityscape)_?'
 )
 
 
 def _version_tag(fname):
-    """Strip arch/backbone/type/dataset prefix from filename, return remainder without .pth."""
+    """
+    Return a compact version string from the filename (without .pth).
+    Keeps model_type prefix (pretrained/scratch) so same-subdir checkpoints
+    don't collide:
+      ASPP_resnet101_pretrained_cityscape_v3.pth  →  pretrained_v3
+      ASPP_resnet101_scratch_cityscape_v3.pth     →  scratch_v3
+    """
     stem = fname.replace('.pth', '')
-    return _STRIP_RE.sub('', stem) or stem
+    # Strip arch + backbone, keep type + dataset-suffix
+    stripped = re.sub(
+        r'^(?:PIGNet_GSPonly|ASPP|Mask2Former)_resnet(?:50|101)_', '', stem)
+    # Strip dataset name (pascal/cityscape) from what remains
+    stripped = re.sub(r'^(?:pretrained|pretrain|scratch)_(?:pascal|cityscape)_?',
+                      lambda m: m.group(0).split('_')[0] + '_', stripped)
+    return stripped or stem
 
 
 def _short_label(path):
     """
-    Build a compact column label:  {sub_dir}/{version}
-    e.g.  model_1/v3   or   pretrained/v3_aggregate_mean_8
+    Build a compact label:  {sub_dir}/{version}
+    - model_1/pretrained_v3  (sub_dir=model_1, type visible in version)
+    - pretrained/v3          (sub_dir already encodes type, so strip type from version)
     """
     rel   = os.path.relpath(path, ROOT)
     parts = rel.split(os.sep)
@@ -174,6 +191,9 @@ def _short_label(path):
     except ValueError:
         sub_dir = 'root'
     version = _version_tag(os.path.basename(path))
+    # Avoid "pretrained/pretrained_v3" → strip leading type when sub_dir already names the type
+    if sub_dir in ('pretrained', 'scratch', 'pretrain'):
+        version = re.sub(r'^(?:pretrained|pretrain|scratch)_', '', version)
     return f'{sub_dir}/{version}' if version else sub_dir
 
 
@@ -193,7 +213,8 @@ def scan_ckpts(backbone, dataset_name, model_type, exp_num=None):
     else:
         search_root = f'{ROOT}/model_{num}'
 
-    ok_types    = {'pretrained': ('pretrained', 'pretrain'), 'scratch': ('scratch',)}[model_type]
+    ok_types    = None if model_type == 'all' else \
+                  {'pretrained': ('pretrained', 'pretrain'), 'scratch': ('scratch',)}[model_type]
     backbone_str = backbone  # 'resnet50' or 'resnet101'
 
     result = {}
@@ -218,7 +239,7 @@ def scan_ckpts(backbone, dataset_name, model_type, exp_num=None):
             continue
         if dataset_name not in fname:
             continue
-        if not any(t in fname for t in ok_types):
+        if ok_types is not None and not any(t in fname for t in ok_types):
             continue
 
         label = _short_label(path)
@@ -227,73 +248,14 @@ def scan_ckpts(backbone, dataset_name, model_type, exp_num=None):
     return result
 
 
-# ── Matrix builder ─────────────────────────────────────────────────────────────
-
-def build_matrix(img_names, orig_imgs, gt_imgs, ckpt_preds, ckpt_labels):
-    """
-    Rows    = eval images  (labeled with short image stem)
-    Columns = [Image, GT, ckpt_label_1, ckpt_label_2, ...]
-    """
-    col_headers = ['Image', 'GT'] + ckpt_labels
-    n_cols  = len(col_headers)
-    n_rows  = len(img_names)
-    LABEL_W = 130
-
-    header_h = LABEL_H + GAP * 2
-    total_w  = LABEL_W + n_cols * IMG_W + (n_cols + 1) * GAP
-    total_h  = header_h + n_rows * (IMG_H + GAP) + GAP
-
-    canvas = Image.new('RGB', (total_w, total_h), (255, 255, 255))
-    draw   = ImageDraw.Draw(canvas)
-
-    try:
-        font  = ImageFont.truetype(
-            '/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf', FONT_SZ)
-        sfont = ImageFont.truetype(
-            '/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf', FONT_SZ - 2)
-    except Exception:
-        font = sfont = ImageFont.load_default()
-
-    # Column headers
-    for c, hdr in enumerate(col_headers):
-        x = LABEL_W + GAP + c * (IMG_W + GAP) + IMG_W // 2
-        draw.text((x, GAP // 2), hdr, fill=(0, 0, 0), font=font, anchor='mt')
-
-    # Rows
-    row_labels = [os.path.splitext(n)[0][-16:] for n in img_names]
-    for r, (row_lbl, img_name) in enumerate(zip(row_labels, img_names)):
-        y = header_h + r * (IMG_H + GAP)
-        draw.text((LABEL_W // 2, y + IMG_H // 2), row_lbl,
-                  fill=(0, 0, 0), font=sfont, anchor='mm')
-
-        for c, hdr in enumerate(col_headers):
-            x = LABEL_W + GAP + c * (IMG_W + GAP)
-            if hdr == 'Image':
-                cell = orig_imgs.get(img_name)
-            elif hdr == 'GT':
-                cell = gt_imgs.get(img_name)
-            else:
-                preds = ckpt_preds.get(hdr, [])
-                cell  = preds[r] if r < len(preds) else None
-
-            if cell is not None:
-                canvas.paste(cell.resize((IMG_W, IMG_H), Image.Resampling.LANCZOS), (x, y))
-            else:
-                draw.rectangle([x, y, x + IMG_W, y + IMG_H],
-                                outline=(200, 200, 200), fill=(240, 240, 240))
-                draw.text((x + IMG_W // 2, y + IMG_H // 2), 'N/A',
-                           fill=(150, 150, 150), font=sfont, anchor='mm')
-
-    return canvas
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description='Compare all checkpoint versions per architecture')
     parser.add_argument('--backbone',   required=True, choices=['resnet50', 'resnet101'])
     parser.add_argument('--dataset',    required=True, choices=['pascal', 'cityscape'])
-    parser.add_argument('--model_type', required=True, choices=['scratch', 'pretrained'])
+    parser.add_argument('--model_type', required=True, choices=['scratch', 'pretrained', 'all'],
+                        help='"all" scans both pretrained and scratch checkpoints')
     parser.add_argument('--exp_num',    type=str, default=None,
                         help='Limit scan to one experiment dir (e.g. --exp_num 1). '
                              'Default: scan all experiment dirs.')
@@ -313,7 +275,7 @@ def main():
     base_cfg.mode       = 'infer'
     base_cfg.train      = False
     base_cfg.MI         = False
-    base_cfg.scratch    = (args.model_type == 'scratch')
+    base_cfg.scratch    = (args.model_type == 'scratch')  # 'all' → defaults to False (pretrained mode)
 
     # Datasets: zoom=1 (no distortion) for clean baseline inference
     def make_ds(crop_size):
@@ -349,22 +311,29 @@ def main():
             print(f'    {lbl:30s}  {path}')
     print(f'{"="*60}\n')
 
-    # ── Per-architecture inference + matrix ───────────────────────────────────
+    # ── Per-architecture: one folder per checkpoint, individual images ────────
     for arch_name, ckpt_list in ckpt_map.items():
         print(f'\n[{arch_name}]  running {len(ckpt_list)} checkpoint(s)...')
 
-        ds  = ds_512 if arch_name == 'Mask2Former' else ds_513
+        ds      = ds_512 if arch_name == 'Mask2Former' else ds_513
         idx_map = {n: find_index(ds, n, args.dataset) for n in eval_list}
 
-        ckpt_labels = []
-        ckpt_preds  = {}   # label → [PIL | None]  one per eval image
+        arch_root   = os.path.join(SAVE_BASE, arch_name, backbone_label,
+                                   args.dataset, args.model_type)
+        legend_rows = []
 
         for label, ckpt_path in ckpt_list:
+            # folder name: replace '/' with '__'  e.g. model_1__v3
+            folder_name = label.replace('/', '__')
+            ckpt_dir    = os.path.join(arch_root, folder_name)
+            os.makedirs(ckpt_dir, exist_ok=True)
+
+            legend_rows.append(f'{folder_name:40s}  {ckpt_path}')
             print(f'  Loading [{label}]  {ckpt_path}')
 
             m_cfg = copy.deepcopy(base_cfg)
             m_cfg.model        = arch_name
-            m_cfg.model_number = 1   # placeholder; actual weights from ckpt_path
+            m_cfg.model_number = 1
             m_cfg.crop_size    = 512 if arch_name == 'Mask2Former' else 513
 
             try:
@@ -373,21 +342,26 @@ def main():
                 load_ckpt(model, ckpt_path, device)
             except Exception as e:
                 print(f'    ERROR: {e}')
-                ckpt_preds[label] = [None] * len(eval_list)
-                ckpt_labels.append(label)
                 continue
 
-            preds = []
             for img_name in eval_list:
-                idx = idx_map.get(img_name)
+                stem = os.path.splitext(img_name)[0].replace('_gtFine_labelTrainIds', '')
+                idx  = idx_map.get(img_name)
+
+                # Save orig + GT alongside predictions (only once per image)
+                if orig_imgs.get(img_name):
+                    orig_imgs[img_name].resize((IMG_W, IMG_H), Image.Resampling.LANCZOS)\
+                        .save(os.path.join(ckpt_dir, f'{stem}_orig.png'))
+                if gt_imgs.get(img_name):
+                    gt_imgs[img_name].resize((IMG_W, IMG_H), Image.Resampling.LANCZOS)\
+                        .save(os.path.join(ckpt_dir, f'{stem}_gt.png'))
+
                 if idx is None:
                     print(f'    WARN: {img_name} not in dataset')
-                    preds.append(None)
                     continue
 
                 sample = ds[idx]
                 if sample[0] is None:
-                    preds.append(None)
                     continue
 
                 inp = Variable(sample[0].to(device))
@@ -402,33 +376,22 @@ def main():
                 _, pred_t = torch.max(out, 1)
                 pred     = pred_t.cpu().numpy().squeeze().astype(np.uint8)
                 pred_img = colorize(pred, cmap).resize((IMG_W, IMG_H), Image.Resampling.LANCZOS)
-                preds.append(pred_img)
-                print(f'    OK  {img_name}')
-
-            ckpt_preds[label]  = preds
-            ckpt_labels.append(label)
+                pred_img.save(os.path.join(ckpt_dir, f'{stem}_pred.png'))
+                print(f'    OK  {stem}')
 
             del model
             torch.cuda.empty_cache()
 
-        # Build and save matrix
-        out_dir = os.path.join(SAVE_BASE, arch_name, backbone_label, args.dataset)
-        os.makedirs(out_dir, exist_ok=True)
-
-        matrix   = build_matrix(eval_list, orig_imgs, gt_imgs, ckpt_preds, ckpt_labels)
-        out_path = os.path.join(out_dir, f'{args.model_type}_comparison.png')
-        matrix.save(out_path, dpi=(150, 150))
-        print(f'  Saved matrix  →  {out_path}')
-
-        # Legend: full path for every label
-        legend_path = os.path.join(out_dir, f'{args.model_type}_legend.txt')
+        # Legend file (one per arch)
+        os.makedirs(arch_root, exist_ok=True)
+        legend_path = os.path.join(arch_root, 'legend.txt')
         with open(legend_path, 'w') as f:
             f.write(f'arch={arch_name}  backbone={backbone_label}  '
                     f'dataset={args.dataset}  model_type={args.model_type}\n')
             f.write('='*70 + '\n')
-            for lbl, path in ckpt_list:
-                f.write(f'{lbl:35s}  {path}\n')
-        print(f'  Saved legend  →  {legend_path}')
+            for row in legend_rows:
+                f.write(row + '\n')
+        print(f'  Legend  →  {legend_path}')
 
     print(f'\nDone.  Results in  {SAVE_BASE}')
 

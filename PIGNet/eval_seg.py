@@ -109,9 +109,17 @@ def main(config):
     iou_list = []
     img_name = []
 
+    save_base = '/home/hail/pan/GCN/PIGNet'
+    pred_dir  = f'{save_base}/pred_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
+    gt_dir    = f'{save_base}/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
+    color_dir = f'{save_base}/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
+    os.makedirs(pred_dir,  exist_ok=True)
+    os.makedirs(gt_dir,    exist_ok=True)
+    os.makedirs(color_dir, exist_ok=True)
+
     for i in tqdm(range(len(dataset))):
-        inputs, target, _, _, _, _ = dataset[i]
-        if inputs==None:
+        inputs, target, gt_image, color_target, _, _ = dataset[i]
+        if inputs is None:
             continue
 
         inputs = Variable(inputs.to(device))
@@ -125,12 +133,30 @@ def main(config):
         _, pred = torch.max(outputs, 1)
         pred = pred.data.cpu().numpy().squeeze().astype(np.uint8)
         mask = target.numpy().astype(np.uint8)
+
+        if config.dataset == 'cityscape':
+            pad_location = (mask == 255)
+            pred[pad_location] = 255
+
         inter, union = inter_and_union(pred, mask, len(dataset.CLASSES))
         iou_score = inter.sum() / union.sum()
 
+        imname = os.path.splitext(dataset.images[i].split('/')[-1])[0] + '.png'
+
+        def top_crop(img, w=513, h=256):
+            return img.crop((0, 0, w, h))
+
+        mask_pred = Image.fromarray(pred)
+        mask_pred.putpalette(cmap)
+        top_crop(mask_pred.convert('RGB')).save(os.path.join(pred_dir, imname))
+        if gt_image is not None:
+            top_crop(gt_image).save(os.path.join(gt_dir, imname))
+        if color_target is not None:
+            top_crop(color_target).save(os.path.join(color_dir, imname))
+
         pred_img.append(pred)
         iou_list.append(iou_score)
-        img_name.append(dataset.images[i].split('/')[-1])
+        img_name.append(imname)
 
         inter_meter.update(inter)
         union_meter.update(union)
@@ -142,11 +168,11 @@ def main(config):
         print('IoU {0}: {1:.2f}'.format(dataset.CLASSES[i], val * 100))
     print('Mean IoU: {0:.2f}'.format(iou.mean() * 100))
 
-    output_data = {
-        'pred_img': np.stack([np.asarray(x, dtype=np.uint8) for x in pred_img]),
-        'iou': np.array([float(x.cpu()) if isinstance(x, torch.Tensor) else float(x) for x in iou_list]),
-        'img_name': np.array(img_name, dtype=object)
-    }
+    # output_data = {
+    #     'pred_img': np.stack([np.asarray(x, dtype=np.uint8) for x in pred_img]),
+    #     'iou': np.array([float(x.cpu()) if isinstance(x, torch.Tensor) else float(x) for x in iou_list]),
+    #     'img_name': np.array(img_name, dtype=object)
+    # }
 
     # Pickle 파일로 저장 (단일 파일)
     base_path = f'/home/hail/pan/GCN/PIGNet/infer_output/{config.backbone}/{config.model_type}'
@@ -159,10 +185,10 @@ def main(config):
     elif config.factor == np.sqrt(2.75):
         config.factor = 1.75
     
-    pkl_path = f'{base_path}/{config.dataset}_{config.model}_{config.infer_params.process_type}_{config.factor}_number_{config.model_number}.pkl'
+    # pkl_path = f'{base_path}/{config.dataset}_{config.model}_{config.infer_params.process_type}_{config.factor}_number_{config.model_number}.pkl'
     
-    with open(pkl_path, 'wb') as f:
-        pickle.dump(output_data, f)
+    # with open(pkl_path, 'wb') as f:
+    #     pickle.dump(output_data, f)
 
     return iou.mean() * 100
 
