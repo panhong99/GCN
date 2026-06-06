@@ -1,3 +1,48 @@
+# Configs
+- Have to change
+  - backbone
+    - resnet50
+    - resnet101
+  - dataset
+    - cls
+      - CIFAR-10
+      - CIFAR-100
+      - imagenet
+    - seg
+      - pascal
+      - cityscape
+  - model_type
+    - scratch
+    - pretrained
+
+```
+# cls
+config_classification.yaml
+
+# seg
+config_segmentation.yaml
+```
+
+# Train
+```
+# cls
+train_cls.py
+
+# seg
+train_seg.py
+```
+
+# Eval
+```
+# Please check model_number in config_{task}.yaml
+# cls
+eval_cls.py
+
+# seg
+eval_seg.py
+```
+
+
 # 실험 디렉토리 구조
 ```
 pan/GCN/PIGNet/ 
