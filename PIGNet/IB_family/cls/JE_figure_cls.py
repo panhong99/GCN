@@ -262,9 +262,9 @@ def plot_ratio_barplot_all_models_classification(args, datasets_list,
 
             mean_vals, err_vals = [], []
             for layer_data in layers_data:
-                mi_xt = np.asarray(layer_data[f'{ct}_xt'], dtype=float).flatten()
-                mi_ty = np.asarray(layer_data[f'{ct}_ty'], dtype=float).flatten()
-                ratio = mi_xt / mi_ty
+                je_xt = np.asarray(layer_data[f'{ct}_xt'], dtype=float).flatten()
+                je_ty = np.asarray(layer_data[f'{ct}_ty'], dtype=float).flatten()
+                ratio = je_xt / je_ty
                 mean_vals.append(np.mean(ratio))
                 err_vals.append(np.std(ratio, ddof=1))
 
@@ -528,9 +528,9 @@ def plot_ratio_barplot_per_model_classification(args, datasets_list,
 
             mean_vals, err_vals = [], []
             for layer_data in layers_data:
-                mi_xt = np.asarray(layer_data[f'{ct}_xt'], dtype=float).flatten()
-                mi_ty = np.asarray(layer_data[f'{ct}_ty'], dtype=float).flatten()
-                ratio = mi_xt / mi_ty
+                je_xt = np.asarray(layer_data[f'{ct}_xt'], dtype=float).flatten()
+                je_ty = np.asarray(layer_data[f'{ct}_ty'], dtype=float).flatten()
+                ratio = je_xt / je_ty
                 mean_vals.append(np.mean(ratio))
                 err_vals.append(np.std(ratio, ddof=1))
 
