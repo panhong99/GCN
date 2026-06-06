@@ -19,6 +19,11 @@ A research codebase for classification and segmentation experiments using PIGNet
 
 ```
 pan/GCN/PIGNet/
+├── csvs/                          # Result xlsx with graph
+│   ├── cls_graph                  # cls acc figures
+│   ├── seg_graph                  # seg acc figures
+│   ├── *.xlsx                     # {dataset}_{scratch or pretrain}.xlsx
+│
 ├── data/                          # Dataset definition files
 │   ├── cifar-10/
 │   ├── cifar-100/
@@ -98,6 +103,8 @@ pan/GCN/PIGNet/
 ├── train_cls.py   / train_seg.py
 ├── eval_cls.py    / eval_seg.py
 └── utils.py
+└── cls_graph.py # plot generalize figure
+└── seg_graph.py # plot generalize figure
 ```
 
 > **Model numbering:** 3 independent runs per configuration are used to obtain statistically reliable results.
