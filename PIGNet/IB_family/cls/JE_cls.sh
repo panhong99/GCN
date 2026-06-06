@@ -1,18 +1,21 @@
 #!/bin/bash
 set -e  # 에러 발생 시 즉시 중단
 
-SCRIPT="/home/hail/pan/GCN/PIGNet/JE_cls_main.py"
-MODEL="vit"
+SCRIPT="/home/hail/pan/GCN/PIGNet/IB_family/cls/JE_cls_main.py"
+MODEL="${1:-PIGNet_GSPonly_classification}" #PIGNet_GSPonly_classification, Resnet, vit
 
 COUNT=0
 
-if [ "$MODEL" == "vit" ]; then
-    BACKBONES="resnet101"
-    TOTAL=6
-else
-    BACKBONES="resnet50 resnet101"
-    TOTAL=12
-fi
+# if [ "$MODEL" == "vit" ]; then
+#     BACKBONES="resnet101"
+#     TOTAL=6
+# else
+#     BACKBONES="resnet50 resnet101"
+#     TOTAL=12
+# fi
+
+BACKBONES="resnet50 resnet101"
+TOTAL=12
 
 for backbone in $BACKBONES; do
     for dataset in CIFAR-10 CIFAR-100 imagenet; do

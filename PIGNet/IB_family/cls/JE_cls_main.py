@@ -5,7 +5,9 @@ import argparse
 from JE_calcul_cls import calcul_JE, calcul_JE_kde
 from JE_figure_cls import (
     plot_scatter_combined_all_models_datasets,
+    plot_scatter_per_model_datasets,
     plot_ratio_barplot_all_models_classification,
+    plot_ratio_barplot_per_model_classification,
 )
 
 PIGNET_MODEL  = 'PIGNet_GSPonly_classification'
@@ -14,7 +16,7 @@ BACKBONE_NUM  = 4
 GSP_LAYER_NUM = 5
 
 BASE_DATA_ROOT  = '/home/hail/pan/HDD/IB_dataset'
-SCATTER_MODEL_ORDER = ['PIGNet_Backbone','Resnet', 'vit']
+SCATTER_MODEL_ORDER = ['PIGNet_Backbone', 'PIGNet_GSP', 'Resnet', 'vit']
 
 # ── private I/O helpers ───────────────────────────────────────────────────────
 def _cache_path(base, tag, calcul_type, cluster_num):
@@ -141,7 +143,7 @@ if __name__ == "__main__":
     parser.add_argument('--cluster_num',  type=int,  default=50)
     parser.add_argument('--calcul_type',  type=str,  default='joint')
     parser.add_argument('--model_type',   type=str,  default='scratch')
-    parser.add_argument('--all_models',   action='store_true', default=False,
+    parser.add_argument('--all_models',   default=True,
                         help='Show all models in scatter and draw barplot')
     args = parser.parse_args()
 
@@ -197,6 +199,12 @@ if __name__ == "__main__":
             num=max_num + 1,
             calcul_type=ct,
         )
+        plot_scatter_per_model_datasets(
+            args,
+            datasets_list,
+            num=max_num + 1,
+            calcul_type=ct,
+        )
 
     # # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     # # 3. KDE
@@ -235,6 +243,11 @@ if __name__ == "__main__":
 
     if barplot_datasets:
         plot_ratio_barplot_all_models_classification(
+            args,
+            barplot_datasets,
+            calcul_type=ct,
+        )
+        plot_ratio_barplot_per_model_classification(
             args,
             barplot_datasets,
             calcul_type=ct,
