@@ -1,5 +1,6 @@
 import argparse
 import os
+import json
 import numpy as np
 import torch
 import pandas as pd
@@ -109,10 +110,12 @@ def main(config):
     iou_list = []
     img_name = []
 
+    backbone_abbr = 'R50' if 'resnet50' in config.backbone else 'R101'
+
     save_base = '/home/hail/pan/GCN/PIGNet'
-    pred_dir  = f'{save_base}/pred_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
-    gt_dir    = f'{save_base}/GT_input_images/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
-    color_dir = f'{save_base}/GT_segmentation_masks/{config.dataset}/{config.model}/{config.infer_params.process_type}/{config.factor}'
+    pred_dir  = f'{save_base}/pred_segmentation_masks/{config.dataset}/{config.model}/{config.model_type}/{backbone_abbr}/{config.infer_params.process_type}/{config.factor}'
+    gt_dir    = f'{save_base}/GT_input_images/{config.dataset}/{config.model}/{config.model_type}/{backbone_abbr}/{config.infer_params.process_type}/{config.factor}'
+    color_dir = f'{save_base}/GT_segmentation_masks/{config.dataset}/{config.model}/{config.model_type}/{backbone_abbr}/{config.infer_params.process_type}/{config.factor}'
     os.makedirs(pred_dir,  exist_ok=True)
     os.makedirs(gt_dir,    exist_ok=True)
     os.makedirs(color_dir, exist_ok=True)
@@ -162,6 +165,11 @@ def main(config):
         union_meter.update(union)
                                 
     print('eval: {0}/{1}'.format(i + 1, len(dataset)))
+
+    iou_dict = {name: float(score) for name, score in zip(img_name, iou_list)}
+    iou_save_path = os.path.join(pred_dir, 'iou_scores.json')
+    with open(iou_save_path, 'w') as f:
+        json.dump(iou_dict, f, indent=2)
 
     iou = inter_meter.sum / (union_meter.sum + 1e-10)
     for i, val in enumerate(iou):
