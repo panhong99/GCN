@@ -121,7 +121,8 @@ class Cityscapes(data.Dataset):
         return None,None,None,None,None,None
       
     else: # train
-      _img, _target = self.image_resizing(_img, _target)
+      _img, _target, _ = self.image_resizing(_img, _target)
+      _color_target = None
 
       if _img == None:
         # return None,None,None,None,None,None
@@ -162,7 +163,7 @@ class Cityscapes(data.Dataset):
     raise NotImplementedError('Automatic download not yet implemented.')
   
   # def image_resizing(self, img, mask, color_mask, aug_scale=(0.5, 2.0)):
-  def image_resizing(self, img, mask ,color_mask):
+  def image_resizing(self, img, mask ,color_mask=None):
   
     aug_scale=(0.5, 2.0)
   
@@ -178,11 +179,15 @@ class Cityscapes(data.Dataset):
     new_size = (int(round(w * random_scale)), int(round(h * random_scale)))
     image = img.resize(new_size, Image.Resampling.LANCZOS)
     mask = mask.resize(new_size, Image.Resampling.NEAREST)
-    color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
+    if color_mask is not None:
+        color_mask = color_mask.resize(new_size, Image.Resampling.NEAREST)
 
     new_image = image.resize((new_w, new_h), Image.Resampling.LANCZOS)
     new_mask = mask.resize((new_w, new_h), Image.Resampling.NEAREST)
-    new_color_mask = color_mask.resize((new_w, new_h), Image.Resampling.NEAREST)
+    if color_mask is not None:
+        new_color_mask = color_mask.resize((new_w, new_h), Image.Resampling.NEAREST)
+    else:
+        new_color_mask = None
     
     return new_image, new_mask, new_color_mask
     # return new_image, new_mask

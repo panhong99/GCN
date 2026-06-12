@@ -151,12 +151,17 @@ def main(config):
 
         mask_pred = Image.fromarray(pred)
         mask_pred.putpalette(cmap)
-        top_crop(mask_pred.convert('RGB')).save(os.path.join(pred_dir, imname))
-        if gt_image is not None:
-            top_crop(gt_image).save(os.path.join(gt_dir, imname))
-        if color_target is not None:
-            top_crop(color_target).save(os.path.join(color_dir, imname))
+        # top_crop(mask_pred.convert('RGB')).save(os.path.join(pred_dir, imname))
+        mask_pred.convert('RGB').save(os.path.join(pred_dir, imname))
 
+        if gt_image is not None:
+            # top_crop(gt_image).save(os.path.join(gt_dir, imname))
+            (gt_image).save(os.path.join(gt_dir, imname))
+
+        if color_target is not None:
+            # top_crop(color_target).save(os.path.join(color_dir, imname))
+            (color_target).save(os.path.join(color_dir, imname))
+    
         pred_img.append(pred)
         iou_list.append(iou_score)
         img_name.append(imname)
